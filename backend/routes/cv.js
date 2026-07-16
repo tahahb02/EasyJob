@@ -1,6 +1,5 @@
 import express from 'express'
 import mongoose from 'mongoose'
-import { PDFParse } from 'pdf-parse'
 import { protect } from '../middlewares/auth.js'
 import { upload } from '../utils/fileUpload.js'
 
@@ -332,6 +331,7 @@ router.post('/', protect, upload.single('cv'), async (req, res) => {
     let extractedText = ''
     if (req.file.mimetype === 'application/pdf') {
       try {
+        const { PDFParse } = await import('pdf-parse')
         const pdfParser = new PDFParse({ data: new Uint8Array(req.file.buffer) })
         const textResult = await pdfParser.getText()
         extractedText = (textResult.text || '').trim()
@@ -486,6 +486,7 @@ router.put('/:id', protect, async (req, res) => {
           ? cv.fileData.split(',')[1]
           : cv.fileData
         const buffer = Buffer.from(rawBase64, 'base64')
+        const { PDFParse } = await import('pdf-parse')
         const pdfParser = new PDFParse({ data: new Uint8Array(buffer) })
         const textResult = await pdfParser.getText()
         extractedText = (textResult.text || '').trim()
