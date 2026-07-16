@@ -4,7 +4,6 @@ import cors from 'cors'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import cookieParser from 'cookie-parser'
-import dotenv from 'dotenv'
 import authRoutes from './routes/auth.js'
 import profileRoutes from './routes/profile.js'
 import jobRoutes from './routes/jobs.js'
@@ -19,16 +18,26 @@ import analyticsRoutes from './routes/analytics.js'
 import cvRoutes from './routes/cv.js'
 import portfolioRoutes from './routes/portfolio.js'
 
-dotenv.config({ path: new URL('../.env', import.meta.url) })
-
 mongoose.set('toJSON', { virtuals: true, versionKey: false })
 mongoose.set('toObject', { virtuals: true, versionKey: false })
 
 const app = express()
-const PORT = process.env.PORT || 5000
 
 app.use(helmet({ contentSecurityPolicy: false }))
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173', credentials: true }))
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
+  .split(',')
+  .map(o => o.trim())
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true)
+    } else {
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
+  credentials: true
+}))
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
@@ -61,36 +70,25 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || 'Erreur serveur interne' })
 })
 
-async function startServer() {
-  let mongoUri = process.env.MONGODB_URI
+async function connectDB() {
+  if (mongoose.connection.readyState === 1) return
 
   try {
-    await mongoose.connect(mongoUri)
+    await mongoose.connect(process.env.MONGODB_URI)
     console.log('✅ MongoDB connecté (Atlas)')
   } catch (err) {
     console.log('⚠️  MongoDB Atlas non disponible, démarrage avec MongoDB en mémoire...')
     try {
       const { MongoMemoryServer } = await import('mongodb-memory-server')
       const mongod = await MongoMemoryServer.create()
-      mongoUri = mongod.getUri()
-      await mongoose.connect(mongoUri)
+      await mongoose.connect(mongod.getUri())
       console.log('✅ MongoDB en mémoire démarré')
     } catch (memErr) {
       console.error('❌ Impossible de démarrer MongoDB:', memErr.message)
-      process.exit(1)
+      throw memErr
     }
   }
-
-  app.listen(PORT, () => {
-    console.log(`🚀 Serveur EasyJob sur port ${PORT}`)
-    console.log(`📡 API: http://localhost:${PORT}/api`)
-    console.log(`🔗 Frontend: http://localhost:5173`)
-  })
 }
 
-startServer().catch(err => {
-  console.error('❌ Erreur fatale:', err)
-  process.exit(1)
-})
-
+export { connectDB }
 export default app

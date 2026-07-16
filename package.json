@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:all": "vite & node backend/server.js",
-    "server": "node backend/server.js",
+    "dev:all": "vite & node backend/start.js",
+    "server": "node backend/start.js",
+    "start": "node backend/start.js",
     "seed": "node backend/seed.js",
     "build": "vite build",
     "lint": "oxlint",
@@ -40,6 +41,7 @@
     "react-hot-toast": "^2.6.0",
     "react-router-dom": "^7.18.1",
     "recharts": "^3.9.2",
+    "serverless-http": "^4.0.0",
     "tailwindcss": "^4.3.2",
     "zod": "^4.4.3"
   },
