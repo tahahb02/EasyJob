@@ -1,0 +1,8 @@
+backend/
+build-api.js
+.vercel/
+node_modules/
+dist/
+render.yaml
+*.log
+.qodo/
