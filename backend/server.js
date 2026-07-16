@@ -73,20 +73,18 @@ app.use((err, req, res, next) => {
 async function connectDB() {
   if (mongoose.connection.readyState === 1) return
 
+  const uri = process.env.MONGODB_URI
+  if (!uri) {
+    console.error('❌ MONGODB_URI non défini')
+    throw new Error('MONGODB_URI non défini')
+  }
+
   try {
-    await mongoose.connect(process.env.MONGODB_URI)
-    console.log('✅ MongoDB connecté (Atlas)')
+    await mongoose.connect(uri)
+    console.log('✅ MongoDB connecté')
   } catch (err) {
-    console.log('⚠️  MongoDB Atlas non disponible, démarrage avec MongoDB en mémoire...')
-    try {
-      const { MongoMemoryServer } = await import('mongodb-memory-server')
-      const mongod = await MongoMemoryServer.create()
-      await mongoose.connect(mongod.getUri())
-      console.log('✅ MongoDB en mémoire démarré')
-    } catch (memErr) {
-      console.error('❌ Impossible de démarrer MongoDB:', memErr.message)
-      throw memErr
-    }
+    console.error('❌ MongoDB connection failed:', err.message)
+    throw err
   }
 }
 
