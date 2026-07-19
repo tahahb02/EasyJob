@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell, CheckCircle, Mail, Briefcase, Scissors, Clock,
@@ -84,8 +85,11 @@ function NotificationSkeleton() {
 }
 
 export default function NotificationsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeFilter, setActiveFilter] = useState('Toutes');
   const [page, setPage] = useState(1);
+  const [highlightedId, setHighlightedId] = useState(null);
+  const highlightTimeoutRef = useRef(null);
 
   const apiFilters = useMemo(() => {
     const filters = { page, limit: 20 };
@@ -100,6 +104,29 @@ export default function NotificationsPage() {
 
   const notifications = data?.notifications ?? [];
   const unreadCount = data?.unreadCount ?? 0;
+
+  const highlightId = searchParams.get('id');
+
+  useEffect(() => {
+    if (highlightId && notifications.length > 0) {
+      setHighlightedId(highlightId);
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`notif-${highlightId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+      highlightTimeoutRef.current = setTimeout(() => {
+        setHighlightedId(null);
+        searchParams.delete('id');
+        setSearchParams(searchParams, { replace: true });
+      }, 3000);
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(highlightTimeoutRef.current);
+      };
+    }
+  }, [highlightId, notifications.length]);
 
   const markAsRead = (id) => {
     markRead.mutate(id);
@@ -206,14 +233,17 @@ export default function NotificationsPage() {
                 return (
                   <motion.div
                     key={notification.id}
+                    id={`notif-${notification._id || notification.id}`}
                     variants={listItem}
                     initial="hidden"
                     animate="visible"
                     exit="exit"
                     transition={{ delay: index * 0.03 }}
                     onClick={() => markAsRead(notification.id)}
-                    className={`flex items-start gap-4 p-4 sm:p-5 border-b border-surface-100 dark:border-surface-700 last:border-0 cursor-pointer transition-colors hover:bg-surface-50 dark:hover:bg-surface-700/50 ${
-                      !notification.read ? 'bg-primary-500/[0.03]' : ''
+                    className={`flex items-start gap-4 p-4 sm:p-5 border-b border-surface-100 dark:border-surface-700 last:border-0 cursor-pointer transition-all duration-500 hover:bg-surface-50 dark:hover:bg-surface-700/50 ${
+                      highlightedId === (notification._id || notification.id)
+                        ? 'bg-primary-500/[0.08] ring-2 ring-primary-500/40 shadow-lg shadow-primary-500/10'
+                        : !notification.read ? 'bg-primary-500/[0.03]' : ''
                     }`}
                   >
                     <div className={`flex-shrink-0 p-2.5 rounded-xl ${config.bg}`}>

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bell, CheckCircle, Mail, Briefcase, Scissors, Clock,
@@ -25,6 +25,7 @@ export default function NotificationDropdown() {
   const [open, setOpen] = useState(false)
   const [visibleCount, setVisibleCount] = useState(5)
   const ref = useRef(null)
+  const navigate = useNavigate()
 
   const { data: unreadData } = useUnreadNotificationCount()
   const unreadCount = unreadData ?? 0
@@ -46,9 +47,10 @@ export default function NotificationDropdown() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [open, handleClickOutside])
 
-  const handleMarkRead = (id, e) => {
+  const handleClickNotification = (id, e) => {
     e.stopPropagation()
-    markRead.mutate(id)
+    setOpen(false)
+    navigate(`/notifications?id=${id}`)
   }
 
   return (
@@ -119,7 +121,7 @@ export default function NotificationDropdown() {
                   return (
                     <div
                       key={notif._id}
-                      onClick={(e) => handleMarkRead(notif._id, e)}
+                      onClick={(e) => handleClickNotification(notif._id, e)}
                       className={`flex items-start gap-3 px-5 py-3.5 cursor-pointer transition-colors hover:bg-surface-50 dark:hover:bg-surface-800 ${
                         !notif.isRead ? 'bg-primary-500/[0.03]' : ''
                       }`}
