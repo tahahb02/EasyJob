@@ -13,7 +13,7 @@ import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage'
 import ResetPasswordPage from '@/pages/auth/ResetPasswordPage'
 import VerifyEmailPage from '@/pages/auth/VerifyEmailPage'
 
-// Pages protégées
+// Pages protégées Candidat
 import DashboardPage from '@/pages/dashboard/DashboardPage'
 import AnalyticsPage from '@/pages/dashboard/AnalyticsPage'
 import NotificationsPage from '@/pages/dashboard/NotificationsPage'
@@ -34,6 +34,15 @@ import RecruiterDetailPage from '@/pages/recruiters/RecruiterDetailPage'
 import NetworkPage from '@/pages/recruiters/NetworkPage'
 import MessagesPage from '@/pages/shared/MessagesPage'
 import OnboardingPage from '@/pages/OnboardingPage'
+
+// Pages Recruteur
+import RecruiterDashboardPage from '@/pages/recruiter/RecruiterDashboardPage'
+import RecruiterJobsPage from '@/pages/recruiter/RecruiterJobsPage'
+import RecruiterJobCreatePage from '@/pages/recruiter/RecruiterJobCreatePage'
+import RecruiterJobDetailPage from '@/pages/recruiter/RecruiterJobDetailPage'
+import RecruiterCandidatesPage from '@/pages/recruiter/RecruiterCandidatesPage'
+import RecruiterApplicationsPage from '@/pages/recruiter/RecruiterApplicationsPage'
+import RecruiterProfilePage from '@/pages/recruiter/RecruiterProfilePage'
 
 export default function App() {
   return (
@@ -66,6 +75,7 @@ export default function App() {
               <Route path="/onboarding" element={<OnboardingPage />} />
               <Route element={<ProtectedRoute requireOnboarding={false} />}>
               <Route element={<MainLayoutShell />}>
+                {/* Candidat routes */}
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/analytics" element={<AnalyticsPage />} />
                 <Route path="/notifications" element={<NotificationsPage />} />
@@ -85,6 +95,15 @@ export default function App() {
                 <Route path="/recruiters/:id" element={<RecruiterDetailPage />} />
                 <Route path="/network" element={<NetworkPage />} />
                 <Route path="/messages" element={<MessagesPage />} />
+
+                {/* Recruteur routes */}
+                <Route path="/recruiter-space/dashboard" element={<RecruiterDashboardPage />} />
+                <Route path="/recruiter-space/jobs" element={<RecruiterJobsPage />} />
+                <Route path="/recruiter-space/jobs/new" element={<RecruiterJobCreatePage />} />
+                <Route path="/recruiter-space/jobs/:id" element={<RecruiterJobDetailPage />} />
+                <Route path="/recruiter-space/candidates" element={<RecruiterCandidatesPage />} />
+                <Route path="/recruiter-space/applications" element={<RecruiterApplicationsPage />} />
+                <Route path="/recruiter-space/profile" element={<RecruiterProfilePage />} />
               </Route>
               </Route>
             </Route>

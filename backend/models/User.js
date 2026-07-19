@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   password: { type: String, required: true, minlength: 6 },
   phone: { type: String, default: '' },
-  role: { type: String, enum: ['candidat', 'admin'], default: 'candidat' },
+  role: { type: String, enum: ['candidat', 'recruiter', 'admin'], default: 'candidat' },
   avatar: { type: String, default: '' },
   isActive: { type: Boolean, default: true },
   isEmailVerified: { type: Boolean, default: false },
@@ -21,6 +21,11 @@ const userSchema = new mongoose.Schema({
   lockUntil: Date,
   onboardingCompleted: { type: Boolean, default: false },
   onboardingStep: { type: Number, default: 0 },
+  jobSearchStatus: {
+    type: String,
+    enum: ['none', 'actively_looking', 'open_to_offers', 'urgent', 'seeking_internship'],
+    default: 'none',
+  },
   preferences: {
     language: { type: String, default: 'fr' },
     theme: { type: String, enum: ['light', 'dark', 'system'], default: 'light' },

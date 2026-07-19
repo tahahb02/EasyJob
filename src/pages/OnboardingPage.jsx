@@ -12,9 +12,9 @@ import {
   ArrowLeft,
   Sparkles,
   FileText,
-  ChevronRight,
   X,
-  Globe,
+  Building2,
+  BriefcaseBusiness,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/context/AuthContext'
@@ -46,11 +46,26 @@ const SUGGESTED_KEYWORDS = {
   'Design / Créatif': ['UI/UX', 'Figma', 'Photoshop', 'Illustrator', 'Motion Design', 'Web Design', 'Brand Identity'],
 }
 
+const INDUSTRIES = [
+  'Technologie / IT', 'Finance / Banque', 'Santé', 'Éducation',
+  'Industrie / Manufacturing', 'Commerce / Distribution', 'BTP / Construction',
+  'Transport / Logistique', 'Énergie', 'Télécommunications',
+  'Agroalimentaire', 'Automobile', 'Aéronautique', 'Pharmacie',
+  'Média / Communication', 'Hôtellerie / Tourisme', 'Immobilier',
+]
+
+const COMPANY_SIZES = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+']
+
 export default function OnboardingPage() {
   const navigate = useNavigate()
   const { updateProfile, user } = useAuth()
   const uploadMutation = useUploadCV()
   const [step, setStep] = useState(0)
+
+  const isRecruiter = user?.role === 'recruiter'
+
+  const totalSteps = isRecruiter ? 2 : 4
+
   const [cvFile, setCvFile] = useState(null)
   const [domains, setDomains] = useState([])
   const [keywords, setKeywords] = useState([])
@@ -60,7 +75,14 @@ export default function OnboardingPage() {
   const [isDragging, setIsDragging] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  const totalSteps = 4
+  const [companyName, setCompanyName] = useState('')
+  const [industry, setIndustry] = useState('')
+  const [companySize, setCompanySize] = useState('11-50')
+  const [companyLocation, setCompanyLocation] = useState('')
+  const [companyWebsite, setCompanyWebsite] = useState('')
+  const [companyDescription, setCompanyDescription] = useState('')
+  const [position, setPosition] = useState('')
+  const [hiringDomains, setHiringDomains] = useState([])
 
   const handleFile = useCallback((file) => {
     if (!file || file.type !== 'application/pdf') {
@@ -77,57 +99,59 @@ export default function OnboardingPage() {
     handleFile(e.dataTransfer.files[0])
   }, [handleFile])
 
-  const toggleDomain = (d) => {
-    setDomains(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])
-  }
-
-  const toggleJobType = (t) => {
-    setJobTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
-  }
-
-  const toggleLocation = (l) => {
-    setLocations(prev => prev.includes(l) ? prev.filter(x => x !== l) : [...prev, l])
-  }
-
-  const addKeyword = (kw) => {
-    if (kw && !keywords.includes(kw)) {
-      setKeywords(prev => [...prev, kw])
-      setKeywordInput('')
-    }
-  }
-
-  const removeKeyword = (kw) => {
-    setKeywords(prev => prev.filter(x => x !== kw))
-  }
+  const toggleDomain = (d) => setDomains(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])
+  const toggleJobType = (t) => setJobTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
+  const toggleLocation = (l) => setLocations(prev => prev.includes(l) ? prev.filter(x => x !== l) : [...prev, l])
+  const addKeyword = (kw) => { if (kw && !keywords.includes(kw)) { setKeywords(prev => [...prev, kw]); setKeywordInput('') } }
+  const removeKeyword = (kw) => setKeywords(prev => prev.filter(x => x !== kw))
+  const toggleHiringDomain = (d) => setHiringDomains(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])
 
   const handleSubmit = async () => {
     setSubmitting(true)
     try {
-      if (cvFile) {
-        const formData = new FormData()
-        formData.append('cv', cvFile)
-        await uploadMutation.mutateAsync(formData)
+      if (isRecruiter) {
+        await api.put('/recruiter-space/profile', {
+          companyName,
+          industry,
+          companySize,
+          companyLocation,
+          companyWebsite,
+          companyDescription,
+          position,
+          hiringDomains,
+        })
+        await updateProfile({ onboardingCompleted: true })
+        toast.success('Espace recruteur configuré ! Bienvenue 🎉')
+        navigate('/recruiter-space/dashboard')
+      } else {
+        if (cvFile) {
+          const formData = new FormData()
+          formData.append('cv', cvFile)
+          await uploadMutation.mutateAsync(formData)
+        }
+        await api.post('/profile/onboarding', {
+          domains: JSON.stringify(domains),
+          searchKeywords: JSON.stringify(keywords),
+          jobTypes: JSON.stringify(jobTypes),
+          preferredLocations: JSON.stringify(locations),
+        })
+        await updateProfile({ onboardingCompleted: true })
+        toast.success('Profil configuré ! Bienvenue sur EasyJob 🎉')
+        navigate('/jobs')
       }
-
-      await api.post('/profile/onboarding', {
-        domains: JSON.stringify(domains),
-        searchKeywords: JSON.stringify(keywords),
-        jobTypes: JSON.stringify(jobTypes),
-        preferredLocations: JSON.stringify(locations),
-      })
-
-      await updateProfile({ onboardingCompleted: true })
-
-      toast.success('Profil configuré ! Bienvenue sur EasyJob 🎉')
-      navigate('/jobs')
     } catch (err) {
-      toast.error(err?.message || 'Erreur lors de la configuration')
+      toast.error(err?.response?.data?.error || err?.message || 'Erreur lors de la configuration')
     } finally {
       setSubmitting(false)
     }
   }
 
   const canNext = () => {
+    if (isRecruiter) {
+      if (step === 0) return companyName.trim().length > 0 && industry.length > 0
+      if (step === 1) return hiringDomains.length > 0
+      return true
+    }
     if (step === 0) return true
     if (step === 1) return domains.length > 0
     if (step === 2) return keywords.length > 0
@@ -145,14 +169,16 @@ export default function OnboardingPage() {
               <div key={i} className="flex items-center">
                 <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold transition-all ${
                   i <= step
-                    ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/30'
+                    ? isRecruiter
+                      ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                      : 'bg-primary-500 text-white shadow-lg shadow-primary-500/30'
                     : 'bg-surface-200 text-surface-500 dark:bg-surface-700 dark:text-surface-400'
                 }`}>
                   {i < step ? <CheckCircle className="h-5 w-5" /> : i + 1}
                 </div>
                 {i < totalSteps - 1 && (
                   <div className={`h-1 w-12 sm:w-20 mx-2 rounded-full transition-all ${
-                    i < step ? 'bg-primary-500' : 'bg-surface-200 dark:bg-surface-700'
+                    i < step ? (isRecruiter ? 'bg-emerald-500' : 'bg-primary-500') : 'bg-surface-200 dark:bg-surface-700'
                   }`} />
                 )}
               </div>
@@ -166,14 +192,146 @@ export default function OnboardingPage() {
         {/* Steps */}
         <AnimatePresence mode="wait">
           <motion.div
-            key={step}
+            key={`${isRecruiter}-${step}`}
             initial={{ opacity: 0, x: 50 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -50 }}
             transition={{ duration: 0.3 }}
           >
-            {/* Step 0: Welcome + CV */}
-            {step === 0 && (
+            {/* ═══════════ RECRUITER STEPS ═══════════ */}
+            {isRecruiter && step === 0 && (
+              <div className="bg-white dark:bg-surface-800 rounded-2xl p-8 shadow-sm border border-surface-200 dark:border-surface-700">
+                <div className="text-center mb-6">
+                  <div className="w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4">
+                    <Building2 className="w-8 h-8 text-emerald-500" />
+                  </div>
+                  <h1 className="text-2xl font-bold text-surface-900 dark:text-white">
+                    Bienvenue {user?.firstName} !
+                  </h1>
+                  <p className="text-surface-500 dark:text-surface-400 mt-2">
+                    Configurons votre espace recruteur
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">
+                        Nom de l'entreprise <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
+                        placeholder="Ex: TechCorp Maroc"
+                        className="w-full px-4 py-2.5 rounded-xl border border-surface-200 dark:border-surface-600 bg-surface-50 dark:bg-surface-700 text-surface-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">
+                        Secteur d'activité <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={industry}
+                        onChange={(e) => setIndustry(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-surface-200 dark:border-surface-600 bg-surface-50 dark:bg-surface-700 text-surface-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
+                      >
+                        <option value="">Sélectionner...</option>
+                        {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Taille de l'entreprise</label>
+                      <select
+                        value={companySize}
+                        onChange={(e) => setCompanySize(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-surface-200 dark:border-surface-600 bg-surface-50 dark:bg-surface-700 text-surface-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
+                      >
+                        {COMPANY_SIZES.map(s => <option key={s} value={s}>{s} employés</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Localisation</label>
+                      <select
+                        value={companyLocation}
+                        onChange={(e) => setCompanyLocation(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-surface-200 dark:border-surface-600 bg-surface-50 dark:bg-surface-700 text-surface-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
+                      >
+                        <option value="">Sélectionner...</option>
+                        {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Site web</label>
+                    <input
+                      type="url"
+                      value={companyWebsite}
+                      onChange={(e) => setCompanyWebsite(e.target.value)}
+                      placeholder="https://www.example.com"
+                      className="w-full px-4 py-2.5 rounded-xl border border-surface-200 dark:border-surface-600 bg-surface-50 dark:bg-surface-700 text-surface-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Votre poste</label>
+                    <input
+                      type="text"
+                      value={position}
+                      onChange={(e) => setPosition(e.target.value)}
+                      placeholder="Ex: Responsable RH, Directeur technique..."
+                      className="w-full px-4 py-2.5 rounded-xl border border-surface-200 dark:border-surface-600 bg-surface-50 dark:bg-surface-700 text-surface-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Description de l'entreprise</label>
+                    <textarea
+                      value={companyDescription}
+                      onChange={(e) => setCompanyDescription(e.target.value)}
+                      placeholder="Décrivez brièvement votre entreprise..."
+                      rows={3}
+                      className="w-full px-4 py-2.5 rounded-xl border border-surface-200 dark:border-surface-600 bg-surface-50 dark:bg-surface-700 text-surface-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm resize-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {isRecruiter && step === 1 && (
+              <div className="bg-white dark:bg-surface-800 rounded-2xl p-8 shadow-sm border border-surface-200 dark:border-surface-700">
+                <div className="text-center mb-6">
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4">
+                    <BriefcaseBusiness className="w-7 h-7 text-emerald-500" />
+                  </div>
+                  <h2 className="text-xl font-bold text-surface-900 dark:text-white">Domaines de recrutement</h2>
+                  <p className="text-surface-500 dark:text-surface-400 mt-1">Dans quels domaines recrutez-vous ?</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {DOMAINS.map(d => (
+                    <button
+                      key={d}
+                      onClick={() => toggleHiringDomain(d)}
+                      className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all border ${
+                        hiringDomains.includes(d)
+                          ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm'
+                          : 'bg-white dark:bg-surface-700 text-surface-700 dark:text-surface-300 border-surface-200 dark:border-surface-600 hover:border-emerald-300'
+                      }`}
+                    >
+                      {d}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-sm text-surface-400 mt-4">{hiringDomains.length} domaine(s) sélectionné(s)</p>
+              </div>
+            )}
+
+            {/* ═══════════ CANDIDATE STEPS ═══════════ */}
+            {!isRecruiter && step === 0 && (
               <div className="bg-white dark:bg-surface-800 rounded-2xl p-8 shadow-sm border border-surface-200 dark:border-surface-700">
                 <div className="text-center mb-6">
                   <div className="w-16 h-16 rounded-2xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center mx-auto mb-4">
@@ -221,8 +379,7 @@ export default function OnboardingPage() {
               </div>
             )}
 
-            {/* Step 1: Domains */}
-            {step === 1 && (
+            {!isRecruiter && step === 1 && (
               <div className="bg-white dark:bg-surface-800 rounded-2xl p-8 shadow-sm border border-surface-200 dark:border-surface-700">
                 <div className="text-center mb-6">
                   <div className="w-14 h-14 rounded-2xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center mx-auto mb-4">
@@ -250,8 +407,7 @@ export default function OnboardingPage() {
               </div>
             )}
 
-            {/* Step 2: Keywords */}
-            {step === 2 && (
+            {!isRecruiter && step === 2 && (
               <div className="bg-white dark:bg-surface-800 rounded-2xl p-8 shadow-sm border border-surface-200 dark:border-surface-700">
                 <div className="text-center mb-6">
                   <div className="w-14 h-14 rounded-2xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center mx-auto mb-4">
@@ -270,15 +426,9 @@ export default function OnboardingPage() {
                     placeholder="Tapez un mot-clé et appuyez Entrée"
                     className="flex-1 rounded-xl border border-surface-200 dark:border-surface-600 bg-surface-50 dark:bg-surface-700 px-4 py-3 text-sm text-surface-700 dark:text-surface-200 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
                   />
-                  <button
-                    onClick={() => addKeyword(keywordInput.trim())}
-                    className="rounded-xl bg-primary-500 px-4 py-3 text-sm font-semibold text-white hover:bg-primary-600 transition-colors"
-                  >
-                    Ajouter
-                  </button>
+                  <button onClick={() => addKeyword(keywordInput.trim())} className="rounded-xl bg-primary-500 px-4 py-3 text-sm font-semibold text-white hover:bg-primary-600 transition-colors">Ajouter</button>
                 </div>
 
-                {/* Selected keywords */}
                 {keywords.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-5">
                     {keywords.map(kw => (
@@ -290,7 +440,6 @@ export default function OnboardingPage() {
                   </div>
                 )}
 
-                {/* Suggested keywords */}
                 <div>
                   <p className="text-xs font-medium text-surface-500 mb-2">Suggestions :</p>
                   <div className="flex flex-wrap gap-1.5">
@@ -308,8 +457,7 @@ export default function OnboardingPage() {
               </div>
             )}
 
-            {/* Step 3: Job types + Locations */}
-            {step === 3 && (
+            {!isRecruiter && step === 3 && (
               <div className="bg-white dark:bg-surface-800 rounded-2xl p-8 shadow-sm border border-surface-200 dark:border-surface-700">
                 <div className="text-center mb-6">
                   <div className="w-14 h-14 rounded-2xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center mx-auto mb-4">
@@ -379,7 +527,11 @@ export default function OnboardingPage() {
               whileTap={{ scale: 0.97 }}
               onClick={() => setStep(s => s + 1)}
               disabled={!canNext()}
-              className="inline-flex items-center gap-2 rounded-xl bg-primary-500 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                isRecruiter
+                  ? 'bg-emerald-500 hover:bg-emerald-600'
+                  : 'bg-primary-500 hover:bg-primary-600'
+              }`}
             >
               Suivant
               <ArrowRight className="h-4 w-4" />
@@ -390,7 +542,11 @@ export default function OnboardingPage() {
               whileTap={{ scale: 0.97 }}
               onClick={handleSubmit}
               disabled={submitting || !canNext()}
-              className="inline-flex items-center gap-2 rounded-xl bg-secondary-500 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-secondary-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                isRecruiter
+                  ? 'bg-emerald-500 hover:bg-emerald-600'
+                  : 'bg-secondary-500 hover:bg-secondary-600'
+              }`}
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
               {submitting ? 'Configuration...' : 'Terminer'}
@@ -402,7 +558,7 @@ export default function OnboardingPage() {
         {step === 0 && (
           <div className="text-center mt-4">
             <button
-              onClick={() => { updateProfile({ onboardingCompleted: true }); navigate('/jobs') }}
+              onClick={() => { updateProfile({ onboardingCompleted: true }); navigate(isRecruiter ? '/recruiter-space/dashboard' : '/jobs') }}
               className="text-sm text-surface-500 hover:text-primary-500 transition-colors"
             >
               Passer cette étape →

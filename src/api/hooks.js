@@ -366,3 +366,170 @@ export const useUpdateRecruiter = () => {
     },
   })
 }
+
+// ─── RECRUITER SPACE HOOKS ────────────────────────────────────
+export const useRecruiterDashboard = () => useQuery({
+  queryKey: ['recruiterSpace', 'dashboard'],
+  queryFn: async () => { const { data } = await api.get('/recruiter-space/dashboard'); return data },
+})
+
+export const useRecruiterProfile = () => useQuery({
+  queryKey: ['recruiterSpace', 'profile'],
+  queryFn: async () => { const { data } = await api.get('/recruiter-space/profile'); return data },
+})
+
+export const useUpdateRecruiterProfile = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (updates) => { const { data } = await api.put('/recruiter-space/profile', updates); return data },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['recruiterSpace', 'profile'] }),
+  })
+}
+
+export const useRecruiterJobs = (filters = {}) => useQuery({
+  queryKey: ['recruiterSpace', 'jobs', filters],
+  queryFn: async () => {
+    const params = new URLSearchParams()
+    Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v) })
+    const { data } = await api.get(`/recruiter-space/jobs?${params}`)
+    return data
+  },
+})
+
+export const useRecruiterJob = (id) => useQuery({
+  queryKey: ['recruiterSpace', 'job', id],
+  queryFn: async () => { const { data } = await api.get(`/recruiter-space/jobs/${id}`); return data },
+  enabled: !!id,
+})
+
+export const useCreateRecruiterJob = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (jobData) => { const { data } = await api.post('/recruiter-space/jobs', jobData); return data },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['recruiterSpace', 'jobs'] })
+      qc.invalidateQueries({ queryKey: ['recruiterSpace', 'dashboard'] })
+    },
+  })
+}
+
+export const useUpdateRecruiterJob = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, ...updates }) => { const { data } = await api.put(`/recruiter-space/jobs/${id}`, updates); return data },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['recruiterSpace', 'jobs'] })
+      qc.invalidateQueries({ queryKey: ['recruiterSpace', 'dashboard'] })
+    },
+  })
+}
+
+export const useDeleteRecruiterJob = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id) => { const { data } = await api.delete(`/recruiter-space/jobs/${id}`); return data },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['recruiterSpace', 'jobs'] })
+      qc.invalidateQueries({ queryKey: ['recruiterSpace', 'dashboard'] })
+    },
+  })
+}
+
+export const useToggleRecruiterJob = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id) => { const { data } = await api.put(`/recruiter-space/jobs/${id}/toggle`); return data },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['recruiterSpace', 'jobs'] })
+      qc.invalidateQueries({ queryKey: ['recruiterSpace', 'dashboard'] })
+    },
+  })
+}
+
+export const useRecruiterCandidates = (filters = {}) => useQuery({
+  queryKey: ['recruiterSpace', 'candidates', filters],
+  queryFn: async () => {
+    const params = new URLSearchParams()
+    Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v) })
+    const { data } = await api.get(`/recruiter-space/candidates?${params}`)
+    return data
+  },
+})
+
+export const useRecruiterCandidateDetail = (userId) => useQuery({
+  queryKey: ['recruiterSpace', 'candidate', userId],
+  queryFn: async () => { const { data } = await api.get(`/recruiter-space/candidates/${userId}`); return data },
+  enabled: !!userId,
+})
+
+export const useMatchingCandidates = (jobId, filters = {}) => useQuery({
+  queryKey: ['recruiterSpace', 'matching', jobId, filters],
+  queryFn: async () => {
+    const params = new URLSearchParams()
+    Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v) })
+    const { data } = await api.get(`/recruiter-space/jobs/${jobId}/matching-candidates?${params}`)
+    return data
+  },
+  enabled: !!jobId,
+})
+
+export const useRecruiterApplications = (filters = {}) => useQuery({
+  queryKey: ['recruiterSpace', 'applications', filters],
+  queryFn: async () => {
+    const params = new URLSearchParams()
+    Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v) })
+    const { data } = await api.get(`/recruiter-space/applications?${params}`)
+    return data
+  },
+})
+
+export const useUpdateRecruiterApplicationStatus = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, status }) => { const { data } = await api.put(`/recruiter-space/applications/${id}/status`, { status }); return data },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['recruiterSpace', 'applications'] })
+      qc.invalidateQueries({ queryKey: ['recruiterSpace', 'dashboard'] })
+    },
+  })
+}
+
+export const useRecruiterSendEmail = () => {
+  return useMutation({
+    mutationFn: async ({ userId, subject, message }) => {
+      const { data } = await api.post(`/recruiter-space/candidates/${userId}/email`, { subject, message })
+      return data
+    },
+  })
+}
+
+// ─── RECRUITER JOB BOARD (for candidates) ────────────────────
+export const useRecruiterJobBoard = (filters = {}) => useQuery({
+  queryKey: ['jobs', 'recruiterBoard', filters],
+  queryFn: async () => {
+    const params = new URLSearchParams()
+    Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v) })
+    const { data } = await api.get(`/jobs/recruiter-board?${params}`)
+    return data
+  },
+})
+
+export const useApplyToRecruiterJob = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ jobId, coverLetter }) => { const { data } = await api.post(`/jobs/${jobId}/apply`, { coverLetter }); return data },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['jobs', 'recruiterBoard'] })
+      qc.invalidateQueries({ queryKey: ['applications'] })
+    },
+  })
+}
+
+// ─── JOB SEARCH STATUS ───────────────────────────────────────
+export const useUpdateJobSearchStatus = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (status) => { const { data } = await api.put('/auth/job-search-status', { status }); return data },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['profile'] }),
+  })
+}

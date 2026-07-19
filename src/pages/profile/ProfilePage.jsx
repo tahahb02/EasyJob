@@ -32,6 +32,7 @@ import {
   Sparkles,
   TrendingUp,
   Download,
+  MessageSquareQuote,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useProfile, useUpdateProfile, useUploadCV, useCV, useDeleteCV, useAnalyzeCV } from "@/api/hooks";
@@ -280,6 +281,7 @@ function buildFormValues(profile, user) {
     phone: user?.phone || profile?.phone || "",
     city: profile?.location?.city || profile?.city || "",
     title: profile?.title || "",
+    presentation: profile?.presentation || "",
     domains: profile?.domains || [],
     searchKeywords: profile?.searchKeywords || [],
     jobTypes: profile?.jobTypes || [],
@@ -359,6 +361,7 @@ export default function ProfilePage() {
       phone: "",
       city: "",
       title: "",
+      presentation: "",
       domains: [],
       searchKeywords: [],
       jobTypes: [],
@@ -410,6 +413,7 @@ export default function ProfilePage() {
         phone: data.phone,
         title: data.title,
         city: data.city,
+        presentation: data.presentation,
         domains: data.domains,
         searchKeywords: data.searchKeywords,
         jobTypes: data.jobTypes,
@@ -1038,6 +1042,23 @@ export default function ProfilePage() {
                 {...register("title")}
               />
             </div>
+          </Section>
+
+          {/* Présentation - first impression for recruiters */}
+          <Section title="Ma Présentation" icon={MessageSquareQuote} badge="Première impression">
+            <p className="text-sm text-surface-500 dark:text-surface-400 mb-3">
+              Ce paragraphe sera affiché aux recruteurs comme première impression. Écrivez-le en 2-4 phrases pour vous décrire, vos atouts et votre ambition professionnelle.
+            </p>
+            <textarea
+              rows={4}
+              maxLength={500}
+              placeholder="Ex: Développeur Full Stack passionné par les technologies web modernes, je recherche un poste stimulant où je pourrai contribuer à des projets innovants tout en développant mes compétences en architecture logicielle..."
+              {...register("presentation")}
+              className="w-full px-4 py-3 rounded-xl border border-surface-300 dark:border-surface-600 bg-surface-50 dark:bg-surface-900 text-surface-900 dark:text-white placeholder-surface-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 transition-all text-sm resize-none leading-relaxed"
+            />
+            <p className="text-xs text-surface-400 mt-1.5">
+              {(watch("presentation") || "").length}/500 caractères
+            </p>
           </Section>
 
           {/* Domains - from onboarding */}

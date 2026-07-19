@@ -4,10 +4,14 @@ let transporterPromise = null
 
 async function getTransporter() {
   if (transporterPromise) return transporterPromise
-  
-  if (process.env.NODE_ENV === 'production' && process.env.EMAIL_USER !== 'your_email@gmail.com') {
+
+  const hasRealCreds = process.env.EMAIL_USER && process.env.EMAIL_PASS
+    && process.env.EMAIL_USER !== 'your_email@gmail.com'
+    && process.env.EMAIL_PASS !== 'your_app_password'
+
+  if (hasRealCreds) {
     transporterPromise = Promise.resolve(nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
+      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
       port: parseInt(process.env.EMAIL_PORT || '587'),
       secure: false,
       auth: {
@@ -45,7 +49,7 @@ export const sendEmail = async ({ to, subject, html }) => {
     if (previewUrl) {
       console.log('🔗 Voir l\'email:', previewUrl)
     }
-    return { success: true, messageId: info.messageId, previewUrl }
+    return { success: true, messageId: info.messageId, previewUrl: previewUrl || null }
   } catch (error) {
     console.error('❌ Erreur envoi email:', error.message)
     return { success: false, error: error.message }

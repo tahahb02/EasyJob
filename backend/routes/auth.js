@@ -1,16 +1,17 @@
 import express from 'express'
 import jwt from 'jsonwebtoken'
 import User from '../models/User.js'
+import UserProfile from '../models/UserProfile.js'
+import RecruiterProfile from '../models/RecruiterProfile.js'
 import { generateAccessToken, generateRefreshToken, generateEmailVerificationCode, generateResetPasswordToken } from '../utils/generateToken.js'
 import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/sendEmail.js'
 import { protect } from '../middlewares/auth.js'
 
 const router = express.Router()
 
-// POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { firstName, lastName, email, password, phone } = req.body
+    const { firstName, lastName, email, password, phone, role } = req.body
 
     if (!firstName || !lastName || !email || !password) {
       return res.status(400).json({ error: 'Tous les champs obligatoires doivent être remplis' })
@@ -24,6 +25,9 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Un compte avec cet email existe déjà' })
     }
 
+    const validRoles = ['candidat', 'recruiter']
+    const userRole = validRoles.includes(role) ? role : 'candidat'
+
     const verificationCode = generateEmailVerificationCode()
 
     const user = await User.create({
@@ -32,10 +36,30 @@ router.post('/register', async (req, res) => {
       email: email.toLowerCase(),
       password,
       phone: phone || '',
+      role: userRole,
       isEmailVerified: false,
       emailVerificationCode: verificationCode,
       emailVerificationExpire: new Date(Date.now() + 10 * 60 * 1000),
     })
+
+    // If recruiter, create recruiter profile
+    if (userRole === 'recruiter') {
+      const { companyName, industry, companySize, companyLocation, companyWebsite, companyDescription, position, linkedinUrl } = req.body
+      await RecruiterProfile.create({
+        userId: user._id,
+        companyName: companyName || '',
+        industry: industry || '',
+        companySize: companySize || '11-50',
+        companyLocation: companyLocation || '',
+        companyWebsite: companyWebsite || '',
+        companyDescription: companyDescription || '',
+        position: position || '',
+        linkedinUrl: linkedinUrl || '',
+      })
+    } else {
+      // Create empty profile for candidates
+      await UserProfile.create({ userId: user._id })
+    }
 
     const emailResult = await sendVerificationEmail(user.email, user.firstName, verificationCode)
     const emailSent = emailResult.success
@@ -59,7 +83,6 @@ router.post('/register', async (req, res) => {
   }
 })
 
-// POST /api/auth/verify-email
 router.post('/verify-email', async (req, res) => {
   try {
     const { email, code } = req.body
@@ -86,7 +109,6 @@ router.post('/verify-email', async (req, res) => {
   }
 })
 
-// POST /api/auth/resend-verification
 router.post('/resend-verification', async (req, res) => {
   try {
     const { email } = req.body
@@ -107,7 +129,6 @@ router.post('/resend-verification', async (req, res) => {
   }
 })
 
-// POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body
@@ -156,7 +177,6 @@ router.post('/login', async (req, res) => {
   }
 })
 
-// POST /api/auth/refresh-token
 router.post('/refresh-token', async (req, res) => {
   try {
     const { refreshToken } = req.body
@@ -180,7 +200,6 @@ router.post('/refresh-token', async (req, res) => {
   }
 })
 
-// POST /api/auth/forgot-password
 router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body
@@ -204,7 +223,6 @@ router.post('/forgot-password', async (req, res) => {
   }
 })
 
-// POST /api/auth/reset-password/:token
 router.post('/reset-password/:token', async (req, res) => {
   try {
     const { password } = req.body
@@ -235,7 +253,6 @@ router.post('/reset-password/:token', async (req, res) => {
   }
 })
 
-// GET /api/auth/me
 router.get('/me', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
@@ -245,13 +262,27 @@ router.get('/me', protect, async (req, res) => {
   }
 })
 
-// POST /api/auth/logout
 router.post('/logout', protect, async (req, res) => {
   try {
     await User.findByIdAndUpdate(req.user._id, { refreshToken: null })
     res.json({ message: 'Déconnexion réussie' })
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors de la déconnexion' })
+  }
+})
+
+// Update job search status
+router.put('/job-search-status', protect, async (req, res) => {
+  try {
+    const { status } = req.body
+    const validStatuses = ['none', 'actively_looking', 'open_to_offers', 'urgent', 'seeking_internship']
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Statut invalide' })
+    }
+    const user = await User.findByIdAndUpdate(req.user._id, { jobSearchStatus: status }, { new: true })
+    res.json({ user, message: 'Statut mis à jour' })
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur serveur' })
   }
 })
 

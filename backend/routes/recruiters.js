@@ -1,5 +1,6 @@
 import express from 'express'
 import Recruiter from '../models/Recruiter.js'
+import UserProfile from '../models/UserProfile.js'
 import { protect } from '../middlewares/auth.js'
 import { scrapeRecruiters } from '../services/jobScraper.js'
 
@@ -9,11 +10,21 @@ router.post('/scrape', protect, async (req, res) => {
   try {
     const { keywords, location, count } = req.body || {}
 
-    const searchKeywords = keywords || ['recruteur', 'HR', 'talent', 'recruitment']
-    const searchLocation = location || 'Maroc'
+    const profile = await UserProfile.findOne({ userId: req.user._id })
+    const searchKeywords = keywords || profile?.domains || profile?.searchKeywords || ['recruteur', 'HR', 'talent']
+    const searchLocation = location || profile?.location?.city || 'Maroc'
     const targetCount = Math.min(count || 30, 50)
 
-    const scrapedRecruiters = await scrapeRecruiters(searchKeywords, searchLocation, targetCount)
+    const userProfile = {
+      skills: profile?.skills || [],
+      domains: profile?.domains || [],
+      searchKeywords: profile?.searchKeywords || [],
+      education: profile?.education || [],
+      experience: profile?.experience || [],
+      title: profile?.title || '',
+    }
+
+    const scrapedRecruiters = await scrapeRecruiters(searchKeywords, searchLocation, targetCount, userProfile)
 
     const createdRecruiters = []
     let newCount = 0
@@ -53,7 +64,6 @@ router.post('/scrape', protect, async (req, res) => {
   }
 })
 
-// GET /api/recruiters
 router.get('/', protect, async (req, res) => {
   try {
     const { search, sector, location, connectionDegree } = req.query
@@ -77,7 +87,6 @@ router.get('/', protect, async (req, res) => {
   }
 })
 
-// GET /api/recruiters/:id
 router.get('/:id', protect, async (req, res) => {
   try {
     const recruiter = await Recruiter.findOne({ _id: req.params.id, userId: req.user._id })
@@ -88,7 +97,6 @@ router.get('/:id', protect, async (req, res) => {
   }
 })
 
-// POST /api/recruiters
 router.post('/', protect, async (req, res) => {
   try {
     const recruiter = await Recruiter.create({ ...req.body, userId: req.user._id })
@@ -98,7 +106,6 @@ router.post('/', protect, async (req, res) => {
   }
 })
 
-// PUT /api/recruiters/:id
 router.put('/:id', protect, async (req, res) => {
   try {
     const recruiter = await Recruiter.findOneAndUpdate(
@@ -113,7 +120,6 @@ router.put('/:id', protect, async (req, res) => {
   }
 })
 
-// DELETE /api/recruiters/:id
 router.delete('/:id', protect, async (req, res) => {
   try {
     await Recruiter.findOneAndDelete({ _id: req.params.id, userId: req.user._id })

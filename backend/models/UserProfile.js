@@ -4,6 +4,7 @@ const userProfileSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
   title: { type: String, default: '' },
   summary: { type: String, default: '' },
+  presentation: { type: String, default: '', maxlength: 500 },
   education: [{
     institution: String,
     degree: String,

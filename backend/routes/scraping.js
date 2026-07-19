@@ -2,6 +2,7 @@ import express from 'express'
 import JobOffer from '../models/JobOffer.js'
 import ScrapingLog from '../models/ScrapingLog.js'
 import UserProfile from '../models/UserProfile.js'
+import User from '../models/User.js'
 import { protect } from '../middlewares/auth.js'
 import { scrapeAllSources } from '../services/jobScraper.js'
 
@@ -11,17 +12,30 @@ router.post('/run', protect, async (req, res) => {
   try {
     const { keywords, location, sources } = req.body || {}
 
-    const profile = await UserProfile.findOne({ userId: req.user._id })
+    const [profile, user] = await Promise.all([
+      UserProfile.findOne({ userId: req.user._id }),
+      User.findById(req.user._id),
+    ])
 
     const searchKeywords = keywords
       || profile?.searchKeywords
       || profile?.domains
+      || profile?.skills
       || ['développeur', 'ingénieur', 'chef de projet']
     const searchLocation = location
       || profile?.preferredLocations?.[0]
       || profile?.location?.city
       || 'Maroc'
     const enabledSources = sources || ['linkedin', 'indeed', 'rekrute']
+
+    const userProfile = {
+      skills: profile?.skills || [],
+      domains: profile?.domains || [],
+      searchKeywords: profile?.searchKeywords || [],
+      education: profile?.education || [],
+      experience: profile?.experience || [],
+      title: profile?.title || user?.role || '',
+    }
 
     const log = await ScrapingLog.create({
       userId: req.user._id,
@@ -30,7 +44,7 @@ router.post('/run', protect, async (req, res) => {
       sources: enabledSources.map(s => ({ source: s, status: 'running' })),
     })
 
-    const results = await scrapeAllSources(searchKeywords, searchLocation, enabledSources)
+    const results = await scrapeAllSources(searchKeywords, searchLocation, enabledSources, userProfile)
 
     const createdJobs = []
     const sourceStats = []
@@ -52,6 +66,7 @@ router.post('/run', protect, async (req, res) => {
               userId: req.user._id,
               scrapedAt: new Date(),
               sourceId: jobData.sourceId || `scrape-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              postedAt: jobData.postedAt || new Date(),
             })
             createdJobs.push(job)
             newOffers++

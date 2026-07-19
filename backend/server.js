@@ -17,6 +17,7 @@ import searchProfileRoutes from './routes/searchProfiles.js'
 import analyticsRoutes from './routes/analytics.js'
 import cvRoutes from './routes/cv.js'
 import portfolioRoutes from './routes/portfolio.js'
+import recruiterSpaceRoutes from './routes/recruiterSpace.js'
 
 mongoose.set('toJSON', { virtuals: true, versionKey: false })
 mongoose.set('toObject', { virtuals: true, versionKey: false })
@@ -59,6 +60,7 @@ app.use('/api/scraping', scrapingRoutes)
 app.use('/api/emails', emailTemplateRoutes)
 app.use('/api/search-profiles', searchProfileRoutes)
 app.use('/api/analytics', analyticsRoutes)
+app.use('/api/recruiter-space', recruiterSpaceRoutes)
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }))
 

@@ -2,7 +2,8 @@ import mongoose from 'mongoose'
 
 const jobOfferSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  source: { type: String, enum: ['linkedin', 'indeed', 'welcometothejungle', 'rekrute', 'manpower', 'manual', 'autre'] },
+  postedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  source: { type: String, enum: ['linkedin', 'indeed', 'welcometothejungle', 'rekrute', 'manpower', 'manual', 'recruiter', 'autre'] },
   sourceId: String,
   sourceUrl: String,
   title: { type: String, required: true },
@@ -25,14 +26,21 @@ const jobOfferSchema = new mongoose.Schema({
   expiresAt: Date,
   scrapedAt: Date,
   sector: { type: String, default: '' },
+  domain: { type: String, default: '' },
   keywords: [String],
   relevanceScore: { type: Number, default: 0, min: 0, max: 100 },
   isSaved: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true },
+  viewsCount: { type: Number, default: 0 },
+  applicationsCount: { type: Number, default: 0 },
+  maxApplications: { type: Number, default: 100 },
+  applicationDeadline: Date,
 }, { timestamps: true })
 
 jobOfferSchema.index({ userId: 1, source: 1, sourceId: 1 }, { unique: true, sparse: true })
 jobOfferSchema.index({ userId: 1, isActive: 1 })
+jobOfferSchema.index({ postedBy: 1, isActive: 1 })
 jobOfferSchema.index({ title: 'text', company: 'text', description: 'text' })
+jobOfferSchema.index({ domain: 1, sector: 1, isActive: 1 })
 
 export default mongoose.model('JobOffer', jobOfferSchema)
