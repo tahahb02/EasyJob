@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 
-import { useDashboardStats } from '@/api/hooks';
+import { useAnalyticsOverview, useAnalyticsApplications, useAnalyticsSources } from '@/api/hooks';
 
 const dateRanges = ['Cette semaine', 'Ce mois', 'Ce trimestre'];
 
@@ -53,23 +53,65 @@ function StatSkeleton() {
   );
 }
 
+const statusColors = ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+
 export default function AnalyticsPage() {
   const [selectedRange, setSelectedRange] = useState('Ce mois');
-  const { data, isLoading, error, refetch } = useDashboardStats();
+  const { data: overviewData, isLoading: isLoadingOverview, error: errorOverview, refetch: refetchOverview } = useAnalyticsOverview();
+  const { data: appsData, isLoading: isLoadingApps } = useAnalyticsApplications();
+  const { data: sourcesData, isLoading: isLoadingSources } = useAnalyticsSources();
 
-  const stats = data?.stats ?? {};
-  const sourcePerformance = data?.sourcePerformance ?? [];
-  const candidaturesEvolution = data?.candidaturesEvolution ?? [];
-  const repartitionSecteur = data?.repartitionSecteur ?? [];
-  const conversionRates = data?.conversionRates ?? [];
-  const insights = data?.insights ?? [];
+  const isLoading = isLoadingOverview || isLoadingApps || isLoadingSources;
+  const error = errorOverview;
+
+  const overview = overviewData?.overview ?? {};
+  const offersBySource = overviewData?.offersBySource ?? [];
+  const appsByStatus = overviewData?.appsByStatus ?? [];
+  const appsByWeek = overviewData?.appsByWeek ?? [];
+  const offersByWeek = overviewData?.offersByWeek ?? [];
+
+  const sources = sourcesData?.sources ?? [];
+  const appsByStatusDetail = appsData?.byStatus ?? [];
 
   const kpis = [
-    { label: "Total offres", value: stats.totalJobs, color: "primary" },
-    { label: "Total candidatures", value: stats.totalApplications, color: "secondary" },
-    { label: "Taux de réponse", value: stats.responseRate, color: "accent", suffix: "%" },
-    { label: "Taux d'ouverture", value: stats.emailOpenRate, color: "primary", suffix: "%" }
+    { label: "Total offres", value: overview.totalOffers, color: "primary" },
+    { label: "Total candidatures", value: overview.totalApplications, color: "secondary" },
+    { label: "Taux de réponse", value: overview.responseRate, color: "accent", suffix: "%" },
+    { label: "Taux d'ouverture", value: overview.emailOpenRate, color: "primary", suffix: "%" }
   ];
+
+  const statusPieData = appsByStatus.map((s, i) => ({
+    name: s.name,
+    value: s.value,
+    color: statusColors[i % statusColors.length],
+  }));
+
+  const evolutionData = appsByWeek.map(w => ({
+    mois: `S${w._id}`,
+    candidatures: w.count,
+  }));
+
+  const offersEvolutionData = offersByWeek.map(w => ({
+    mois: `S${w._id}`,
+    offres: w.count,
+  }));
+
+  const sourceChartData = sources.map(s => ({
+    source: s.name || 'Inconnu',
+    candidatures: s.count,
+    score: s.avgScore,
+  }));
+
+  const insights = [];
+  if (overview.totalApplications > 0 && overview.responseRate > 50) {
+    insights.push({ title: "Taux de réponse", value: `${overview.responseRate}%`, trend: "up", description: "Votre taux de réponse est au-dessus de la moyenne." });
+  }
+  if (overview.emailOpenRate > 30) {
+    insights.push({ title: "Ouvertures email", value: `${overview.emailOpenRate}%`, trend: "up", description: "Vos emails sont bien ouverts par les recruteurs." });
+  }
+  if (sources.length > 0) {
+    insights.push({ title: "Source principale", value: sources[0].name || 'N/A', trend: "up", description: `${sources[0].count} candidatures via cette source.` });
+  }
 
   if (error) {
     return (
@@ -79,7 +121,7 @@ export default function AnalyticsPage() {
           <AlertTriangle className="mb-3 h-10 w-10 text-danger-400" />
           <h3 className="text-lg font-semibold text-danger-700 dark:text-danger-400">Erreur de chargement</h3>
           <p className="mt-1 text-sm text-danger-500">{error?.message || 'Une erreur est survenue.'}</p>
-          <button onClick={() => refetch()} className="mt-4 rounded-xl bg-danger-500 px-4 py-2 text-sm font-semibold text-white hover:bg-danger-600">
+          <button onClick={() => refetchOverview()} className="mt-4 rounded-xl bg-danger-500 px-4 py-2 text-sm font-semibold text-white hover:bg-danger-600">
             Réessayer
           </button>
         </div>
@@ -148,83 +190,94 @@ export default function AnalyticsPage() {
           <>
             <div className="bg-white dark:bg-surface-800 rounded-2xl p-5 border border-surface-200 dark:border-surface-700 shadow-sm">
               <h2 className="text-lg font-semibold text-surface-900 dark:text-white mb-4">Performance par source</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={sourcePerformance} barGap={4}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" className="dark:stroke-surface-700" />
-                  <XAxis dataKey="source" tick={{ fontSize: 12 }} stroke="#9CA3AF" />
-                  <YAxis tick={{ fontSize: 12 }} stroke="#9CA3AF" />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend />
-                  <Bar dataKey="offres" name="Offres" fill="#2563EB" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="candidatures" name="Candidatures" fill="#10B981" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {sourceChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={sourceChartData} barGap={4}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" className="dark:stroke-surface-700" />
+                    <XAxis dataKey="source" tick={{ fontSize: 12 }} stroke="#9CA3AF" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="#9CA3AF" />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend />
+                    <Bar dataKey="candidatures" name="Candidatures" fill="#2563EB" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-sm text-surface-400 dark:text-surface-500 text-center py-12">Aucune donnée de source disponible.</p>
+              )}
             </div>
 
             <div className="bg-white dark:bg-surface-800 rounded-2xl p-5 border border-surface-200 dark:border-surface-700 shadow-sm">
               <h2 className="text-lg font-semibold text-surface-900 dark:text-white mb-4">Évolution des candidatures</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={candidaturesEvolution}>
-                  <defs>
-                    <linearGradient id="gradCandidatures" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#2563EB" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#2563EB" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" className="dark:stroke-surface-700" />
-                  <XAxis dataKey="mois" tick={{ fontSize: 12 }} stroke="#9CA3AF" />
-                  <YAxis tick={{ fontSize: 12 }} stroke="#9CA3AF" />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Area
-                    type="monotone"
-                    dataKey="candidatures"
-                    name="Candidatures"
-                    stroke="#2563EB"
-                    strokeWidth={2}
-                    fill="url(#gradCandidatures)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              {evolutionData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <AreaChart data={evolutionData}>
+                    <defs>
+                      <linearGradient id="gradCandidatures" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#2563EB" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#2563EB" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" className="dark:stroke-surface-700" />
+                    <XAxis dataKey="mois" tick={{ fontSize: 12 }} stroke="#9CA3AF" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="#9CA3AF" />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Area
+                      type="monotone"
+                      dataKey="candidatures"
+                      name="Candidatures"
+                      stroke="#2563EB"
+                      strokeWidth={2}
+                      fill="url(#gradCandidatures)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-sm text-surface-400 dark:text-surface-500 text-center py-12">Aucune donnée d'évolution disponible.</p>
+              )}
             </div>
 
             <div className="bg-white dark:bg-surface-800 rounded-2xl p-5 border border-surface-200 dark:border-surface-700 shadow-sm">
-              <h2 className="text-lg font-semibold text-surface-900 dark:text-white mb-4">Répartition par secteur</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={repartitionSecteur}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={4}
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {repartitionSecteur.map((entry, index) => (
-                      <Cell key={index} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<CustomTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
+              <h2 className="text-lg font-semibold text-surface-900 dark:text-white mb-4">Répartition par statut</h2>
+              {statusPieData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={statusPieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={4}
+                      dataKey="value"
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    >
+                      {statusPieData.map((entry, index) => (
+                        <Cell key={index} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-sm text-surface-400 dark:text-surface-500 text-center py-12">Aucune donnée de statut disponible.</p>
+              )}
             </div>
 
             <div className="bg-white dark:bg-surface-800 rounded-2xl p-5 border border-surface-200 dark:border-surface-700 shadow-sm">
-              <h2 className="text-lg font-semibold text-surface-900 dark:text-white mb-4">Taux de conversion</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={conversionRates} layout="vertical" barSize={24}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" className="dark:stroke-surface-700" />
-                  <XAxis type="number" tick={{ fontSize: 12 }} stroke="#9CA3AF" domain={[0, 100]} />
-                  <YAxis type="category" dataKey="etape" tick={{ fontSize: 12 }} stroke="#9CA3AF" width={120} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="taux" name="Taux %" radius={[0, 4, 4, 0]}>
-                    {conversionRates.map((entry, index) => (
-                      <Cell key={index} fill={index === 0 ? '#2563EB' : index < 3 ? '#F59E0B' : '#10B981'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              <h2 className="text-lg font-semibold text-surface-900 dark:text-white mb-4">Offres par semaine</h2>
+              {offersEvolutionData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={offersEvolutionData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" className="dark:stroke-surface-700" />
+                    <XAxis dataKey="mois" tick={{ fontSize: 12 }} stroke="#9CA3AF" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="#9CA3AF" />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="offres" name="Offres" fill="#10B981" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-sm text-surface-400 dark:text-surface-500 text-center py-12">Aucune donnée d'offres disponible.</p>
+              )}
             </div>
           </>
         )}

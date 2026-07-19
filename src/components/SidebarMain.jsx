@@ -9,6 +9,7 @@ import {
   LogOut, ChevronLeft, ChevronRight, Sun, Moon, X, User,
   Building2, ClipboardList, UserCheck
 } from 'lucide-react'
+import { useUnreadNotificationCount } from '@/api/hooks'
 
 const candidateNavItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
@@ -39,6 +40,7 @@ export default function SidebarMain() {
   const { collapsed, toggleCollapse, mobileOpen, closeMobile } = useSidebar()
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
+  const { data: unreadCount } = useUnreadNotificationCount()
 
   const isRecruiter = user?.role === 'recruiter'
   const navItems = isRecruiter ? recruiterNavItems : candidateNavItems
@@ -60,25 +62,35 @@ export default function SidebarMain() {
       </div>
 
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        {navItems.map(item => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            onClick={closeMobile}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                isActive
-                  ? isRecruiter
-                    ? 'bg-secondary-500 text-white shadow-lg shadow-secondary-500/25'
-                    : 'bg-primary-500 text-white shadow-lg shadow-primary-500/25'
-                  : 'text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-800 dark:hover:text-white'
-              } ${collapsed ? 'justify-center' : ''}`
-            }
-          >
-            <item.icon className="w-5 h-5 flex-shrink-0" />
-            {!collapsed && <span>{item.label}</span>}
-          </NavLink>
-        ))}
+        {navItems.map(item => {
+          const isBell = item.icon === Bell && unreadCount > 0
+          return (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              onClick={closeMobile}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  isActive
+                    ? isRecruiter
+                      ? 'bg-secondary-500 text-white shadow-lg shadow-secondary-500/25'
+                      : 'bg-primary-500 text-white shadow-lg shadow-primary-500/25'
+                    : 'text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-800 dark:hover:text-white'
+                } ${collapsed ? 'justify-center' : ''}`
+              }
+            >
+              <div className="relative flex-shrink-0">
+                <item.icon className="w-5 h-5" />
+                {isBell && (
+                  <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-danger-500 text-white text-[10px] font-bold px-1 leading-none">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </div>
+              {!collapsed && <span>{item.label}</span>}
+            </NavLink>
+          )
+        })}
       </nav>
 
       <div className="p-3 border-t border-surface-200 dark:border-surface-700 space-y-2">

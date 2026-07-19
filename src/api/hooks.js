@@ -129,6 +129,15 @@ export const useNotifications = (filters = {}) => useQuery({
   },
 })
 
+export const useUnreadNotificationCount = () => useQuery({
+  queryKey: ['notifications', 'unreadCount'],
+  queryFn: async () => {
+    const { data } = await api.get('/notifications')
+    return data.unreadCount ?? 0
+  },
+  refetchInterval: 30000,
+})
+
 export const useMarkNotificationRead = () => {
   const qc = useQueryClient()
   return useMutation({

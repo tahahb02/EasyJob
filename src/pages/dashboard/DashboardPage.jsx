@@ -32,7 +32,8 @@ import {
 import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
-import { useDashboardStats, useDashboardActivity } from '@/api/hooks'
+import { useAuth } from '@/context/AuthContext'
+import { useDashboardStats, useDashboardActivity, useProfile } from '@/api/hooks'
 
 const container = {
   hidden: { opacity: 0 },
@@ -159,6 +160,8 @@ const activityTypeConfig = {
 }
 
 export default function DashboardPage() {
+  const { user } = useAuth()
+  const { data: profileData } = useProfile()
   const { data, isLoading, error, refetch } = useDashboardStats()
   const { data: activityData, isLoading: isLoadingActivity } = useDashboardActivity()
 
@@ -256,7 +259,7 @@ export default function DashboardPage() {
       {/* Welcome Header */}
       <motion.div variants={item}>
         <h1 className="text-3xl font-bold text-surface-900 dark:text-surface-50">
-          Bonjour! 👋
+          Bonjour {profileData?.profile?.title ? `${profileData.profile.title} ` : ''}{user?.firstName} {user?.lastName} 👋
         </h1>
         <p className="mt-1 text-lg text-surface-500 dark:text-surface-400">
           Voici un résumé de votre activité
