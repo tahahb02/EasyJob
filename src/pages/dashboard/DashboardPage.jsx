@@ -33,7 +33,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
 import { useAuth } from '@/context/AuthContext'
-import { useDashboardStats, useDashboardActivity, useProfile } from '@/api/hooks'
+import { useDashboardStats, useDashboardActivity, useProfile, useUnreadNotificationCount } from '@/api/hooks'
 
 const container = {
   hidden: { opacity: 0 },
@@ -162,6 +162,7 @@ const activityTypeConfig = {
 export default function DashboardPage() {
   const { user } = useAuth()
   const { data: profileData } = useProfile()
+  const { data: unreadCount } = useUnreadNotificationCount()
   const { data, isLoading, error, refetch } = useDashboardStats()
   const { data: activityData, isLoading: isLoadingActivity } = useDashboardActivity()
 
@@ -257,13 +258,23 @@ export default function DashboardPage() {
       className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8"
     >
       {/* Welcome Header */}
-      <motion.div variants={item}>
-        <h1 className="text-3xl font-bold text-surface-900 dark:text-surface-50">
-          Bonjour {profileData?.profile?.title ? `${profileData.profile.title} ` : ''}{user?.firstName} {user?.lastName} 👋
-        </h1>
-        <p className="mt-1 text-lg text-surface-500 dark:text-surface-400">
-          Voici un résumé de votre activité
-        </p>
+      <motion.div variants={item} className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-surface-900 dark:text-surface-50">
+            Bonjour {profileData?.profile?.title ? `${profileData.profile.title} ` : ''}{user?.firstName} {user?.lastName} 👋
+          </h1>
+          <p className="mt-1 text-lg text-surface-500 dark:text-surface-400">
+            Voici un résumé de votre activité
+          </p>
+        </div>
+        <Link to="/notifications" className="relative flex items-center justify-center w-11 h-11 rounded-xl bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 transition">
+          <Bell className="w-5 h-5 text-surface-600 dark:text-surface-400" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-danger-500 text-white text-[10px] font-bold px-1 leading-none">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </Link>
       </motion.div>
 
       {/* Stats Cards */}
