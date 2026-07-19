@@ -12,7 +12,6 @@ import {
   FileText,
   CheckCircle,
   AlertCircle,
-  Bell,
   Loader2,
   AlertTriangle,
 } from 'lucide-react'
@@ -33,7 +32,8 @@ import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
 import { useAuth } from '@/context/AuthContext'
-import { useDashboardStats, useDashboardActivity, useProfile, useUnreadNotificationCount } from '@/api/hooks'
+import { useDashboardStats, useDashboardActivity, useProfile } from '@/api/hooks'
+import NotificationDropdown from '@/components/NotificationDropdown'
 
 const container = {
   hidden: { opacity: 0 },
@@ -162,7 +162,6 @@ const activityTypeConfig = {
 export default function DashboardPage() {
   const { user } = useAuth()
   const { data: profileData } = useProfile()
-  const { data: unreadCount } = useUnreadNotificationCount()
   const { data, isLoading, error, refetch } = useDashboardStats()
   const { data: activityData, isLoading: isLoadingActivity } = useDashboardActivity()
 
@@ -267,14 +266,7 @@ export default function DashboardPage() {
             Voici un résumé de votre activité
           </p>
         </div>
-        <Link to="/notifications" className="relative flex items-center justify-center w-11 h-11 rounded-xl bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 transition">
-          <Bell className="w-5 h-5 text-surface-600 dark:text-surface-400" />
-          {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-danger-500 text-white text-[10px] font-bold px-1 leading-none">
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </span>
-          )}
-        </Link>
+        <NotificationDropdown />
       </motion.div>
 
       {/* Stats Cards */}
