@@ -1,6 +1,6 @@
 backend/
 .vercel/
-node_modules/
-dist/
-*.log
 .qodo/
+node_modules/
+*.log
+test_cv.pdf

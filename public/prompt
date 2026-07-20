@@ -151,7 +151,7 @@ jobconnect-ai/
 │   │   └── axios.js              # Instance Axios avec intercepteurs JWT
 │   │
 │   ├── assets/
-│   │   ├── hero.png
+│   │   ├── hero.png    
 │   │   ├── logo.svg
 │   │   └── empty-states/
 │   │       ├── no-jobs.svg

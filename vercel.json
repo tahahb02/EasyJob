@@ -1,6 +1,6 @@
 {
   "installCommand": "npm install",
-  "buildCommand": "npm run build",
+  "buildCommand": "node build-api.js && npm run build",
   "outputDirectory": "dist",
   "functions": {
     "api/index.js": {

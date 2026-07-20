@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Loader2,
   AlertTriangle,
+  Bell,
 } from 'lucide-react'
 import {
   AreaChart,
