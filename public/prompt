@@ -933,7 +933,7 @@ const sidebarItems = [
 
 ### pdfParser.js
 ```javascript
-// Fonctions principales :
+// Fonctions principales : 
 // - extractTextFromPDF(pdfBuffer) → String
 // - parseCVData(text) → { skills, experience, education, languages }
 // - generateCVPreview(cvUrl) → Buffer (thumbnail)

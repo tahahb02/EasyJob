@@ -11,7 +11,7 @@ import EmailTemplate from './models/EmailTemplate.js'
 
 dotenv.config()
 
-const PASSWORD = 'EasyJob2026!'
+const PASSWORD = 'Tahtah2002@'
 
 function daysAgo(n) {
   const d = new Date()
@@ -379,6 +379,414 @@ const candidatesData = [
       score: 76,
     },
   },
+  // ─── NOUVEAUX CANDIDATS (9 à 20) ─────────────────────────────
+  {
+    firstName: 'Youssef', lastName: 'Amrani', email: 'youssef.amrani@gmail.com', phone: '+212 6 32 12 34 56',
+    jobSearchStatus: 'actively_looking',
+    profile: {
+      title: 'Développeur Backend Java/Spring',
+      presentation: 'Développeur Backend avec 4 ans d\'expérience en Java et Spring Boot. Spécialisé dans les architectures microservices et les API REST. Je recherche un poste dans une grande entreprise avec des défis techniques stimulants.',
+      domains: ['Technologie / IT'],
+      skills: ['Java', 'Spring Boot', 'Microservices', 'PostgreSQL', 'Docker', 'Kubernetes', 'Redis', 'Kafka'],
+      searchKeywords: ['Java', 'Spring', 'Backend', 'Microservices', 'API'],
+      jobTypes: ['CDI'],
+      preferredLocations: ['Casablanca', 'Rabat', 'Remote'],
+      languages: [{ language: 'Arabe', level: 'Natif' }, { language: 'Français', level: 'Avancé' }, { language: 'Anglais', level: 'Avancé' }],
+      location: { city: 'Casablanca', country: 'Maroc', isRemoteOpen: true },
+      education: [
+        { institution: 'ENSIAS', degree: 'Ingénieur d\'État', field: 'Génie Logiciel', startDate: daysAgo(2000), endDate: daysAgo(1100) },
+      ],
+      experience: [
+        { company: 'OCP Group', position: 'Développeur Backend Java', startDate: daysAgo(1100), endDate: null, isCurrent: true, description: 'Développement d\'applications enterprise avec Spring Boot, Kafka, microservices.', skills: ['Java', 'Spring Boot', 'Kafka'] },
+        { company: 'Telnet', position: 'Développeur Junior Java', startDate: daysAgo(1500), endDate: daysAgo(1100), isCurrent: false, description: 'Développement d\'applications web Java EE, tests unitaires.', skills: ['Java', 'SQL', 'Git'] },
+      ],
+    },
+    cv: {
+      skills: ['Java', 'Spring Boot', 'Microservices', 'PostgreSQL', 'Docker', 'Kubernetes', 'Redis', 'Kafka', 'Maven', 'Git'],
+      experience: [
+        { title: 'Développeur Backend Java', company: 'OCP Group', period: 'Jan 2022 - Présent', description: 'Architecture microservices, Spring Boot, Kafka, Docker.' },
+        { title: 'Développeur Junior Java', company: 'Telnet', period: 'Mar 2021 - Jan 2022', description: 'Applications Java EE, SQL, tests unitaires.' },
+      ],
+      education: [
+        { degree: 'Ingénieur d\'État Génie Logiciel', institution: 'ENSIAS', year: '2018 - 2021' },
+      ],
+      languages: ['Arabe (Natif)', 'Français (Avancé)', 'Anglais (Avancé)'],
+      score: 74,
+    },
+  },
+  {
+    firstName: 'Sara', lastName: 'Tahiri', email: 'sara.tahiri@outlook.com', phone: '+212 6 43 23 45 67',
+    jobSearchStatus: 'open_to_offers',
+    profile: {
+      title: 'Chef de Projet Marketing Digital',
+      presentation: 'Chef de projet marketing digital avec 3 ans d\'expérience en stratégie digitale et gestion de campagnes. Maîtrise SEO, SEM et analytics. Je recherche un poste dans une entreprise innovante.',
+      domains: ['Marketing / Communication', 'Digital'],
+      skills: ['SEO', 'Google Ads', 'Social Media', 'Analytics', 'Content Marketing', 'Email Marketing'],
+      searchKeywords: ['Marketing Digital', 'SEO', 'Google Ads', 'Social Media', 'Content'],
+      jobTypes: ['CDI'],
+      preferredLocations: ['Casablanca', 'Marrakech'],
+      languages: [{ language: 'Arabe', level: 'Natif' }, { language: 'Français', level: 'Courant' }, { language: 'Anglais', level: 'Avancé' }],
+      location: { city: 'Casablanca', country: 'Maroc', isRemoteOpen: false },
+      education: [
+        { institution: 'ISCAE', degree: 'Master', field: 'Marketing Digital', startDate: daysAgo(1400), endDate: daysAgo(600) },
+      ],
+      experience: [
+        { company: 'MarocTelecom', position: 'Chef de Projet Marketing Digital', startDate: daysAgo(600), endDate: null, isCurrent: true, description: 'Gestion des campagnes digitales, SEO, Google Ads, analytics.', skills: ['SEO', 'Google Ads', 'Analytics'] },
+        { company: 'L\'Oréal Maroc', position: 'Stagiaire Marketing', startDate: daysAgo(900), endDate: daysAgo(600), isCurrent: false, description: 'Assistance gestion campagnes, community management.', skills: ['Social Media', 'Content Marketing'] },
+      ],
+    },
+    cv: {
+      skills: ['SEO', 'Google Ads', 'Social Media', 'Analytics', 'Content Marketing', 'Email Marketing', 'HubSpot', 'WordPress'],
+      experience: [
+        { title: 'Chef de Projet Marketing Digital', company: 'MarocTelecom', period: 'Jun 2024 - Présent', description: 'Campagnes digitales, SEO +40% trafic, ROI Google Ads.' },
+        { title: 'Stagiaire Marketing', company: 'L\'Oréal Maroc', period: 'Sep 2023 - Jun 2024', description: 'Community management, contenu digtal.' },
+      ],
+      education: [
+        { degree: 'Master Marketing Digital', institution: 'ISCAE', year: '2021 - 2023' },
+      ],
+      languages: ['Arabe (Natif)', 'Français (Courant)', 'Anglais (Avancé)'],
+      score: 68,
+    },
+  },
+  {
+    firstName: 'Ahmed', lastName: 'Bouzid', email: 'ahmed.bouzid@gmail.com', phone: '+212 6 54 34 56 78',
+    jobSearchStatus: 'actively_looking',
+    profile: {
+      title: 'Ingénieur Cloud & Infrastructure',
+      presentation: 'Ingénieur Cloud certifié AWS et Azure avec 5 ans d\'expérience. Expert en infrastructure as code, Terraform et automatisation. Je pilote des migrations cloud à grande échelle.',
+      domains: ['Technologie / IT', 'Cloud'],
+      skills: ['AWS', 'Azure', 'Terraform', 'Docker', 'Kubernetes', 'Ansible', 'Linux', 'Bash', 'Python'],
+      searchKeywords: ['Cloud', 'AWS', 'Azure', 'Terraform', 'Infrastructure'],
+      jobTypes: ['CDI'],
+      preferredLocations: ['Casablanca', 'Remote'],
+      languages: [{ language: 'Arabe', level: 'Natif' }, { language: 'Français', level: 'Courant' }, { language: 'Anglais', level: 'Courant' }],
+      location: { city: 'Casablanca', country: 'Maroc', isRemoteOpen: true },
+      education: [
+        { institution: 'EMI', degree: 'Ingénieur d\'État', field: 'Réseaux et Systèmes', startDate: daysAgo(2200), endDate: daysAgo(1300) },
+      ],
+      experience: [
+        { company: 'ONCF', position: 'Ingénieur Cloud', startDate: daysAgo(1300), endDate: null, isCurrent: true, description: 'Migration AWS, Terraform, Kubernetes, automatisation Ansible.', skills: ['AWS', 'Terraform', 'Kubernetes'] },
+        { company: 'IBM Maroc', position: 'Admin Système Linux', startDate: daysAgo(1800), endDate: daysAgo(1300), isCurrent: false, description: 'Administration serveurs Linux, monitoring Nagios.', skills: ['Linux', 'Nagios', 'Bash'] },
+      ],
+    },
+    cv: {
+      skills: ['AWS', 'Azure', 'Terraform', 'Docker', 'Kubernetes', 'Ansible', 'Linux', 'Bash', 'Python', 'Nagios'],
+      experience: [
+        { title: 'Ingénieur Cloud', company: 'ONCF', period: 'Mar 2022 - Présent', description: 'Migration cloud AWS, Terraform IaC, Kubernetes.' },
+        { title: 'Admin Système Linux', company: 'IBM Maroc', period: 'Jun 2020 - Mar 2022', description: 'Linux admin, monitoring, scripting Bash.' },
+      ],
+      education: [
+        { degree: 'Ingénieur d\'État Réseaux et Systèmes', institution: 'EMI', year: '2017 - 2020' },
+      ],
+      languages: ['Arabe (Natif)', 'Français (Courant)', 'Anglais (Courant)'],
+      score: 82,
+    },
+  },
+  {
+    firstName: 'Malika', lastName: 'El Ouahbi', email: 'malika.ouahbi@yahoo.fr', phone: '+212 6 65 45 67 89',
+    jobSearchStatus: 'open_to_offers',
+    profile: {
+      title: 'Comptable Senior',
+      presentation: 'Comptable certifiée avec 6 ans d\'expérience en cabinet comptable. Maîtrise la comptabilité générale, fiscale et sociale. Diplômée DECG, je recherche un poste en entreprise ou en cabinet.',
+      domains: ['Finance / Banque', 'Comptabilité'],
+      skills: ['Comptabilité', 'Sage', 'QuickBooks', 'Fiscalité', 'Paie', 'Excel', 'IFRS'],
+      searchKeywords: ['Comptable', 'Comptabilité', 'Fiscalité', 'Paie', 'Sage'],
+      jobTypes: ['CDI'],
+      preferredLocations: ['Casablanca', 'Rabat'],
+      languages: [{ language: 'Arabe', level: 'Natif' }, { language: 'Français', level: 'Courant' }, { language: 'Anglais', level: 'Intermédiaire' }],
+      location: { city: 'Rabat', country: 'Maroc', isRemoteOpen: false },
+      education: [
+        { institution: 'ISCAE', degree: 'DECG', field: 'Comptabilité et Gestion', startDate: daysAgo(2400), endDate: daysAgo(1800) },
+      ],
+      experience: [
+        { company: 'KPMG Maroc', position: 'Comptable Senior', startDate: daysAgo(1200), endDate: null, isCurrent: true, description: 'Gestion portefeuille clients, bilans fiscaux, audit.', skills: ['Comptabilité', 'Fiscalité', 'Audit'] },
+        { company: 'PwC Maroc', position: 'Comptable Junior', startDate: daysAgo(1800), endDate: daysAgo(1200), isCurrent: false, description: 'Tenue comptable, déclarations fiscales, paie.', skills: ['Sage', 'Paie', 'Excel'] },
+      ],
+    },
+    cv: {
+      skills: ['Comptabilité', 'Sage', 'QuickBooks', 'Fiscalité', 'Paie', 'Excel', 'IFRS', 'Audit'],
+      experience: [
+        { title: 'Comptable Senior', company: 'KPMG Maroc', period: 'Jan 2023 - Présent', description: 'Portefeuille 30+ clients, bilans IFRS, fiscalité.' },
+        { title: 'Comptable Junior', company: 'PwC Maroc', period: 'Jan 2021 - Jan 2023', description: 'Tenue comptable, déclarations fiscales, Sage.' },
+      ],
+      education: [
+        { degree: 'DECG Comptabilité et Gestion', institution: 'ISCAE', year: '2018 - 2021' },
+      ],
+      languages: ['Arabe (Natif)', 'Français (Courant)', 'Anglais (Intermédiaire)'],
+      score: 71,
+    },
+  },
+  {
+    firstName: 'Othman', lastName: 'Chraibi', email: 'othman.chraibi@gmail.com', phone: '+212 6 76 56 78 90',
+    jobSearchStatus: 'urgent',
+    profile: {
+      title: 'Développeur Frontend Vue.js',
+      presentation: 'Développeur Frontend passionné par les interfaces utilisateur modernes avec 3 ans d\'expérience en Vue.js et Nuxt.js. En recherche urgente, disponible immédiatement.',
+      domains: ['Technologie / IT'],
+      skills: ['Vue.js', 'Nuxt.js', 'JavaScript', 'TypeScript', 'HTML', 'CSS', 'Tailwind CSS', 'Vuetify'],
+      searchKeywords: ['Vue.js', 'Frontend', 'Nuxt.js', 'JavaScript', 'TypeScript'],
+      jobTypes: ['CDI', 'CDD', 'Freelance'],
+      preferredLocations: ['Casablanca', 'Tanger', 'Remote'],
+      languages: [{ language: 'Arabe', level: 'Natif' }, { language: 'Français', level: 'Avancé' }, { language: 'Anglais', level: 'Intermédiaire' }],
+      location: { city: 'Tanger', country: 'Maroc', isRemoteOpen: true },
+      education: [
+        { institution: 'ENSA Tanger', degree: 'Licence', field: 'Informatique', startDate: daysAgo(1200), endDate: daysAgo(500) },
+      ],
+      experience: [
+        { company: 'Vermeg', position: 'Développeur Frontend Vue.js', startDate: daysAgo(500), endDate: null, isCurrent: true, description: 'Développement d\'interfaces avec Vue.js/Vuetify, optimisation performance.', skills: ['Vue.js', 'Vuetify', 'JavaScript'] },
+        { company: 'Sofrecom', position: 'Stagiaire Développeur Web', startDate: daysAgo(800), endDate: daysAgo(500), isCurrent: false, description: 'Intégration HTML/CSS, développement JavaScript.', skills: ['HTML', 'CSS', 'JavaScript'] },
+      ],
+    },
+    cv: {
+      skills: ['Vue.js', 'Nuxt.js', 'JavaScript', 'TypeScript', 'HTML', 'CSS', 'Tailwind CSS', 'Vuetify', 'Pinia', 'Vuex'],
+      experience: [
+        { title: 'Développeur Frontend Vue.js', company: 'Vermeg', period: 'Jun 2024 - Présent', description: 'Vue.js 3, Vuetify 3, Pinia, composition API.' },
+        { title: 'Stagiaire Développeur Web', company: 'Sofrecom', period: 'Sep 2023 - Jun 2024', description: 'HTML/CSS/JS, intégration responsive.' },
+      ],
+      education: [
+        { degree: 'Licence Informatique', institution: 'ENSA Tanger', year: '2021 - 2024' },
+      ],
+      languages: ['Arabe (Natif)', 'Français (Avancé)', 'Anglais (Intermédiaire)'],
+      score: 62,
+    },
+  },
+  {
+    firstName: 'Houda', lastName: 'Benkirane', email: 'houda.benkirane@gmail.com', phone: '+212 6 87 67 89 01',
+    jobSearchStatus: 'actively_looking',
+    profile: {
+      title: 'Data Scientist',
+      presentation: 'Data Scientist avec Master en Intelligence Artificielle et 2 ans d\'expérience. Spécialisée en machine learning et deep learning avec Python. Passionnée par l\'innovation data-driven.',
+      domains: ['Technologie / IT', 'Data / Intelligence Artificielle'],
+      skills: ['Python', 'TensorFlow', 'PyTorch', 'Scikit-learn', 'SQL', 'Pandas', 'NLP', 'Deep Learning'],
+      searchKeywords: ['Data Science', 'Machine Learning', 'Deep Learning', 'Python', 'AI'],
+      jobTypes: ['CDI', 'Freelance'],
+      preferredLocations: ['Casablanca', 'Rabat', 'Remote'],
+      languages: [{ language: 'Arabe', level: 'Natif' }, { language: 'Français', level: 'Courant' }, { language: 'Anglais', level: 'Courant' }],
+      location: { city: 'Casablanca', country: 'Maroc', isRemoteOpen: true },
+      education: [
+        { institution: 'ENSIAS', degree: 'Master', field: 'Intelligence Artificielle', startDate: daysAgo(1000), endDate: daysAgo(300) },
+      ],
+      experience: [
+        { company: 'Procter & Gamble', position: 'Data Scientist', startDate: daysAgo(300), endDate: null, isCurrent: true, description: 'Modèles de prédiction ventes, NLP pour analyse feedback client.', skills: ['Python', 'TensorFlow', 'NLP'] },
+        { company: 'UM6P', position: 'Stagiaire Research', startDate: daysAgo(500), endDate: daysAgo(300), isCurrent: false, description: 'Recherche deep learning, publication article scientifique.', skills: ['PyTorch', 'Deep Learning', 'Python'] },
+      ],
+    },
+    cv: {
+      skills: ['Python', 'TensorFlow', 'PyTorch', 'Scikit-learn', 'SQL', 'Pandas', 'NLP', 'Deep Learning', 'Spark'],
+      experience: [
+        { title: 'Data Scientist', company: 'Procter & Gamble', period: 'Oct 2024 - Présent', description: 'Modèles ML prédictifs, NLP, pipeline de données.' },
+        { title: 'Stagiaire Research', company: 'UM6P', period: 'Jun 2024 - Oct 2024', description: 'Deep learning, CNN, publication scientifique.' },
+      ],
+      education: [
+        { degree: 'Master Intelligence Artificielle', institution: 'ENSIAS', year: '2022 - 2024' },
+      ],
+      languages: ['Arabe (Natif)', 'Français (Courant)', 'Anglais (Courant)'],
+      score: 79,
+    },
+  },
+  {
+    firstName: 'Karim', lastName: 'El Mansouri', email: 'karim.mansouri@outlook.com', phone: '+212 6 98 78 90 12',
+    jobSearchStatus: 'open_to_offers',
+    profile: {
+      title: 'Responsable RH',
+      presentation: 'Professionnel RH avec 7 ans d\'expérience en gestion des ressources humaines. Spécialisé en recrutement, administration du personnel et droit du travail. Certifié SHRM.',
+      domains: ['Ressources Humaines', 'Administration'],
+      skills: ['Recrutement', 'Gestion des talents', 'Droit du travail', 'Payroll', 'SIRH', 'Formation', 'RH'],
+      searchKeywords: ['RH', 'Recrutement', 'Gestion des talents', 'SIRH', 'DRH'],
+      jobTypes: ['CDI'],
+      preferredLocations: ['Casablanca', 'Rabat'],
+      languages: [{ language: 'Arabe', level: 'Natif' }, { language: 'Français', level: 'Courant' }, { language: 'Anglais', level: 'Courant' }],
+      location: { city: 'Rabat', country: 'Maroc', isRemoteOpen: false },
+      education: [
+        { institution: 'ISCAE', degree: 'Master', field: 'Gestion des Ressources Humaines', startDate: daysAgo(2800), endDate: daysAgo(2000) },
+      ],
+      experience: [
+        { company: 'BMCE Bank', position: 'Responsable RH', startDate: daysAgo(1400), endDate: null, isCurrent: true, description: 'Pilote RH pour 500+ employés, recrutement, formation, administration.', skills: ['Recrutement', 'SIRH', 'Formation'] },
+        { company: 'CIH Bank', position: 'Chargé de Recrutement', startDate: daysAgo(2000), endDate: daysAgo(1400), isCurrent: false, description: 'Gestion processus de recrutement, entretiens, onboarding.', skills: ['Recrutement', 'Onboarding', 'Droit du travail'] },
+      ],
+    },
+    cv: {
+      skills: ['Recrutement', 'Gestion des talents', 'Droit du travail', 'Payroll', 'SIRH', 'Formation', 'Talent Acquisition'],
+      experience: [
+        { title: 'Responsable RH', company: 'BMCE Bank', period: 'Jan 2022 - Présent', description: '500+ employés, recrutement annuel 50+, plan formation.' },
+        { title: 'Chargé de Recrutement', company: 'CIH Bank', period: 'Jan 2020 - Jan 2022', description: 'Processus recrutement complet, entretiens, tests.' },
+      ],
+      education: [
+        { degree: 'Master GRH', institution: 'ISCAE', year: '2017 - 2019' },
+      ],
+      languages: ['Arabe (Natif)', 'Français (Courant)', 'Anglais (Courant)'],
+      score: 73,
+    },
+  },
+  {
+    firstName: 'Najlae', lastName: 'Roudani', email: 'najlae.roudani@gmail.com', phone: '+212 7 09 89 01 23',
+    jobSearchStatus: 'seeking_internship',
+    profile: {
+      title: 'Étudiante Ingénieure en Informatique',
+      presentation: 'Étudiante en 4ème année à l\'ENSIAS, à la recherche d\'un stage PFE en développement web ou intelligence artificielle. Bonnes bases en Python, JavaScript et bases de données.',
+      domains: ['Technologie / IT'],
+      skills: ['Python', 'JavaScript', 'React', 'Django', 'SQL', 'Git', 'HTML', 'CSS'],
+      searchKeywords: ['Stage', 'PFE', 'Développeur', 'Python', 'React'],
+      jobTypes: ['Stage', 'Alternance'],
+      preferredLocations: ['Casablanca', 'Rabat'],
+      languages: [{ language: 'Arabe', level: 'Natif' }, { language: 'Français', level: 'Courant' }, { language: 'Anglais', level: 'Avancé' }],
+      location: { city: 'Rabat', country: 'Maroc', isRemoteOpen: false },
+      education: [
+        { institution: 'ENSIAS', degree: 'Ingénieur d\'État', field: 'Génie Logiciel', startDate: daysAgo(1000), endDate: null },
+      ],
+      experience: [
+        { company: 'MarocTelecom', position: 'Stagiaire Data', startDate: daysAgo(80), endDate: null, isCurrent: true, description: 'Stage d\'été en data analytics, dashboards Power BI.', skills: ['Python', 'SQL', 'Power BI'] },
+      ],
+    },
+    cv: {
+      skills: ['Python', 'JavaScript', 'React', 'Django', 'SQL', 'Git', 'HTML', 'CSS', 'Pandas', 'Power BI'],
+      experience: [
+        { title: 'Stagiaire Data', company: 'MarocTelecom', period: 'Jul 2025 - Présent', description: 'Data analytics, Power BI, Python.' },
+        { title: 'Projet Académique', company: 'ENSIAS', period: 'Sep 2024 - Jun 2025', description: 'Application web React + Django, gestion de projets.' },
+      ],
+      education: [
+        { degree: 'Ingénieur d\'État Génie Logiciel (en cours)', institution: 'ENSIAS', year: '2022 - 2026' },
+      ],
+      languages: ['Arabe (Natif)', 'Français (Courant)', 'Anglais (Avancé)'],
+      score: 52,
+    },
+  },
+  {
+    firstName: 'Zakaria', lastName: 'Ait Brahim', email: 'zakaria.aitbrahim@gmail.com', phone: '+212 6 10 11 22 33',
+    jobSearchStatus: 'actively_looking',
+    profile: {
+      title: 'Développeur Mobile iOS/Swift',
+      presentation: 'Développeur iOS natif avec 3 ans d\'expérience en Swift et UIKit. Apps publiées sur l\'App Store. Je maîtrise aussi SwiftUI et Firebase. Je cherche un poste de développeur iOS dans une équipe produit.',
+      domains: ['Technologie / IT', 'Mobile'],
+      skills: ['Swift', 'SwiftUI', 'UIKit', 'Firebase', 'CoreData', 'REST API', 'Git', 'Xcode'],
+      searchKeywords: ['iOS', 'Swift', 'Mobile', 'SwiftUI', 'Xcode'],
+      jobTypes: ['CDI', 'Freelance'],
+      preferredLocations: ['Casablanca', 'Tanger', 'Remote'],
+      languages: [{ language: 'Arabe', level: 'Natif' }, { language: 'Français', level: 'Avancé' }, { language: 'Anglais', level: 'Avancé' }],
+      location: { city: 'Casablanca', country: 'Maroc', isRemoteOpen: true },
+      education: [
+        { institution: '1337 (42 Network)', degree: 'Formation', field: 'Développement iOS', startDate: daysAgo(1500), endDate: daysAgo(800) },
+      ],
+      experience: [
+        { company: 'Involys', position: 'Développeur iOS', startDate: daysAgo(800), endDate: null, isCurrent: true, description: 'Développement d\'applications iOS Swift, architecture MVVM, CI/CD.', skills: ['Swift', 'MVVM', 'CI/CD'] },
+        { company: 'Freelance', position: 'Développeur iOS Freelance', startDate: daysAgo(1100), endDate: daysAgo(800), isCurrent: false, description: 'Applications iOS pour clients PME, SwiftUI.', skills: ['SwiftUI', 'Firebase'] },
+      ],
+    },
+    cv: {
+      skills: ['Swift', 'SwiftUI', 'UIKit', 'Firebase', 'CoreData', 'REST API', 'Git', 'Xcode', 'Core Animation', 'Combine'],
+      experience: [
+        { title: 'Développeur iOS', company: 'Involys', period: 'Jan 2023 - Présent', description: 'Apps iOS enterprise, MVVM, SwiftUI, CI/CD Xcode Cloud.' },
+        { title: 'Développeur iOS Freelance', company: 'Freelance', period: 'Oct 2022 - Jan 2023', description: '3 apps iOS publiées App Store.' },
+      ],
+      education: [
+        { degree: 'Formation Développement iOS', institution: '1337 (42 Network)', year: '2020 - 2022' },
+      ],
+      languages: ['Arabe (Natif)', 'Français (Avancé)', 'Anglais (Avancé)'],
+      score: 77,
+    },
+  },
+  {
+    firstName: 'Amina', lastName: 'El Ghalbouni', email: 'amina.ghalbouni@yahoo.fr', phone: '+212 6 21 22 33 44',
+    jobSearchStatus: 'open_to_offers',
+    profile: {
+      title: 'Architecte Logiciel',
+      presentation: 'Architecte logiciel avec 8 ans d\'expérience en conception et développement d\'applications distribuées. Expert Java/Cloud, je conçois des architectures scalables et résilientes pour des systèmes critiques.',
+      domains: ['Technologie / IT'],
+      skills: ['Java', 'Spring Cloud', 'AWS', 'Microservices', 'Domain-Driven Design', 'Event Sourcing', 'Kubernetes'],
+      searchKeywords: ['Architecte', 'Software Architecture', 'Java', 'Cloud', 'Microservices'],
+      jobTypes: ['CDI'],
+      preferredLocations: ['Casablanca', 'Remote'],
+      languages: [{ language: 'Arabe', level: 'Natif' }, { language: 'Français', level: 'Courant' }, { language: 'Anglais', level: 'Courant' }],
+      location: { city: 'Casablanca', country: 'Maroc', isRemoteOpen: true },
+      education: [
+        { institution: 'EMI', degree: 'Ingénieur d\'État', field: 'Informatique', startDate: daysAgo(3200), endDate: daysAgo(2300) },
+      ],
+      experience: [
+        { company: 'Attijariwafa Bank', position: 'Architecte Logiciel', startDate: daysAgo(1400), endDate: null, isCurrent: true, description: 'Architecture microservices, cloud AWS, modernisation legacy.', skills: ['Java', 'AWS', 'Microservices'] },
+        { company: 'Sogeti', position: 'Lead Developer Java', startDate: daysAgo(2300), endDate: daysAgo(1400), isCurrent: false, description: 'Leadership technique, conception d\'architecture, code review.', skills: ['Java', 'Spring', 'Architecture'] },
+      ],
+    },
+    cv: {
+      skills: ['Java', 'Spring Cloud', 'AWS', 'Microservices', 'Domain-Driven Design', 'Event Sourcing', 'Kubernetes', 'RabbitMQ', 'MongoDB'],
+      experience: [
+        { title: 'Architecte Logiciel', company: 'Attijariwafa Bank', period: 'Mar 2022 - Présent', description: 'Migration 50+ services vers microservices, AWS.' },
+        { title: 'Lead Developer Java', company: 'Sogeti', period: 'Jun 2019 - Mar 2022', description: 'Leadership équipe 8 devs, architecture Spring Cloud.' },
+      ],
+      education: [
+        { degree: 'Ingénieur d\'État Informatique', institution: 'EMI', year: '2015 - 2018' },
+      ],
+      languages: ['Arabe (Natif)', 'Français (Courant)', 'Anglais (Courant)'],
+      score: 90,
+    },
+  },
+  {
+    firstName: 'Mehdi', lastName: 'Lamrani', email: 'mehdi.lamrani@gmail.com', phone: '+212 6 32 33 44 55',
+    jobSearchStatus: 'actively_looking',
+    profile: {
+      title: 'Technicien Support IT',
+      presentation: 'Technicien support IT avec 2 ans d\'expérience en support utilisateurs et administration réseau. Compétent en Windows Server, Active Directory et Help Desk. Cherche un poste en support IT ou administration système.',
+      domains: ['Technologie / IT', 'Support'],
+      skills: ['Windows Server', 'Active Directory', 'Networking', 'Help Desk', 'ITIL', 'Troubleshooting', 'Linux'],
+      searchKeywords: ['Support IT', 'Help Desk', 'Admin Réseau', 'Windows Server', 'ITIL'],
+      jobTypes: ['CDI', 'CDD'],
+      preferredLocations: ['Casablanca', 'Rabat'],
+      languages: [{ language: 'Arabe', level: 'Natif' }, { language: 'Français', level: 'Avancé' }, { language: 'Anglais', level: 'Intermédiaire' }],
+      location: { city: 'Casablanca', country: 'Maroc', isRemoteOpen: false },
+      education: [
+        { institution: 'ISTA', degree: 'Technicien Spécialisé', field: 'Réseaux Informatiques', startDate: daysAgo(1000), endDate: daysAgo(400) },
+      ],
+      experience: [
+        { company: 'MarocTelecom', position: 'Technicien Support N2', startDate: daysAgo(400), endDate: null, isCurrent: true, description: 'Support utilisateurs N2, Active Directory, résolution incidents.', skills: ['Windows Server', 'Active Directory', 'Help Desk'] },
+        { company: 'Orange Maroc', position: 'Stagiaire Support', startDate: daysAgo(600), endDate: daysAgo(400), isCurrent: false, description: 'Support N1, ticketing, documentation procédures.', skills: ['Help Desk', 'ITIL'] },
+      ],
+    },
+    cv: {
+      skills: ['Windows Server', 'Active Directory', 'Networking', 'Help Desk', 'ITIL', 'Troubleshooting', 'Linux', 'VMware'],
+      experience: [
+        { title: 'Technicien Support N2', company: 'MarocTelecom', period: 'May 2025 - Présent', description: 'Support N2, AD, DHCP/DNS, Group Policy.' },
+        { title: 'Stagiaire Support', company: 'Orange Maroc', period: 'Nov 2024 - May 2025', description: 'Support N1, ticketing ServiceNow.' },
+      ],
+      education: [
+        { degree: 'Technicien Spécialisé Réseaux', institution: 'ISTA', year: '2022 - 2024' },
+      ],
+      languages: ['Arabe (Natif)', 'Français (Avancé)', 'Anglais (Intermédiaire)'],
+      score: 55,
+    },
+  },
+  {
+    firstName: 'Imane', lastName: 'Ziani', email: 'imane.ziani@outlook.com', phone: '+212 6 43 44 55 66',
+    jobSearchStatus: 'open_to_offers',
+    profile: {
+      title: 'Traffic Manager',
+      presentation: 'Traffic Manager digital avec 3 ans d\'expérience en gestion de campagnes publicitaires et optimisation conversion. Expertise Google Ads, Meta Ads et Analytics. Je vise l\'optimisation du ROI digital.',
+      domains: ['Marketing / Communication', 'E-commerce'],
+      skills: ['Google Ads', 'Meta Ads', 'Google Analytics', 'SEO', 'CRO', 'A/B Testing', 'Hotjar', 'Google Tag Manager'],
+      searchKeywords: ['Traffic Manager', 'Google Ads', 'Meta Ads', 'PPC', 'Conversion'],
+      jobTypes: ['CDI', 'Freelance'],
+      preferredLocations: ['Casablanca', 'Marrakech', 'Remote'],
+      languages: [{ language: 'Arabe', level: 'Natif' }, { language: 'Français', level: 'Courant' }, { language: 'Anglais', level: 'Avancé' }, { language: 'Espagnol', level: 'Intermédiaire' }],
+      location: { city: 'Marrakech', country: 'Maroc', isRemoteOpen: true },
+      education: [
+        { institution: 'ENCG Casablanca', degree: 'Master', field: 'Marketing Digital', startDate: daysAgo(1400), endDate: daysAgo(600) },
+      ],
+      experience: [
+        { company: 'Jumia Maroc', position: 'Traffic Manager', startDate: daysAgo(600), endDate: null, isCurrent: true, description: 'Gestion budget pub 500k MAD/mois, Google Ads, Meta Ads, CRO.', skills: ['Google Ads', 'Meta Ads', 'CRO'] },
+        { company: 'VoguePay', position: 'Growth Hacker', startDate: daysAgo(900), endDate: daysAgo(600), isCurrent: false, description: 'Stratégie d\'acquisition, SEO, A/B testing, analytics.', skills: ['SEO', 'Google Analytics', 'A/B Testing'] },
+      ],
+    },
+    cv: {
+      skills: ['Google Ads', 'Meta Ads', 'Google Analytics', 'SEO', 'CRO', 'A/B Testing', 'Hotjar', 'Google Tag Manager', 'Data Studio'],
+      experience: [
+        { title: 'Traffic Manager', company: 'Jumia Maroc', period: 'Jun 2024 - Présent', description: 'Budget 500k/mois, ROAS x4, 15k conversions/mois.' },
+        { title: 'Growth Hacker', company: 'VoguePay', period: 'Sep 2023 - Jun 2024', description: 'Acquisition +60%, SEO top 3 keywords.' },
+      ],
+      education: [
+        { degree: 'Master Marketing Digital', institution: 'ENCG Casablanca', year: '2021 - 2023' },
+      ],
+      languages: ['Arabe (Natif)', 'Français (Courant)', 'Anglais (Avancé)', 'Espagnol (Intermédiaire)'],
+      score: 72,
+    },
+  },
 ]
 
 // ─── RECRUITERS DATA ───────────────────────────────────────────
@@ -452,6 +860,77 @@ const recruitersData = [
       linkedinUrl: 'https://www.linkedin.com/in/younes-alaoui/',
     },
     hiringDomains: ['Technologie / IT', 'Cybersécurité'],
+  },
+  // ─── NOUVEAUX RECRUTEURS (6 à 10) ─────────────────────────────
+  {
+    firstName: 'Rachid', lastName: 'Mouline', email: 'rachid.mouline@oci.ma', phone: '+212 6 11 60 70 80',
+    company: {
+      companyName: 'OCP Digital',
+      companyDescription: 'Branche digitale du groupe OCP, leader mondial de l\'engrais. Innovation et transformation digitale à grande échelle.',
+      industry: 'Technologie / IT',
+      companySize: '501-1000',
+      companyLocation: 'Casablanca',
+      companyWebsite: 'https://ocp.ma',
+      position: 'Directeur Innovation Digitale',
+      linkedinUrl: 'https://www.linkedin.com/in/rachid-mouline/',
+    },
+    hiringDomains: ['Technologie / IT', 'Data / Intelligence Artificielle', 'Cloud'],
+  },
+  {
+    firstName: 'Fatima', lastName: 'Zerhouni', email: 'fatima.zerhouni@carenet.ma', phone: '+212 6 22 70 80 90',
+    company: {
+      companyName: 'CareNet Health',
+      companyDescription: 'Startup HealthTech proposant des solutions digitales pour le secteur de la santé au Maroc et en Afrique.',
+      industry: 'Santé',
+      companySize: '11-50',
+      companyLocation: 'Casablanca',
+      companyWebsite: 'https://carenet.ma',
+      position: 'CEO & Fondatrice',
+      linkedinUrl: 'https://www.linkedin.com/in/fatima-zerhouni/',
+    },
+    hiringDomains: ['Technologie / IT', 'Santé', 'Mobile'],
+  },
+  {
+    firstName: 'Hassan', lastName: 'Bennani', email: 'hassan.bennani@bassacapital.ma', phone: '+212 6 33 80 90 01',
+    company: {
+      companyName: 'Bassa Capital Technologies',
+      companyDescription: 'Fintech marocaine offrant des solutions de paiement digital et de finance participative.',
+      industry: 'Finance / Banque',
+      companySize: '51-200',
+      companyLocation: 'Casablanca',
+      companyWebsite: 'https://bassacapital.ma',
+      position: 'CTO',
+      linkedinUrl: 'https://www.linkedin.com/in/hassan-bennani/',
+    },
+    hiringDomains: ['Technologie / IT', 'Finance / Banque', 'Fintech'],
+  },
+  {
+    firstName: 'Nadia', lastName: 'Filali', email: 'nadia.filali@edua.ma', phone: '+212 6 44 90 01 12',
+    company: {
+      companyName: 'EduTech Maroc',
+      companyDescription: 'Plateforme d\'éducation en ligne pour les étudiants marocains. EdTech en forte croissance.',
+      industry: 'Éducation',
+      companySize: '11-50',
+      companyLocation: 'Rabat',
+      companyWebsite: 'https://edua.ma',
+      position: 'Directrice des Opérations',
+      linkedinUrl: 'https://www.linkedin.com/in/nadia-filali/',
+    },
+    hiringDomains: ['Éducation', 'Technologie / IT', 'Content'],
+  },
+  {
+    firstName: 'Mohammed', lastName: 'Chaoui', email: 'mohammed.chaoui@logisticsma.ma', phone: '+212 6 55 01 12 23',
+    company: {
+      companyName: 'LogisticsMa',
+      companyDescription: 'Solutions logistiques et supply chain pour le e-commerce au Maroc. Partenaire de grandes plateformes.',
+      industry: 'Logistique / Transport',
+      companySize: '201-500',
+      companyLocation: 'Tanger',
+      companyWebsite: 'https://logisticsma.ma',
+      position: 'Directeur Général',
+      linkedinUrl: 'https://www.linkedin.com/in/mohammed-chaoui/',
+    },
+    hiringDomains: ['Logistique / Transport', 'E-commerce', 'Technologie / IT'],
   },
 ]
 
@@ -561,6 +1040,77 @@ const recruiterJobs = [
     description: 'Stage de 6 mois en DevOps. Découvrez Docker, Kubernetes, CI/CD et l\'infrastructure cloud.',
     requirements: ['Linux', 'Docker', 'Git', 'Python', 'Bash'],
     salary: { min: 3500, max: 5500, currency: 'MAD' },
+  },
+  // ─── OFFRES DES NOUVEAUX RECRUTEURS ─────────────────────────
+  {
+    title: 'Data Engineer Senior', company: 'OCP Digital', location: 'Casablanca',
+    isRemote: true, contractType: 'CDI', domain: 'Technologie / IT', sector: 'Data',
+    description: 'Concevez et pilotez nos pipelines de données Big Data pour optimiser la production et la logistique du groupe OCP.',
+    requirements: ['Python', 'Spark', 'AWS', 'Airflow', 'SQL', 'Kafka'],
+    salary: { min: 22000, max: 35000, currency: 'MAD' },
+  },
+  {
+    title: 'Développeur Full Stack React/Node.js', company: 'OCP Digital', location: 'Casablanca',
+    isRemote: true, contractType: 'CDI', domain: 'Technologie / IT', sector: 'Tech',
+    description: 'Développez des applications web innovantes pour les plateformes digitales du groupe OCP.',
+    requirements: ['React', 'Node.js', 'TypeScript', 'PostgreSQL', 'Docker'],
+    salary: { min: 16000, max: 26000, currency: 'MAD' },
+  },
+  {
+    title: 'Développeur Mobile Flutter', company: 'CareNet Health', location: 'Casablanca',
+    isRemote: true, contractType: 'CDI', domain: 'Technologie / IT', sector: 'Mobile',
+    description: 'Développez une application mobile santé révolutionnaire pour les patients et médecins marocains.',
+    requirements: ['Flutter', 'Dart', 'Firebase', 'REST API', 'Git'],
+    salary: { min: 13000, max: 20000, currency: 'MAD' },
+  },
+  {
+    title: 'Backend Developer PHP/Laravel', company: 'CareNet Health', location: 'Casablanca',
+    isRemote: false, contractType: 'CDI', domain: 'Technologie / IT', sector: 'Tech',
+    description: 'Développez le backend de notre plateforme HealthTech avec Laravel et MySQL.',
+    requirements: ['PHP', 'Laravel', 'MySQL', 'REST API', 'Docker'],
+    salary: { min: 12000, max: 18000, currency: 'MAD' },
+  },
+  {
+    title: 'Développeur Backend Java', company: 'Bassa Capital Technologies', location: 'Casablanca',
+    isRemote: true, contractType: 'CDI', domain: 'Technologie / IT', sector: 'Fintech',
+    description: 'Développez des microservices Java pour notre plateforme de paiement digital. Sécurité et performance.',
+    requirements: ['Java', 'Spring Boot', 'Microservices', 'PostgreSQL', 'Redis'],
+    salary: { min: 18000, max: 28000, currency: 'MAD' },
+  },
+  {
+    title: 'Ingénieur Sécurité Informatique', company: 'Bassa Capital Technologies', location: 'Casablanca',
+    isRemote: false, contractType: 'CDI', domain: 'Technologie / IT', sector: 'Fintech',
+    description: 'Sécurisez nos systèmes de paiement et assurez la conformité PCI-DSS.',
+    requirements: ['Sécurité', 'PCI-DSS', 'OWASP', 'Pentesting', 'SIEM'],
+    salary: { min: 20000, max: 32000, currency: 'MAD' },
+  },
+  {
+    title: 'Développeur Full Stack Vue.js/Laravel', company: 'EduTech Maroc', location: 'Rabat',
+    isRemote: true, contractType: 'CDI', domain: 'Technologie / IT', sector: 'EdTech',
+    description: 'Développez notre plateforme d\'e-learning avec Vue.js et Laravel. Fonctionnalités interactives et gamification.',
+    requirements: ['Vue.js', 'Laravel', 'MySQL', 'JavaScript', 'REST API'],
+    salary: { min: 12000, max: 18000, currency: 'MAD' },
+  },
+  {
+    title: 'UX/UI Designer', company: 'EduTech Maroc', location: 'Rabat',
+    isRemote: true, contractType: 'CDI', domain: 'Design / Créatif', sector: 'EdTech',
+    description: 'Concevez des expériences d\'apprentissage engageantes et intuitives pour nos étudiants.',
+    requirements: ['Figma', 'Prototyping', 'User Research', 'Design System', 'Accessibility'],
+    salary: { min: 11000, max: 17000, currency: 'MAD' },
+  },
+  {
+    title: 'Développeur Backend Python', company: 'LogisticsMa', location: 'Tanger',
+    isRemote: false, contractType: 'CDI', domain: 'Technologie / IT', sector: 'Logistique',
+    description: 'Développez des API REST pour notre plateforme de gestion logistique et de tracking en temps réel.',
+    requirements: ['Python', 'Django', 'PostgreSQL', 'Docker', 'REST API'],
+    salary: { min: 13000, max: 20000, currency: 'MAD' },
+  },
+  {
+    title: 'Ingénieur DevOps', company: 'LogisticsMa', location: 'Tanger',
+    isRemote: true, contractType: 'CDI', domain: 'Technologie / IT', sector: 'Logistique',
+    description: 'Automatisez et pilotez notre infrastructure cloud. CI/CD, monitoring, scalabilité.',
+    requirements: ['AWS', 'Docker', 'Kubernetes', 'Terraform', 'Jenkins'],
+    salary: { min: 16000, max: 25000, currency: 'MAD' },
   },
 ]
 
