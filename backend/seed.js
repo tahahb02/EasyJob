@@ -8,6 +8,8 @@ import Application from './models/Application.js'
 import Notification from './models/Notification.js'
 import Recruiter from './models/Recruiter.js'
 import EmailTemplate from './models/EmailTemplate.js'
+import CompanyEmail from './models/CompanyEmail.js'
+import companyEmailsData from './data/companyEmails.js'
 
 dotenv.config()
 
@@ -1440,6 +1442,16 @@ async function seed() {
     }
     console.log(`✅ ${templates.length} templates d'emails créés`)
 
+    // ─── 10. COMPANY EMAILS ──────────────────────────────────
+    for (const c of companyEmailsData) {
+      await CompanyEmail.findOneAndUpdate(
+        { email: c.email },
+        { ...c, isActive: true },
+        { upsert: true, new: true }
+      )
+    }
+    console.log(`✅ ${companyEmailsData.length} entreprises ajoutées à l'annuaire`)
+
     // ─── SUMMARY ──────────────────────────────────────────────
     console.log('\n' + '═'.repeat(50))
     console.log('🎉 SEED TERMINÉ AVEC SUCCÈS!')
@@ -1451,6 +1463,7 @@ async function seed() {
     console.log(`   📝 ${applications.length} candidatures`)
     console.log(`   🔔 ${totalNotifs} notifications`)
     console.log(`   📧 ${templates.length} templates d'emails`)
+    console.log(`   🏢 ${companyEmailsData.length} entreprises (annuaire)`)
     console.log(`\n🔑 COMPTE DE CONNEXION (tous les comptes):`)
     console.log(`   Mot de passe: ${PASSWORD}`)
     console.log(`\n   👤 CANDIDATS:`)

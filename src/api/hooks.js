@@ -542,3 +542,49 @@ export const useUpdateJobSearchStatus = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['profile'] }),
   })
 }
+
+// ─── COMPANY EMAILS ───────────────────────────────────────────
+export const useCompanyEmails = (filters = {}) => useQuery({
+  queryKey: ['companyEmails', filters],
+  queryFn: async () => {
+    const params = new URLSearchParams()
+    Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v) })
+    const { data } = await api.get(`/company-emails?${params}`)
+    return data
+  },
+})
+
+export const useCompanyEmailFilters = () => useQuery({
+  queryKey: ['companyEmails', 'filters'],
+  queryFn: async () => { const { data } = await api.get('/company-emails/filters'); return data },
+})
+
+export const useCompanyEmail = (id) => useQuery({
+  queryKey: ['companyEmail', id],
+  queryFn: async () => { const { data } = await api.get(`/company-emails/${id}`); return data },
+  enabled: !!id,
+})
+
+export const useCreateCompanyEmail = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data) => { const { data: res } = await api.post('/company-emails', data); return res },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['companyEmails'] }),
+  })
+}
+
+export const useUpdateCompanyEmail = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, ...updates }) => { const { data } = await api.put(`/company-emails/${id}`, updates); return data },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['companyEmails'] }),
+  })
+}
+
+export const useDeleteCompanyEmail = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id) => { const { data } = await api.delete(`/company-emails/${id}`); return data },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['companyEmails'] }),
+  })
+}

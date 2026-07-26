@@ -34,6 +34,7 @@ import RecruiterDetailPage from '@/pages/recruiters/RecruiterDetailPage'
 import NetworkPage from '@/pages/recruiters/NetworkPage'
 import MessagesPage from '@/pages/shared/MessagesPage'
 import OnboardingPage from '@/pages/OnboardingPage'
+import CompanyEmailsPage from '@/pages/companyEmails/CompanyEmailsPage'
 
 // Pages Recruteur
 import RecruiterDashboardPage from '@/pages/recruiter/RecruiterDashboardPage'
@@ -94,6 +95,7 @@ export default function App() {
                 <Route path="/recruiters" element={<RecruitersPage />} />
                 <Route path="/recruiters/:id" element={<RecruiterDetailPage />} />
                 <Route path="/network" element={<NetworkPage />} />
+                <Route path="/company-emails" element={<CompanyEmailsPage />} />
                 <Route path="/messages" element={<MessagesPage />} />
 
                 {/* Recruteur routes */}

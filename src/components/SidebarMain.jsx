@@ -22,6 +22,7 @@ const candidateNavItems = [
   { icon: Search, label: 'Profils de Recherche', path: '/profile/search-preferences' },
   { icon: Settings, label: 'Profil & CV', path: '/profile' },
   { icon: BarChart3, label: 'Analytics', path: '/analytics' },
+  { icon: Building2, label: 'Annuaire Entreprises', path: '/company-emails' },
   { icon: Bell, label: 'Notifications', path: '/notifications' },
   { icon: MessageSquare, label: 'Messages', path: '/messages' },
 ]
