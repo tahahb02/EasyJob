@@ -78,7 +78,7 @@ const item = {
   show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
 }
 
-function FilterDropdown({ value, options, onChange, label, icon: Icon }) {
+function FilterDropdown({ value, options, onChange, label, icon: Icon, labelMap }) {
   return (
     <div className="relative">
       <label className="mb-1.5 block text-xs font-medium text-surface-500 dark:text-surface-400">
@@ -94,7 +94,7 @@ function FilterDropdown({ value, options, onChange, label, icon: Icon }) {
           <option value="">Tous</option>
           {options.map((opt) => (
             <option key={opt} value={opt}>
-              {opt}
+              {labelMap ? (labelMap[opt] || opt) : opt}
             </option>
           ))}
         </select>
@@ -102,6 +102,22 @@ function FilterDropdown({ value, options, onChange, label, icon: Icon }) {
       </div>
     </div>
   )
+}
+
+function getWebsiteUrl(url) {
+  if (!url) return ''
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  return `https://${url}`
+}
+
+function getWebsiteDomain(url) {
+  if (!url) return ''
+  const full = getWebsiteUrl(url)
+  try {
+    return new URL(full).hostname
+  } catch {
+    return url.replace(/^https?:\/\//, '').split('/')[0]
+  }
 }
 
 function CopyEmailButton({ email }) {
@@ -142,7 +158,8 @@ function CompanyCard({ company, index }) {
   const TypeIcon = companyTypeIcons[company.companyType] || Building2
   const typeColor = companyTypeColors[company.companyType] || companyTypeColors.privee
   const typeLabel = companyTypeLabels[company.companyType] || company.companyType
-  const domain = company.website ? company.website.replace(/^https?:\/\//, '').split('/')[0] : ''
+  const websiteUrl = getWebsiteUrl(company.website)
+  const websiteDomain = getWebsiteDomain(company.website)
 
   return (
     <motion.div
@@ -204,16 +221,16 @@ function CompanyCard({ company, index }) {
           <span>{company.city}, {company.country}</span>
         </div>
 
-        {domain && (
+        {websiteDomain && (
           <div className="flex items-center gap-2 text-sm text-surface-600 dark:text-surface-400">
             <Globe className="h-4 w-4 shrink-0 text-surface-400" />
             <a
-              href={company.website}
+              href={websiteUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1 hover:text-primary-500 hover:underline"
             >
-              {domain}
+              {websiteDomain}
               <ExternalLink className="h-3 w-3" />
             </a>
           </div>
@@ -236,7 +253,7 @@ function CompanyCard({ company, index }) {
         </a>
         {company.website && (
           <a
-            href={company.website}
+            href={websiteUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-surface-200 bg-white px-4 py-2.5 text-sm font-medium text-surface-600 transition-colors hover:bg-surface-50 dark:border-surface-600 dark:bg-surface-700 dark:text-surface-400 dark:hover:bg-surface-600"
@@ -378,25 +395,19 @@ export default function CompanyEmailsPage() {
               />
               <FilterDropdown
                 value={companyType}
-                options={(filtersData?.types || []).map(t => companyTypeLabels[t] || t)}
-                onChange={(v) => {
-                  const key = Object.entries(companyTypeLabels).find(([, val]) => val === v)?.[0] || v
-                  setCompanyType(key === v && !Object.values(companyTypeLabels).includes(v) ? '' : key)
-                  setPage(1)
-                }}
+                options={filtersData?.types || []}
+                onChange={(v) => { setCompanyType(v); setPage(1) }}
                 label="Type"
                 icon={Factory}
+                labelMap={companyTypeLabels}
               />
               <FilterDropdown
                 value={companySize}
-                options={(filtersData?.sizes || []).map(s => sizeLabels[s] || s)}
-                onChange={(v) => {
-                  const key = Object.entries(sizeLabels).find(([, val]) => val === v)?.[0] || v
-                  setCompanySize(key === v && !Object.values(sizeLabels).includes(v) ? '' : key)
-                  setPage(1)
-                }}
+                options={filtersData?.sizes || []}
+                onChange={(v) => { setCompanySize(v); setPage(1) }}
                 label="Taille"
                 icon={Users}
+                labelMap={sizeLabels}
               />
               <FilterDropdown
                 value={city}

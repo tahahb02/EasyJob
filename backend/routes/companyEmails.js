@@ -14,13 +14,15 @@ router.get('/', protect, async (req, res) => {
         { companyName: { $regex: search, $options: 'i' } },
         { email: { $regex: search, $options: 'i' } },
         { sector: { $regex: search, $options: 'i' } },
+        { domain: { $regex: search, $options: 'i' } },
+        { city: { $regex: search, $options: 'i' } },
       ]
     }
-    if (sector) query.sector = sector
-    if (domain) query.domain = domain
+    if (sector) query.sector = { $regex: `^${sector}$`, $options: 'i' }
+    if (domain) query.domain = { $regex: `^${domain}$`, $options: 'i' }
     if (companyType) query.companyType = companyType
     if (companySize) query.companySize = companySize
-    if (city) query.city = city
+    if (city) query.city = { $regex: `^${city}$`, $options: 'i' }
 
     const skip = (parseInt(page) - 1) * parseInt(limit)
     const [companies, total] = await Promise.all([
@@ -49,7 +51,13 @@ router.get('/filters', protect, async (req, res) => {
       CompanyEmail.distinct('companySize', { isActive: true }),
       CompanyEmail.distinct('city', { isActive: true }),
     ])
-    res.json({ sectors, domains, types, sizes, cities })
+    res.json({
+      sectors: sectors.filter(Boolean).sort(),
+      domains: domains.filter(Boolean).sort(),
+      types: types.filter(Boolean).sort(),
+      sizes: sizes.filter(Boolean).sort(),
+      cities: cities.filter(Boolean).sort(),
+    })
   } catch (error) {
     res.status(500).json({ error: 'Erreur serveur' })
   }
