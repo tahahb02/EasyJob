@@ -1443,6 +1443,7 @@ async function seed() {
     console.log(`✅ ${templates.length} templates d'emails créés`)
 
     // ─── 10. COMPANY EMAILS ──────────────────────────────────
+    await CompanyEmail.deleteMany({})
     for (const c of companyEmailsData) {
       await CompanyEmail.findOneAndUpdate(
         { email: c.email },
