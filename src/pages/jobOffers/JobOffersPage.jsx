@@ -17,6 +17,7 @@ import {
   Building2,
   Send,
   UserCheck,
+  Inbox,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -33,7 +34,7 @@ import {
 
 const tabs = [
   { key: 'external', label: 'Offres externes', icon: Briefcase },
-  { key: 'internal', label: 'Offres recruteurs', icon: Building2 },
+  { key: 'internal', label: 'Offres internes', icon: Building2 },
 ]
 
 const contractTypes = ['Tous', 'CDI', 'CDD', 'Stage', 'Freelance']
@@ -435,25 +436,34 @@ export default function JobOffersPage() {
           <p className="mt-1 text-surface-500 dark:text-surface-400">
             {activeTab === 'external'
               ? 'Offres importées depuis les plateformes externes'
-              : 'Offres publiées directement par les recruteurs'}
+              : 'Offres internes publiées par les recruteurs'}
           </p>
         </div>
-        {activeTab === 'external' && (
-          <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={handleScraping}
-            disabled={runScraping.isPending}
-            className="inline-flex items-center gap-2 rounded-xl bg-primary-500 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-primary-600 dark:hover:bg-primary-500"
+        <div className="flex items-center gap-3">
+          <Link
+            to="/applications"
+            className="inline-flex items-center gap-2 rounded-xl border border-surface-200 bg-white px-5 py-3 text-sm font-semibold text-surface-700 shadow-sm transition-colors hover:bg-surface-50 dark:border-surface-600 dark:bg-surface-800 dark:text-surface-300 dark:hover:bg-surface-700"
           >
-            {runScraping.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            {runScraping.isPending ? 'Scrapping en cours...' : 'Lancer le scrapping'}
-          </motion.button>
-        )}
+            <Inbox className="h-4 w-4" />
+            Mes candidatures
+          </Link>
+          {activeTab === 'external' && (
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={handleScraping}
+              disabled={runScraping.isPending}
+              className="inline-flex items-center gap-2 rounded-xl bg-primary-500 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-primary-600 dark:hover:bg-primary-500"
+            >
+              {runScraping.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {runScraping.isPending ? 'Scrapping en cours...' : 'Lancer le scrapping'}
+            </motion.button>
+          )}
+        </div>
       </motion.div>
 
       {/* Tabs */}
