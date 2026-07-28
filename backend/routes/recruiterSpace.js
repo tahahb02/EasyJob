@@ -7,6 +7,12 @@ import User from '../models/User.js'
 import RecruiterProfile from '../models/RecruiterProfile.js'
 import { protect, authorize } from '../middlewares/auth.js'
 import { calculateCandidateMatch } from '../services/jobScraper.js'
+import {
+  notifyNewJobOffer,
+  notifyApplicationStatusChange,
+  notifyNewApplicationToRecruiter,
+  notifyEmailFromCompany,
+} from '../services/NotificationService.js'
 
 const router = express.Router()
 
@@ -291,6 +297,18 @@ router.post('/jobs', protect, authorize('recruiter'), async (req, res) => {
     if (profile) {
       profile.jobPostingsCount = await JobOffer.countDocuments({ postedBy: req.user._id, source: 'recruiter' })
       await profile.save()
+    }
+
+    notifyNewJobOffer(job)
+
+    const matchingCount = await UserProfile.countDocuments({
+      $or: [
+        { domains: { $regex: job.sector || '', $options: 'i' } },
+        { skills: { $in: (job.requirements || []).map(r => new RegExp(r, 'i')) } },
+      ]
+    })
+    if (matchingCount > 0) {
+      notifySuggestedCandidates(req.user._id, job, matchingCount)
     }
 
     res.status(201).json({ job, message: 'Offre créée avec succès' })
@@ -650,18 +668,22 @@ router.get('/applications', protect, authorize('recruiter'), async (req, res) =>
 router.put('/applications/:id/status', protect, authorize('recruiter'), async (req, res) => {
   try {
     const { status } = req.body
-    const allowedStatuses = ['envoyee', 'ouverte', 'en_cours', 'acceptee', 'refusee']
+    const allowedStatuses = ['envoyee', 'consulte', 'valide_entretien', 'appel_attente', 'entretien_fait', 'accepte_final', 'refusee']
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ error: 'Statut invalide' })
     }
 
     const jobIds = await JobOffer.find({ postedBy: req.user._id }).distinct('_id')
-    const app = await Application.findOneAndUpdate(
-      { _id: req.params.id, jobOfferId: { $in: jobIds } },
-      { status },
-      { new: true, runValidators: true }
-    )
+    const app = await Application.findOne({ _id: req.params.id, jobOfferId: { $in: jobIds } })
     if (!app) return res.status(404).json({ error: 'Candidature non trouvée' })
+
+    const oldStatus = app.status
+    app.status = status
+    if (!app.statusHistory) app.statusHistory = []
+    app.statusHistory.push({ status, changedAt: new Date(), changedBy: 'recruteur', note: `Statut mis à jour par le recruteur: ${status}` })
+    await app.save()
+
+    notifyApplicationStatusChange(app, oldStatus, status, 'recruteur')
 
     res.json({ application: app, message: 'Statut mis à jour' })
   } catch (error) {
@@ -719,10 +741,13 @@ router.post('/public/jobs/:id/apply', protect, async (req, res) => {
       status: 'envoyee',
       coverLetter: req.body.coverLetter || '',
       appliedAt: new Date(),
+      statusHistory: [{ status: 'envoyee', changedAt: new Date(), changedBy: 'candidat', note: 'Candidature envoyée' }],
     })
 
     job.applicationsCount = (job.applicationsCount || 0) + 1
     await job.save()
+
+    notifyNewApplicationToRecruiter(application, job)
 
     res.status(201).json({ application, message: 'Candidature envoyée avec succès' })
   } catch (error) {
@@ -777,6 +802,7 @@ ${message}
     })
 
     if (result.success) {
+      notifyEmailFromCompany(req.params.userId, profile?.companyName || `${req.user.firstName} ${req.user.lastName}`, subject)
       res.json({ message: 'Email envoyé avec succès', messageId: result.messageId })
     } else {
       res.status(500).json({ error: 'Erreur lors de l\'envoi de l\'email' })

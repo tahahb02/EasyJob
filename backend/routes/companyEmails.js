@@ -1,6 +1,7 @@
 import express from 'express'
 import CompanyEmail from '../models/CompanyEmail.js'
 import { protect } from '../middlewares/auth.js'
+import { notifyNewCompany } from '../services/NotificationService.js'
 
 const router = express.Router()
 
@@ -78,6 +79,9 @@ router.post('/', protect, async (req, res) => {
     const existing = await CompanyEmail.findOne({ email: req.body.email })
     if (existing) return res.status(400).json({ error: 'Cet email existe déjà' })
     const company = await CompanyEmail.create(req.body)
+
+    notifyNewCompany(company)
+
     res.status(201).json({ company, message: 'Entreprise ajoutée' })
   } catch (error) {
     res.status(500).json({ error: "Erreur lors de l'ajout" })

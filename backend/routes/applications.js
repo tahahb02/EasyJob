@@ -1,7 +1,12 @@
 import express from 'express'
 import Application from '../models/Application.js'
 import JobOffer from '../models/JobOffer.js'
+import User from '../models/User.js'
 import { protect } from '../middlewares/auth.js'
+import {
+  notifyApplicationStatusChange,
+  notifyNewApplicationToRecruiter
+} from '../services/NotificationService.js'
 
 const router = express.Router()
 
@@ -48,7 +53,14 @@ router.post('/', protect, async (req, res) => {
       jobOfferId,
       status: 'envoyee',
       appliedAt: new Date(),
+      statusHistory: [{ status: 'envoyee', changedAt: new Date(), changedBy: 'candidat', note: 'Candidature envoyée' }],
     })
+
+    const jobOffer = await JobOffer.findById(jobOfferId)
+    if (jobOffer) {
+      notifyNewApplicationToRecruiter(application, jobOffer)
+    }
+
     res.status(201).json({ application, message: 'Candidature enregistrée' })
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors de la création' })
@@ -74,7 +86,14 @@ router.post('/mark-applied', protect, async (req, res) => {
       jobOfferId,
       status: 'envoyee',
       appliedAt: new Date(),
+      statusHistory: [{ status: 'envoyee', changedAt: new Date(), changedBy: 'candidat', note: 'Candidature envoyée' }],
     })
+
+    const jobOffer = await JobOffer.findById(jobOfferId)
+    if (jobOffer) {
+      notifyNewApplicationToRecruiter(application, jobOffer)
+    }
+
     res.status(201).json({ application, message: 'Candidature enregistrée avec succès' })
   } catch (error) {
     res.status(500).json({ error: 'Erreur serveur' })
@@ -89,7 +108,14 @@ router.post('/:id/send', protect, async (req, res) => {
 
     app.status = 'envoyee'
     app.appliedAt = new Date()
+    if (!app.statusHistory) app.statusHistory = []
+    app.statusHistory.push({ status: 'envoyee', changedAt: new Date(), changedBy: 'candidat', note: 'Candidature envoyée' })
     await app.save()
+
+    const jobOffer = await JobOffer.findById(app.jobOfferId)
+    if (jobOffer) {
+      notifyNewApplicationToRecruiter(app, jobOffer)
+    }
 
     res.json({ application: app, message: 'Candidature envoyée avec succès !' })
   } catch (error) {
@@ -117,16 +143,22 @@ router.put('/:id', protect, async (req, res) => {
 router.put('/:id/status', protect, async (req, res) => {
   try {
     const { status } = req.body
-    const allowedStatuses = ['brouillon', 'envoyee', 'ouverte', 'en_cours', 'acceptee', 'refusee', 'retiree']
+    const allowedStatuses = ['brouillon', 'envoyee', 'consulte', 'valide_entretien', 'appel_attente', 'entretien_fait', 'accepte_final', 'refusee']
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ error: 'Statut invalide' })
     }
-    const app = await Application.findOneAndUpdate(
-      { _id: req.params.id, userId: req.user._id },
-      { status },
-      { new: true, runValidators: true }
-    )
-    if (!app) return res.status(404).json({ error: 'Candidature non trouvée' })
+    const app = await Application.findById(req.params.id)
+    if (!app || app.userId.toString() !== req.user._id.toString()) {
+      return res.status(404).json({ error: 'Candidature non trouvée' })
+    }
+    const oldStatus = app.status
+    app.status = status
+    if (!app.statusHistory) app.statusHistory = []
+    app.statusHistory.push({ status, changedAt: new Date(), changedBy: 'candidat', note: `Statut mis à jour: ${status}` })
+    await app.save()
+
+    notifyApplicationStatusChange(app, oldStatus, status, 'candidat')
+
     res.json({ application: app, message: 'Statut mis à jour' })
   } catch (error) {
     res.status(500).json({ error: 'Erreur serveur' })

@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from '@/context/AuthContext'
 import { ThemeProvider } from '@/context/ThemeContext'
+import { SocketProvider } from '@/context/SocketContext'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import MainLayoutShell from '@/layouts/MainLayoutShell'
 
@@ -29,6 +30,7 @@ import ApplicationsPage from '@/pages/applications/ApplicationsPage'
 import ApplicationDetailPage from '@/pages/applications/ApplicationDetailPage'
 import ComposeEmailPage from '@/pages/applications/ComposeEmailPage'
 import EmailTemplatesPage from '@/pages/applications/EmailTemplatesPage'
+import InternalApplicationsPage from '@/pages/applications/InternalApplicationsPage'
 import RecruitersPage from '@/pages/recruiters/RecruitersPage'
 import RecruiterDetailPage from '@/pages/recruiters/RecruiterDetailPage'
 import NetworkPage from '@/pages/recruiters/NetworkPage'
@@ -49,6 +51,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
+        <SocketProvider>
         <BrowserRouter>
           <Toaster
             position="top-right"
@@ -92,6 +95,7 @@ export default function App() {
                 <Route path="/applications/:id" element={<ApplicationDetailPage />} />
                 <Route path="/applications/compose/:jobOfferId" element={<ComposeEmailPage />} />
                 <Route path="/applications/templates" element={<EmailTemplatesPage />} />
+                <Route path="/applications/internal" element={<InternalApplicationsPage />} />
                 <Route path="/recruiters" element={<RecruitersPage />} />
                 <Route path="/recruiters/:id" element={<RecruiterDetailPage />} />
                 <Route path="/network" element={<NetworkPage />} />
@@ -111,6 +115,7 @@ export default function App() {
             </Route>
           </Routes>
         </BrowserRouter>
+        </SocketProvider>
       </AuthProvider>
     </ThemeProvider>
   )

@@ -5,6 +5,7 @@ import UserProfile from '../models/UserProfile.js'
 import User from '../models/User.js'
 import { protect } from '../middlewares/auth.js'
 import { scrapeAllSources } from '../services/jobScraper.js'
+import { notifyScrapingComplete } from '../services/NotificationService.js'
 
 const router = express.Router()
 
@@ -92,6 +93,12 @@ router.post('/run', protect, async (req, res) => {
     log.totalNewOffers = createdJobs.length
     log.completedAt = new Date()
     await log.save()
+
+    notifyScrapingComplete(req.user._id, {
+      count: createdJobs.length,
+      source: enabledSources.join(', '),
+      jobs: createdJobs,
+    })
 
     res.json({
       message: `${createdJobs.length} nouvelles offres trouvées`,
