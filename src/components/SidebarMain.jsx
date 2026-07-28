@@ -15,7 +15,6 @@ const candidateNavItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: Briefcase, label: "Offres d'emploi", path: '/jobs' },
   { icon: Send, label: 'Candidatures', path: '/applications' },
-  { icon: UserCheck, label: 'Candidatures Internes', path: '/applications/internal' },
   { icon: FileText, label: 'Templates Emails', path: '/applications/templates' },
   { icon: Users, label: 'Explorateur Recruteurs', path: '/recruiters' },
   { icon: Network, label: 'Réseau', path: '/network' },
