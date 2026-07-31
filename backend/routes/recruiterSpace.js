@@ -7,10 +7,12 @@ import User from '../models/User.js'
 import RecruiterProfile from '../models/RecruiterProfile.js'
 import { protect, authorize } from '../middlewares/auth.js'
 import { calculateCandidateMatch } from '../services/jobScraper.js'
+import { buildCandidateInfo } from '../services/candidateInfo.js'
 import {
   notifyNewJobOffer,
   notifyApplicationStatusChange,
   notifyNewApplicationToRecruiter,
+  notifySuggestedCandidates,
   notifyEmailFromCompany,
 } from '../services/NotificationService.js'
 
@@ -269,8 +271,15 @@ router.get('/jobs/:id', protect, authorize('recruiter'), async (req, res) => {
       .populate('userId', 'firstName lastName email avatar jobSearchStatus')
       .sort({ createdAt: -1 })
 
+    const profiles = await UserProfile.find({ userId: { $in: applications.map(a => a.userId?._id).filter(Boolean) } })
+    const profileMap = new Map(profiles.map(p => [p.userId.toString(), p]))
+
     const applicationsWithMatch = applications.map(app => {
-      const matchScore = app.userId ? calculateCandidateMatch(app.userId, job.toObject()) : 0
+      let matchScore = app.candidateInfo?.matchScore || 0
+      if (!matchScore && app.userId) {
+        const profile = profileMap.get(app.userId._id.toString())
+        if (profile) matchScore = calculateCandidateMatch(profile, job.toObject())
+      }
       return { ...app.toObject(), matchScore }
     })
 
@@ -285,36 +294,56 @@ router.post('/jobs', protect, authorize('recruiter'), async (req, res) => {
     const profile = await RecruiterProfile.findOne({ userId: req.user._id })
     const company = profile?.companyName || req.body.company || 'Entreprise'
 
+    const body = { ...req.body }
+    if (!body.applicationDeadline) delete body.applicationDeadline
+    if (body.salary && typeof body.salary === 'object') {
+      if (!Number.isFinite(body.salary.min)) delete body.salary.min
+      if (!Number.isFinite(body.salary.max)) delete body.salary.max
+      if (Object.keys(body.salary).length === 0) delete body.salary
+    }
+
+    const titleWords = (req.body.title || '').split(/\s+/).filter(w => w.length > 2)
+    const keywords = [...new Set([
+      ...titleWords,
+      ...(body.requirements || []),
+      ...(body.responsibilities || []),
+    ])].slice(0, 20)
+
     const job = await JobOffer.create({
-      ...req.body,
+      ...body,
       postedBy: req.user._id,
       company,
       source: 'recruiter',
       postedAt: new Date(),
       isActive: true,
+      keywords,
     })
 
-    if (profile) {
-      profile.jobPostingsCount = await JobOffer.countDocuments({ postedBy: req.user._id, source: 'recruiter' })
-      await profile.save()
-    }
-
-    notifyNewJobOffer(job)
-
-    const matchingCount = await UserProfile.countDocuments({
-      $or: [
-        { domains: { $regex: job.sector || '', $options: 'i' } },
-        { skills: { $in: (job.requirements || []).map(r => new RegExp(r, 'i')) } },
-      ]
+    // Fire-and-forget non-critical side effects so they can never block the
+    // creation response (notifications, counters, candidate suggestions).
+    Promise.resolve().then(async () => {
+      try {
+        if (profile) {
+          profile.jobPostingsCount = await JobOffer.countDocuments({ postedBy: req.user._id, source: 'recruiter' })
+          await profile.save()
+        }
+        await notifyNewJobOffer(job)
+        const matchingCount = await UserProfile.countDocuments({
+          $or: [
+            { domains: { $regex: job.sector || '', $options: 'i' } },
+            { skills: { $in: (job.requirements || []).map(r => new RegExp(r, 'i')) } },
+          ]
+        })
+        if (matchingCount > 0) await notifySuggestedCandidates(req.user._id, job, matchingCount)
+      } catch (sideErr) {
+        console.error('Post-create side effects error:', sideErr)
+      }
     })
-    if (matchingCount > 0) {
-      notifySuggestedCandidates(req.user._id, job, matchingCount)
-    }
 
     res.status(201).json({ job, message: 'Offre créée avec succès' })
   } catch (error) {
     console.error('Create recruiter job error:', error)
-    res.status(500).json({ error: 'Erreur lors de la création' })
+    res.status(500).json({ error: `Erreur lors de la création : ${error.message || 'erreur inconnue'}` })
   }
 })
 
@@ -735,6 +764,8 @@ router.post('/public/jobs/:id/apply', protect, async (req, res) => {
       return res.status(400).json({ error: 'Vous avez déjà postulé à cette offre' })
     }
 
+    const candidateInfo = await buildCandidateInfo(req.user._id, job)
+
     const application = await Application.create({
       userId: req.user._id,
       jobOfferId: job._id,
@@ -742,6 +773,7 @@ router.post('/public/jobs/:id/apply', protect, async (req, res) => {
       coverLetter: req.body.coverLetter || '',
       appliedAt: new Date(),
       statusHistory: [{ status: 'envoyee', changedAt: new Date(), changedBy: 'candidat', note: 'Candidature envoyée' }],
+      candidateInfo,
     })
 
     job.applicationsCount = (job.applicationsCount || 0) + 1

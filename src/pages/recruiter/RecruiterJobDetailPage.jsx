@@ -1,26 +1,43 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   ArrowLeft, MapPin, Users, Briefcase, Loader2,
-  Trash2, Eye, EyeOff, Calendar, DollarSign
+  Trash2, Eye, EyeOff, Calendar, DollarSign, Download, ChevronDown,
 } from 'lucide-react'
 import { useRecruiterJob, useDeleteRecruiterJob, useToggleRecruiterJob, useUpdateRecruiterApplicationStatus } from '@/api/hooks'
 import toast from 'react-hot-toast'
 
-const statusColors = {
-  envoyee: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  ouverte: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-  en_cours: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-  acceptee: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  refusee: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+const statusConfig = {
+  envoyee: { label: 'Envoyée', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+  consulte: { label: 'Consultée', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
+  valide_entretien: { label: 'Validée entretien', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
+  appel_attente: { label: 'En attente d\'appel', color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' },
+  entretien_fait: { label: 'Entretien fait', color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400' },
+  accepte_final: { label: 'Accepté', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+  refusee: { label: 'Refusée', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
 }
-const statusLabels = {
-  envoyee: 'Envoyée', ouverte: 'Ouverte', en_cours: 'En cours', acceptee: 'Acceptée', refusee: 'Refusée',
+
+function cvDataUrl(candidateInfo) {
+  if (!candidateInfo?.cvFileData) return null
+  if (candidateInfo.cvFileData.startsWith('data:')) return candidateInfo.cvFileData
+  return `data:${candidateInfo.cvMimeType || 'application/pdf'};base64,${candidateInfo.cvFileData}`
+}
+
+function MatchBadge({ score }) {
+  const s = score ?? 0
+  const color = s >= 70 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+    : s >= 40 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+    : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${color}`}>Match {s}%</span>
+  )
 }
 
 export default function RecruiterJobDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [openAppId, setOpenAppId] = useState(null)
   const { data, isLoading } = useRecruiterJob(id)
   const deleteJob = useDeleteRecruiterJob()
   const toggleJob = useToggleRecruiterJob()
@@ -85,7 +102,7 @@ export default function RecruiterJobDetailPage() {
             <h3 className="font-semibold text-surface-700 dark:text-surface-300 text-sm mb-2">Prérequis</h3>
             <div className="flex flex-wrap gap-2">
               {job.requirements.map((r, i) => (
-                <span key={i} className="px-3 py-1 bg-surface-100 dark:bg-surface-700 text-surface-600 dark:text-surface-400 rounded-full text-xs">{r}</span>
+                <span key={i} className="px-3 py-1 bg-surface-100 dark:bg-surface-700 text-surface-600 dark:text-surface-300 rounded-full text-xs">{r}</span>
               ))}
             </div>
           </div>
@@ -101,34 +118,114 @@ export default function RecruiterJobDetailPage() {
           <div className="space-y-3">
             {applications.map((app) => {
               const candidate = app.userId
+              const info = app.candidateInfo || {}
+              const isOpen = openAppId === app._id
+              const statusInfo = statusConfig[app.status] || { label: app.status, color: 'bg-gray-100 text-gray-600' }
               return (
-                <div key={app._id} className="flex items-center justify-between p-4 rounded-xl border border-surface-100 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-700/50 transition">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-bold text-primary-600">{candidate?.firstName?.[0]}{candidate?.lastName?.[0]}</span>
+                <div key={app._id} className="p-4 rounded-xl border border-surface-100 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-700/50 transition">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className="w-10 h-10 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
+                        <span className="text-sm font-bold text-primary-600">{(info.firstName || candidate?.firstName || '?')[0]}{(info.lastName || candidate?.lastName || '')[0]}</span>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-medium text-surface-800 dark:text-white text-sm">{info.firstName || candidate?.firstName} {info.lastName || candidate?.lastName}</p>
+                          {app.matchScore > 0 && <MatchBadge score={app.matchScore} />}
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusInfo.color}`}>{statusInfo.label}</span>
+                        </div>
+                        <p className="text-xs text-surface-500">{info.email || candidate?.email}{info.phone ? ` · ${info.phone}` : ''}</p>
+                        {info.skills?.length > 0 && (
+                          <p className="text-xs text-surface-400 mt-1 line-clamp-1">
+                            {info.skills.slice(0, 8).join(' · ')}{info.skills.length > 8 ? ' …' : ''}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-surface-800 dark:text-white text-sm">{candidate?.firstName} {candidate?.lastName}</p>
-                      <p className="text-xs text-surface-500">{candidate?.email}</p>
-                      {app.matchScore > 0 && (
-                        <p className="text-xs text-primary-500 font-medium mt-0.5">Score de match : {app.matchScore}%</p>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => setOpenAppId(isOpen ? null : app._id)}
+                        className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border border-surface-200 dark:border-surface-700 text-surface-600 dark:text-surface-400 hover:text-primary-500 transition"
+                      >
+                        {isOpen ? 'Masquer' : 'Profil'} <ChevronDown className={`w-3 h-3 transition ${isOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      {info.cvFileName && cvDataUrl(info) && (
+                        <a
+                          href={cvDataUrl(info)}
+                          download={info.cvFileName}
+                          className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition"
+                        >
+                          <Download className="w-3 h-3" /> CV
+                        </a>
                       )}
+                      <select
+                        value={app.status}
+                        onChange={(e) => handleStatusChange(app._id, e.target.value)}
+                        className="text-xs px-2 py-1.5 rounded-lg border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800"
+                      >
+                        {Object.entries(statusConfig).map(([k, v]) => (
+                          <option key={k} value={k}>{v.label}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[app.status] || ''}`}>
-                      {statusLabels[app.status] || app.status}
-                    </span>
-                    <select
-                      value={app.status}
-                      onChange={(e) => handleStatusChange(app._id, e.target.value)}
-                      className="text-xs px-2 py-1.5 rounded-lg border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800"
-                    >
-                      {Object.entries(statusLabels).map(([k, v]) => (
-                        <option key={k} value={k}>{v}</option>
-                      ))}
-                    </select>
-                  </div>
+
+                  {isOpen && (
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      {info.summary && (
+                        <div className="sm:col-span-2">
+                          <p className="text-xs font-semibold text-surface-500 uppercase tracking-wide mb-1">Présentation</p>
+                          <p className="text-xs text-surface-600 dark:text-surface-300">{info.summary}</p>
+                        </div>
+                      )}
+                      {info.domains?.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-surface-500 uppercase tracking-wide mb-1">Domaines</p>
+                          <div className="flex flex-wrap gap-1.5">{info.domains.map((d, i) => <span key={i} className="px-2 py-0.5 rounded-full bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 text-xs">{d}</span>)}</div>
+                        </div>
+                      )}
+                      {info.skills?.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-surface-500 uppercase tracking-wide mb-1">Compétences</p>
+                          <div className="flex flex-wrap gap-1.5">{info.skills.slice(0, 15).map((s, i) => <span key={i} className="px-2 py-0.5 rounded-full bg-surface-100 dark:bg-surface-700 text-surface-600 dark:text-surface-300 text-xs">{s}</span>)}</div>
+                        </div>
+                      )}
+                      {info.experience?.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-surface-500 uppercase tracking-wide mb-1">Expérience</p>
+                          {info.experience.slice(0, 3).map((e, i) => (
+                            <p key={i} className="text-xs text-surface-600 dark:text-surface-300">
+                              <span className="font-medium">{e.position || 'Poste'}</span>
+                              {e.company && <span className="text-surface-400"> chez {e.company}</span>}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                      {info.education?.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-surface-500 uppercase tracking-wide mb-1">Formation</p>
+                          {info.education.slice(0, 3).map((ed, i) => (
+                            <p key={i} className="text-xs text-surface-600 dark:text-surface-300">
+                              <span className="font-medium">{ed.degree || 'Diplôme'}</span>
+                              {ed.institution && <span className="text-surface-400"> · {ed.institution}</span>}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                      {info.cvSummary && (
+                        <div className="sm:col-span-2">
+                          <p className="text-xs font-semibold text-surface-500 uppercase tracking-wide mb-1">Résumé du candidat</p>
+                          <p className="text-xs text-surface-600 dark:text-surface-300 leading-relaxed">{info.cvSummary}</p>
+                        </div>
+                      )}
+                      <div className="sm:col-span-2 flex items-center justify-between">
+                        <Link to="/recruiter-space/applications" className="text-xs font-medium text-primary-500 hover:underline">
+                          Voir toutes les candidatures →
+                        </Link>
+                        {info.linkedin && <a href={info.linkedin} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-primary-500 hover:underline">LinkedIn</a>}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}

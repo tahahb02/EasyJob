@@ -375,9 +375,9 @@ export default function JobOffersPage() {
     return filters
   }, [search, contractType, location, source, sort, page, activeTab])
 
-  const { data, isLoading, error, refetch } = activeTab === 'external'
-    ? useJobs(apiFilters)
-    : useRecruiterJobBoard(apiFilters)
+  const externalQuery = useJobs(activeTab === 'external' ? apiFilters : undefined, { enabled: activeTab === 'external' })
+  const boardQuery = useRecruiterJobBoard(activeTab === 'internal' ? apiFilters : undefined, { enabled: activeTab === 'internal' })
+  const { data, isLoading, error, refetch } = activeTab === 'external' ? externalQuery : boardQuery
 
   const toggleSave = useToggleSaveJob()
   const runScraping = useRunScraping()
@@ -597,12 +597,12 @@ export default function JobOffersPage() {
           <motion.div variants={item} className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-surface-300 bg-surface-50 py-16 dark:border-surface-600 dark:bg-surface-800/50">
             <Search className="mb-4 h-12 w-12 text-surface-300 dark:text-surface-600" />
             <h3 className="text-lg font-semibold text-surface-700 dark:text-surface-300">
-              {activeTab === 'external' ? 'Aucune offre externe trouvée' : 'Aucune offre recruteur disponible'}
+              {activeTab === 'external' ? 'Aucune offre externe trouvée' : 'Aucune offre recruteur ne correspond à votre profil'}
             </h3>
             <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
               {activeTab === 'external'
                 ? 'Essayez de modifier vos filtres ou lancez un scrapping'
-                : 'Revenez plus tard, de nouvelles offres seront publiées'}
+                : 'Les offres sont classées selon votre profil (compétences, domaine, localisation). Complétez votre profil pour voir plus d\'offres'}
             </p>
           </motion.div>
         )

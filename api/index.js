@@ -112,9 +112,38 @@ var init_sendEmail = __esm({
   }
 });
 
+// backend/services/dbMigration.js
+var dbMigration_exports = {};
+__export(dbMigration_exports, {
+  fixJobOfferIndexes: () => fixJobOfferIndexes
+});
+import mongoose17 from "mongoose";
+async function fixJobOfferIndexes() {
+  try {
+    const db = mongoose17.connection.db;
+    if (!db) return;
+    const collection = db.collection("joboffers");
+    const indexes = await collection.indexes();
+    const oldIndex = indexes.find((i) => i.name === OLD_JOB_INDEX);
+    if (oldIndex) {
+      await collection.dropIndex(OLD_JOB_INDEX);
+      console.log("\u{1F9F9} Ancien index unique supprim\xE9 (userId_1_source_1_sourceId_1)");
+    }
+    await mongoose17.model("JobOffer").createIndexes();
+  } catch (err) {
+    console.error("Migration index JobOffer \xE9chou\xE9e:", err.message);
+  }
+}
+var OLD_JOB_INDEX;
+var init_dbMigration = __esm({
+  "backend/services/dbMigration.js"() {
+    OLD_JOB_INDEX = "userId_1_source_1_sourceId_1";
+  }
+});
+
 // backend/server.js
-import express15 from "express";
-import mongoose15 from "mongoose";
+import express17 from "express";
+import mongoose18 from "mongoose";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -708,7 +737,10 @@ var jobOfferSchema = new mongoose5.Schema({
   maxApplications: { type: Number, default: 100 },
   applicationDeadline: Date
 }, { timestamps: true });
-jobOfferSchema.index({ userId: 1, source: 1, sourceId: 1 }, { unique: true, sparse: true });
+jobOfferSchema.index(
+  { userId: 1, source: 1, sourceId: 1 },
+  { unique: true, partialFilterExpression: { sourceId: { $type: "string" } } }
+);
 jobOfferSchema.index({ userId: 1, isActive: 1 });
 jobOfferSchema.index({ postedBy: 1, isActive: 1 });
 jobOfferSchema.index({ title: "text", company: "text", description: "text" });
@@ -720,7 +752,20 @@ import mongoose6 from "mongoose";
 var applicationSchema = new mongoose6.Schema({
   userId: { type: mongoose6.Schema.Types.ObjectId, ref: "User", required: true },
   jobOfferId: { type: mongoose6.Schema.Types.ObjectId, ref: "JobOffer", required: true },
-  status: { type: String, enum: ["brouillon", "envoyee", "ouverte", "en_cours", "acceptee", "refusee", "retiree"], default: "brouillon" },
+  status: {
+    type: String,
+    enum: [
+      "brouillon",
+      "envoyee",
+      "consulte",
+      "valide_entretien",
+      "appel_attente",
+      "entretien_fait",
+      "accepte_final",
+      "refusee"
+    ],
+    default: "brouillon"
+  },
   email: {
     to: String,
     subject: String,
@@ -731,10 +776,1144 @@ var applicationSchema = new mongoose6.Schema({
   coverLetter: String,
   notes: String,
   followUpDate: Date,
-  followUpCount: { type: Number, default: 0 }
+  followUpCount: { type: Number, default: 0 },
+  statusHistory: [{
+    status: String,
+    changedAt: { type: Date, default: Date.now },
+    changedBy: { type: String, enum: ["candidat", "recruteur", "systeme"], default: "systeme" },
+    note: String
+  }],
+  candidateInfo: {
+    firstName: { type: String, default: "" },
+    lastName: { type: String, default: "" },
+    email: { type: String, default: "" },
+    phone: { type: String, default: "" },
+    city: { type: String, default: "" },
+    title: { type: String, default: "" },
+    linkedin: { type: String, default: "" },
+    github: { type: String, default: "" },
+    portfolio: { type: String, default: "" },
+    summary: { type: String, default: "" },
+    skills: [String],
+    domains: [String],
+    experience: [{
+      position: String,
+      company: String,
+      startDate: Date,
+      endDate: Date,
+      isCurrent: { type: Boolean, default: false },
+      description: String
+    }],
+    education: [{
+      degree: String,
+      institution: String,
+      field: String,
+      endDate: Date
+    }],
+    languages: [{ language: String, level: String }],
+    cvSummary: { type: String, default: "" },
+    cvFileName: { type: String, default: "" },
+    cvFileData: { type: String, default: "" },
+    cvMimeType: { type: String, default: "" },
+    keywords: [String],
+    matchScore: { type: Number, default: 0 }
+  }
 }, { timestamps: true });
 applicationSchema.index({ userId: 1, jobOfferId: 1 }, { unique: true });
+applicationSchema.index({ jobOfferId: 1, status: 1 });
 var Application_default = mongoose6.model("Application", applicationSchema);
+
+// backend/models/Notification.js
+import mongoose7 from "mongoose";
+var notificationSchema = new mongoose7.Schema({
+  userId: { type: mongoose7.Schema.Types.ObjectId, ref: "User", required: true },
+  type: {
+    type: String,
+    enum: [
+      "nouvelle_offre",
+      "candidature",
+      "candidature_statut",
+      "email",
+      "scrapping",
+      "rappel",
+      "nouvelle_entreprise",
+      "candidat_suggere",
+      "nouvelle_candidature",
+      "entretien",
+      "acceptation"
+    ],
+    required: true
+  },
+  title: { type: String, required: true },
+  message: { type: String, required: true },
+  data: mongoose7.Schema.Types.Mixed,
+  isRead: { type: Boolean, default: false },
+  actionUrl: String
+}, { timestamps: true });
+notificationSchema.index({ userId: 1, createdAt: -1 });
+notificationSchema.index({ userId: 1, isRead: 1 });
+var Notification_default = mongoose7.model("Notification", notificationSchema);
+
+// backend/models/CompanyEmail.js
+import mongoose8 from "mongoose";
+var companyEmailSchema = new mongoose8.Schema({
+  companyName: { type: String, required: true, trim: true },
+  email: { type: String, required: true, lowercase: true, trim: true },
+  website: { type: String, default: "" },
+  sector: { type: String, required: true },
+  domain: { type: String, required: true },
+  companyType: {
+    type: String,
+    enum: ["multinationale", "publique", "privee", "startup", "pme", "cabinet", "ong"],
+    default: "privee"
+  },
+  companySize: {
+    type: String,
+    enum: ["1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"],
+    default: "51-200"
+  },
+  city: { type: String, default: "Casablanca" },
+  country: { type: String, default: "Maroc" },
+  phone: { type: String, default: "" },
+  description: { type: String, default: "" },
+  isActive: { type: Boolean, default: true }
+}, { timestamps: true });
+companyEmailSchema.index({ companyName: "text", email: "text", sector: "text", domain: "text" });
+companyEmailSchema.index({ sector: 1, domain: 1, companyType: 1, city: 1 });
+companyEmailSchema.index({ email: 1 }, { unique: true });
+var CompanyEmail_default = mongoose8.model("CompanyEmail", companyEmailSchema);
+
+// backend/services/NotificationService.js
+var io = null;
+function emitToUser(userId, notification) {
+  if (io) {
+    io.to(`user:${userId}`).emit("notification", notification);
+    io.to(`user:${userId}`).emit("unread_count", { unreadCount: 1 });
+  }
+}
+async function createNotification({ userId, type, title, message, data, actionUrl }) {
+  try {
+    const notification = await Notification_default.create({
+      userId,
+      type,
+      title,
+      message,
+      data,
+      actionUrl
+    });
+    emitToUser(userId, notification);
+    return notification;
+  } catch (err) {
+    console.error("Erreur cr\xE9ation notification:", err.message);
+    return null;
+  }
+}
+async function notifyNewJobOffer(jobOffer) {
+  try {
+    const profileQuery = {};
+    const regexPatterns = [jobOffer.sector, jobOffer.domain].filter(Boolean);
+    if (regexPatterns.length > 0) {
+      profileQuery.domains = { $in: regexPatterns.map((p) => new RegExp(p, "i")) };
+    }
+    const profiles = await UserProfile_default.find(profileQuery).populate("userId");
+    for (const profile of profiles) {
+      const user = profile.userId;
+      if (!user || user.role !== "candidat") continue;
+      const skills = jobOffer.requirements || [];
+      const userSkills = profile.skills || [];
+      const matchCount = skills.filter(
+        (s) => userSkills.some((us) => us.toLowerCase().includes(s.toLowerCase()))
+      ).length;
+      if (matchCount === 0) continue;
+      await createNotification({
+        userId: user._id,
+        type: "nouvelle_offre",
+        title: "Nouvelle offre correspondant \xE0 votre profil",
+        message: `${jobOffer.title} chez ${jobOffer.company} - ${jobOffer.location}${jobOffer.isRemote ? " (Remote)" : ""}`,
+        data: { jobOfferId: jobOffer._id, matchCount, totalSkills: skills.length },
+        actionUrl: `/job-offers/${jobOffer._id}`
+      });
+    }
+  } catch (err) {
+    console.error("Erreur notifyNewJobOffer:", err.message);
+  }
+}
+async function notifyApplicationStatusChange(application, oldStatus, newStatus, changedBy) {
+  try {
+    const jobOffer = await JobOffer_default.findById(application.jobOfferId);
+    if (!jobOffer) return;
+    const statusLabels = {
+      envoyee: "Candidature envoy\xE9e",
+      consulte: "Candidature consult\xE9e",
+      valide_entretien: "Candidature valid\xE9e pour entretien",
+      appel_attente: "En attente d'appel pour entretien",
+      entretien_fait: "Entretien termin\xE9",
+      accepte_final: "Acceptation finale",
+      refusee: "Candidature refus\xE9e"
+    };
+    const titles = {
+      consulte: "Votre candidature a \xE9t\xE9 consult\xE9e",
+      valide_entretien: "Vous \xEAtes retenu pour un entretien",
+      appel_attente: "En attente de planification",
+      entretien_fait: "Entretien termin\xE9 - en attente de d\xE9cision",
+      accepte_final: "F\xE9licitations ! Vous \xEAtes accept\xE9",
+      refusee: "Mise \xE0 jour de votre candidature"
+    };
+    const messages = {
+      consulte: `Le recruteur a consult\xE9 votre candidature pour ${jobOffer.title} chez ${jobOffer.company}`,
+      valide_entretien: `Votre profil a \xE9t\xE9 retenu pour ${jobOffer.title} chez ${jobOffer.company}. Un recruteur vous contactera prochainement`,
+      appel_attente: `Veuillez patienter, le recruteur va vous appeler pour planifier l'entretien pour ${jobOffer.title}`,
+      entretien_fait: `L'entretien pour ${jobOffer.title} est termin\xE9. Le recruteur \xE9tudie votre dossier`,
+      accepte_final: `F\xE9licitations ! Vous avez \xE9t\xE9 accept\xE9 pour le poste ${jobOffer.title} chez ${jobOffer.company}`,
+      refusee: `Votre candidature pour ${jobOffer.title} chez ${jobOffer.company} n'a pas \xE9t\xE9 retenue`
+    };
+    const typeMap = {
+      valide_entretien: "entretien",
+      accepte_final: "acceptation"
+    };
+    await createNotification({
+      userId: application.userId,
+      type: typeMap[newStatus] || "candidature_statut",
+      title: titles[newStatus] || statusLabels[newStatus] || `Statut mis \xE0 jour : ${newStatus}`,
+      message: messages[newStatus] || `Votre candidature pour ${jobOffer.title} est maintenant : ${statusLabels[newStatus] || newStatus}`,
+      data: { applicationId: application._id, jobOfferId: jobOffer._id, oldStatus, newStatus, changedBy },
+      actionUrl: `/applications/${application._id}`
+    });
+  } catch (err) {
+    console.error("Erreur notifyApplicationStatusChange:", err.message);
+  }
+}
+async function notifyNewCompany(company) {
+  try {
+    const candidates = await User_default.find({ role: "candidat" });
+    for (const user of candidates) {
+      await createNotification({
+        userId: user._id,
+        type: "nouvelle_entreprise",
+        title: "Nouvelle entreprise disponible",
+        message: `${company.companyName} a rejoint notre plateforme - ${company.sector} \xE0 ${company.city}`,
+        data: { companyEmailId: company._id, companyName: company.companyName },
+        actionUrl: `/company-emails`
+      });
+    }
+  } catch (err) {
+    console.error("Erreur notifyNewCompany:", err.message);
+  }
+}
+async function notifyScrapingComplete(userId, results) {
+  try {
+    await createNotification({
+      userId,
+      type: "scrapping",
+      title: "Scraping termin\xE9",
+      message: `${results.count || 0} nouvelles offres d'emploi ont \xE9t\xE9 trouv\xE9es. Consultez les r\xE9sultats`,
+      data: { count: results.count, source: results.source, results },
+      actionUrl: `/job-offers?source=${results.source || "scraped"}`
+    });
+  } catch (err) {
+    console.error("Erreur notifyScrapingComplete:", err.message);
+  }
+}
+async function notifyNewApplicationToRecruiter(application, jobOffer) {
+  try {
+    const recruiter = await User_default.findById(jobOffer.postedBy || jobOffer.userId);
+    if (!recruiter || recruiter.role !== "recruiter") return;
+    await createNotification({
+      userId: recruiter._id,
+      type: "nouvelle_candidature",
+      title: "Nouvelle candidature re\xE7ue",
+      message: `Un candidat a postul\xE9 \xE0 votre offre ${jobOffer.title}`,
+      data: { applicationId: application._id, jobOfferId: jobOffer._id },
+      actionUrl: `/recruiter/applications`
+    });
+  } catch (err) {
+    console.error("Erreur notifyNewApplicationToRecruiter:", err.message);
+  }
+}
+async function notifySuggestedCandidates(recruiterId, jobOffer, candidateCount) {
+  try {
+    await createNotification({
+      userId: recruiterId,
+      type: "candidat_suggere",
+      title: "Candidats sugg\xE9r\xE9s pour votre offre",
+      message: `${candidateCount} candidats correspondent \xE0 votre offre ${jobOffer.title}`,
+      data: { jobOfferId: jobOffer._id, candidateCount },
+      actionUrl: `/recruiter/jobs/${jobOffer._id}/candidates`
+    });
+  } catch (err) {
+    console.error("Erreur notifySuggestedCandidates:", err.message);
+  }
+}
+async function notifyEmailFromCompany(userId, companyName, subject) {
+  try {
+    await createNotification({
+      userId,
+      type: "email",
+      title: "Email re\xE7u d'une entreprise",
+      message: `${companyName} vous a envoy\xE9 un email : ${subject}`,
+      data: { companyName, subject },
+      actionUrl: "/applications"
+    });
+  } catch (err) {
+    console.error("Erreur notifyEmailFromCompany:", err.message);
+  }
+}
+
+// backend/services/jobScraper.js
+import axios from "axios";
+import * as cheerio from "cheerio";
+var USER_AGENTS = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15"
+];
+function getRandomUA() {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+var delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function fetchWithRetry(url, opts = {}, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await axios.get(url, {
+        ...opts,
+        headers: {
+          "User-Agent": getRandomUA(),
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+          "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7,ar;q=0.6",
+          "Accept-Encoding": "gzip, deflate, br",
+          "Connection": "keep-alive",
+          "Cache-Control": "no-cache",
+          ...opts.headers || {}
+        },
+        timeout: 25e3,
+        maxRedirects: 5
+      });
+      return response;
+    } catch (err) {
+      if (attempt === retries) throw err;
+      const waitMs = attempt * 1500 + Math.random() * 1e3;
+      await delay(waitMs);
+    }
+  }
+}
+function normalizeText(text) {
+  if (!text) return "";
+  return text.replace(/[\t\r]+/g, " ").replace(/\s+/g, " ").replace(/\n+/g, " ").trim();
+}
+function inferContractType(title, description = "") {
+  const t = `${title} ${description}`.toLowerCase();
+  if (t.includes("stage") || t.includes("intern") || t.includes("stagiaire") || t.includes("pfe") || t.includes("pfm")) return "Stage";
+  if (t.includes("freelance") || t.includes("consultant") || t.includes("ind\xE9pendant") || t.includes("mission")) return "Freelance";
+  if (t.includes("cdd") || t.includes("contract") || t.includes("temporaire") || t.includes("interim") || t.includes("int\xE9rim")) return "CDD";
+  if (t.includes("temps partiel") || t.includes("part-time") || t.includes("mi-temps")) return "Temps partiel";
+  if (t.includes("alternance") || t.includes("apprentissage")) return "Alternance";
+  return "CDI";
+}
+function parseRelativeDate(text) {
+  if (!text) return null;
+  const lower = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const now2 = /* @__PURE__ */ new Date();
+  const patterns = [
+    { regex: /(\d+)\s*minute/, ms: (n) => n * 60 * 1e3 },
+    { regex: /(\d+)\s*heure/, ms: (n) => n * 3600 * 1e3 },
+    { regex: /(\d+)\s*jour/, ms: (n) => n * 864e5 },
+    { regex: /(\d+)\s*semaine/, ms: (n) => n * 7 * 864e5 },
+    { regex: /(\d+)\s*mois/, ms: (n) => n * 30 * 864e5 },
+    { regex: /(\d+)\s*an/, ms: (n) => n * 365 * 864e5 }
+  ];
+  if (lower.includes("aujourd") || lower.includes("today") || lower.includes("maintenant")) return now2;
+  if (lower.includes("hier") || lower.includes("yesterday")) return new Date(now2 - 864e5);
+  for (const { regex, ms } of patterns) {
+    const match = lower.match(regex);
+    if (match) return new Date(now2 - ms(parseInt(match[1])));
+  }
+  return null;
+}
+function parseExactDate(text) {
+  if (!text) return null;
+  const lower = text.toLowerCase().trim();
+  const isoMatch = lower.match(/(\d{4}[-/]\d{2}[-/]\d{2})/);
+  if (isoMatch) {
+    const d = new Date(isoMatch[1]);
+    if (!isNaN(d.getTime())) return d;
+  }
+  const frMonths = {
+    janvier: 0,
+    fevrier: 1,
+    mars: 2,
+    avril: 3,
+    mai: 4,
+    juin: 5,
+    juillet: 6,
+    aout: 7,
+    septembre: 8,
+    octobre: 9,
+    novembre: 10,
+    decembre: 11
+  };
+  const frMatch = lower.match(/(\d{1,2})\s*(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s*(\d{4})?/);
+  if (frMatch) {
+    const day = parseInt(frMatch[1]);
+    const month = frMonths[frMatch[2]];
+    const year = frMatch[3] ? parseInt(frMatch[3]) : now.getFullYear();
+    if (month !== void 0) return new Date(year, month, day);
+  }
+  const usMatch = lower.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+(\d{1,2}),?\s*(\d{4})?/);
+  if (usMatch) {
+    const months = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+    const month = months[usMatch[1].slice(0, 3)];
+    const day = parseInt(usMatch[2]);
+    const year = usMatch[3] ? parseInt(usMatch[3]) : (/* @__PURE__ */ new Date()).getFullYear();
+    if (month !== void 0) return new Date(year, month, day);
+  }
+  return null;
+}
+function extractPostedDate($, card) {
+  const selectors = [
+    "time[datetime]",
+    "time",
+    '[data-testid="post-date"]',
+    ".job-search-card__listdate",
+    ".date",
+    ".posted-date",
+    ".job-date",
+    'span[class*="date"]',
+    'span[class*="time"]',
+    ".age",
+    ".new"
+  ];
+  for (const sel of selectors) {
+    const el = $(card).find(sel).first();
+    if (el.length) {
+      const datetime = el.attr("datetime");
+      if (datetime && datetime.includes("T")) {
+        const d = new Date(datetime);
+        if (!isNaN(d.getTime())) return d;
+      }
+      const text = normalizeText(el.text());
+      if (text) {
+        const exact = parseExactDate(text);
+        if (exact) return exact;
+        const relative = parseRelativeDate(text);
+        if (relative) return relative;
+      }
+    }
+  }
+  return null;
+}
+function calculateRelevance(job, userProfile) {
+  let score = 30;
+  if (!userProfile) return Math.floor(Math.random() * 20) + 50;
+  const userSkills = (userProfile.skills || []).map((s) => s.toLowerCase());
+  const userDomains = (userProfile.domains || []).map((d) => d.toLowerCase());
+  const userKeywords = (userProfile.searchKeywords || []).map((k) => k.toLowerCase());
+  const userExperience = (userProfile.experience || []).map((e) => (e.position || "").toLowerCase());
+  const userTitle = (userProfile.title || "").toLowerCase();
+  const jobText = `${job.title} ${job.description || ""} ${job.sector || ""} ${(job.keywords || []).join(" ")}`.toLowerCase();
+  let skillMatches = 0;
+  for (const skill of userSkills) {
+    if (skill.length > 2 && jobText.includes(skill)) skillMatches++;
+  }
+  score += Math.min(skillMatches * 8, 40);
+  let domainMatch = false;
+  for (const domain of userDomains) {
+    if (domain.length > 2 && (jobText.includes(domain) || (job.sector || "").toLowerCase().includes(domain))) {
+      domainMatch = true;
+      break;
+    }
+  }
+  if (domainMatch) score += 20;
+  let keywordMatches = 0;
+  for (const kw of userKeywords) {
+    if (kw.length > 2 && jobText.includes(kw)) keywordMatches++;
+  }
+  score += Math.min(keywordMatches * 5, 15);
+  let titleMatch = false;
+  if (userTitle) {
+    const titleWords = userTitle.split(/\s+/).filter((w) => w.length > 3);
+    for (const w of titleWords) {
+      if (jobText.includes(w)) {
+        titleMatch = true;
+        break;
+      }
+    }
+  }
+  if (titleMatch) score += 10;
+  let expMatch = false;
+  for (const exp of userExperience) {
+    const expWords = exp.split(/\s+/).filter((w) => w.length > 4);
+    for (const w of expWords) {
+      if (jobText.includes(w)) {
+        expMatch = true;
+        break;
+      }
+    }
+    if (expMatch) break;
+  }
+  if (expMatch) score += 5;
+  if (job.description && job.description.length > 100) score += 3;
+  if (job.postedAt) {
+    const daysSince = (Date.now() - new Date(job.postedAt).getTime()) / 864e5;
+    if (daysSince < 3) score += 5;
+    else if (daysSince < 7) score += 3;
+    else if (daysSince < 14) score += 1;
+    else if (daysSince > 30) score -= 5;
+  }
+  return Math.min(Math.max(score, 10), 99);
+}
+async function scrapeLinkedIn(keywords, location = "Morocco", userProfile = null) {
+  const jobs = [];
+  const pages = [0, 25, 50, 75];
+  for (const pageNum of pages) {
+    try {
+      const searchQuery = encodeURIComponent(keywords.slice(0, 5).join(" OR "));
+      const url = `https://www.linkedin.com/jobs/search?keywords=${searchQuery}&location=${encodeURIComponent(location)}&trk=public_jobs_jobs-search-bar_search-submit&position=1&pageNum=${pageNum}&f_TPR=r604800&f_E=2%2C3&sortBy=DD`;
+      const { data } = await fetchWithRetry(url, {
+        headers: {
+          "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7"
+        }
+      });
+      const $ = cheerio.load(data);
+      const cardSelectors = [
+        ".base-card",
+        ".job-search-card",
+        "li.jobs-search__result-card",
+        ".base-search-card",
+        "[data-entity-urn]",
+        ".job-search-card__list-item"
+      ];
+      let foundOnPage = 0;
+      for (const cardSel of cardSelectors) {
+        $(cardSel).each((_, el) => {
+          const card = $(el);
+          const title = normalizeText(
+            card.find(".base-search-card__title, .result__title, h3.base-card__full-link, h3, .job-search-card__title").text()
+          );
+          const company = normalizeText(
+            card.find(".base-search-card__subtitle, .result__company, h4.base-search-card__subtitle, .hidden-nested-link, .job-search-card__company-name").text()
+          );
+          const loc = normalizeText(
+            card.find(".job-search-card__location, .result__location, .job-search-card__bullet").text()
+          );
+          const linkEl = card.find('a.base-card__full-link, a.base-search-card__full-link, a.result__card, a[href*="/jobs/view/"]');
+          const href = (linkEl.attr("href") || "").split("?")[0];
+          const sourceUrl = href.startsWith("http") ? href : `https://www.linkedin.com${href}`;
+          const postedAt = extractPostedDate($, card) || /* @__PURE__ */ new Date();
+          let description = normalizeText(
+            card.find(".base-search-card__description, .job-search-card__snippet, .show-more-less-html__markup, .job-search-card__description-snippet").text()
+          );
+          if (!description || description.length < 20) {
+            description = normalizeText(card.find("p, span.description, .entity-result__summary").text().slice(0, 500));
+          }
+          const salaryText = normalizeText(card.find(".salary, .job-search-card__salary-info").text());
+          if (title && title.length > 3) {
+            jobs.push({
+              title,
+              company: company || "Non sp\xE9cifi\xE9",
+              location: loc || location,
+              sourceUrl,
+              source: "linkedin",
+              postedAt,
+              contractType: inferContractType(title, description),
+              description: description.slice(0, 2500),
+              sector: "",
+              salary: salaryText ? { min: 0, max: 0, currency: "MAD", period: "monthly" } : void 0,
+              keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 8)
+            });
+            foundOnPage++;
+          }
+        });
+      }
+      if (foundOnPage === 0 && pageNum === 0) break;
+      await delay(2e3 + Math.random() * 2e3);
+    } catch (error) {
+      console.error(`LinkedIn page ${pageNum} error:`, error.message);
+      if (pageNum === 0) break;
+    }
+  }
+  const seen = /* @__PURE__ */ new Set();
+  const unique = jobs.filter((j) => {
+    const key = `${j.title.toLowerCase()}|${j.company.toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
+}
+async function scrapeIndeed(keywords, location = "Maroc", userProfile = null) {
+  const jobs = [];
+  const pages = ["0", "10", "20", "30"];
+  for (const start of pages) {
+    try {
+      const searchQuery = encodeURIComponent(keywords.slice(0, 4).join(" "));
+      const url = `https://ma.indeed.com/jobs?q=${searchQuery}&l=${encodeURIComponent(location)}&sort=date&start=${start}&fromage=14`;
+      const { data } = await fetchWithRetry(url);
+      const $ = cheerio.load(data);
+      const cardSelectors = [
+        "div.job_seen_beacon",
+        "div.jobsearch-ResultsList div.result",
+        "td.resultContent",
+        ".resultContent",
+        ".jobsearch-SerpJobCard",
+        ".result",
+        'div[data-testid="slider_item"]'
+      ];
+      let foundOnPage = 0;
+      for (const cardSel of cardSelectors) {
+        $(cardSel).each((_, el) => {
+          const card = $(el);
+          const titleEl = card.find("h2.jobTitle a, a.jcs-JobTitle, h2 a, a[data-jk], .jobTitle a");
+          const title = normalizeText(titleEl.text());
+          const company = normalizeText(
+            card.find('span[data-testid="company-name"], .companyName, .company, span.company, [data-testid="company-name"]').text()
+          );
+          const loc = normalizeText(
+            card.find('div[data-testid="text-location"], .companyLocation, .location, [data-testid="text-location"]').text()
+          );
+          const href = titleEl.attr("href") || "";
+          const sourceUrl = href.startsWith("http") ? href.split("&")[0] : `https://ma.indeed.com${href.split("&")[0]}`;
+          const postedAt = extractPostedDate($, card) || /* @__PURE__ */ new Date();
+          const description = normalizeText(
+            card.find(".job-snippet, .jobCardShelfContainer, .jobsearch-jobDescriptionText, .jobCardShelf .job-snippet").text()
+          );
+          const salaryText = normalizeText(card.find('.salary-snippet, .attribute_snippet, [data-testid="attribute_snippet_testid"]').text());
+          if (title && title.length > 3) {
+            jobs.push({
+              title,
+              company: company || "Non sp\xE9cifi\xE9",
+              location: loc || location,
+              sourceUrl,
+              source: "indeed",
+              postedAt,
+              contractType: inferContractType(title, description),
+              description: description.slice(0, 2500),
+              sector: "",
+              salary: salaryText ? { min: 0, max: 0, currency: "MAD", period: "monthly" } : void 0,
+              keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 8)
+            });
+            foundOnPage++;
+          }
+        });
+      }
+      if (foundOnPage === 0 && start === "0") break;
+      await delay(2500 + Math.random() * 2e3);
+    } catch (error) {
+      console.error(`Indeed page ${start} error:`, error.message);
+      if (start === "0") break;
+    }
+  }
+  const seen = /* @__PURE__ */ new Set();
+  const unique = jobs.filter((j) => {
+    const key = `${j.title.toLowerCase()}|${j.company.toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
+}
+async function scrapeRekrute(keywords, userProfile = null) {
+  const jobs = [];
+  try {
+    const searchQuery = encodeURIComponent(keywords.slice(0, 4).join(" "));
+    const url = `https://www.rekrute.com/offres-emploi?mots-cles=${searchQuery}&tri=date&datePublication=semaine`;
+    const { data } = await fetchWithRetry(url);
+    const $ = cheerio.load(data);
+    const cardSelectors = [
+      "div.offre-item",
+      "li.offre",
+      "div.job-item",
+      "article.offre",
+      ".offre-list-item",
+      ".offre-block",
+      'div[class*="offre"]'
+    ];
+    for (const cardSel of cardSelectors) {
+      $(cardSel).each((_, el) => {
+        const card = $(el);
+        const titleEl = card.find("h2 a, h3 a, a.job-title, a.offre-title, a[title]");
+        const title = normalizeText(titleEl.text()) || normalizeText(titleEl.attr("title") || "");
+        const company = normalizeText(
+          card.find("span.company, div.company-name, p.company, .offre-company, a.company").text()
+        );
+        const loc = normalizeText(
+          card.find("span.location, div.location, span.ville, .offre-location, .city").text()
+        );
+        const href = titleEl.attr("href") || "";
+        const sourceUrl = href.startsWith("http") ? href : `https://www.rekrute.com${href}`;
+        const postedAt = extractPostedDate($, card) || /* @__PURE__ */ new Date();
+        const description = normalizeText(
+          card.find(".offre-description, .description, .job-description, p.short-description, .offre-text").first().text()
+        );
+        const salaryText = normalizeText(card.find(".salary, .salaire, .offre-salaire").text());
+        if (title && title.length > 3) {
+          jobs.push({
+            title,
+            company: company || "Non sp\xE9cifi\xE9",
+            location: loc || "Maroc",
+            sourceUrl,
+            source: "rekrute",
+            postedAt,
+            contractType: inferContractType(title, description),
+            description: description.slice(0, 2500),
+            sector: "",
+            salary: salaryText ? { min: 0, max: 0, currency: "MAD", period: "monthly" } : void 0,
+            keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 8)
+          });
+        }
+      });
+    }
+  } catch (error) {
+    console.error("Rekrute scraping error:", error.message);
+  }
+  const seen = /* @__PURE__ */ new Set();
+  const unique = jobs.filter((j) => {
+    const key = `${j.title.toLowerCase()}|${j.company.toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
+}
+async function scrapeWTTJ(keywords, location = "Maroc", userProfile = null) {
+  const jobs = [];
+  try {
+    const searchQuery = encodeURIComponent(keywords.slice(0, 4).join(" "));
+    const url = `https://www.welcometothejungle.com/fr/jobs?query=${searchQuery}&refinementList[locations][0]=Maroc&sortBy=mostRecent`;
+    const { data } = await fetchWithRetry(url);
+    const $ = cheerio.load(data);
+    const cardSelectors = [
+      "article",
+      ".card-job",
+      '[data-testid="job-card"]',
+      ".ais-Hits-item",
+      ".ais-InfiniteHits-item",
+      '[class*="JobCard"]',
+      'a[href*="/fr/companies/"]'
+    ];
+    for (const cardSel of cardSelectors) {
+      $(cardSel).each((_, el) => {
+        const card = $(el);
+        const title = normalizeText(
+          card.find('h2, h3, .job-title, [data-testid="job-title"], .title, [class*="Title"]').text()
+        );
+        const company = normalizeText(
+          card.find('.company-name, .job-company, [data-testid="company-name"], .company, [class*="Company"]').text()
+        );
+        const loc = normalizeText(
+          card.find('.job-location, .location, [data-testid="location"], .city, [class*="Location"]').text()
+        );
+        const href = card.find("a").first().attr("href") || card.find('a[href*="/jobs/"]').attr("href") || "";
+        const sourceUrl = href.startsWith("http") ? href : `https://www.welcometothejungle.com${href}`;
+        const description = normalizeText(
+          card.find('.job-description, .description, p, [class*="Description"]').text()
+        );
+        const postedAt = extractPostedDate($, card) || /* @__PURE__ */ new Date();
+        if (title && title.length > 3) {
+          jobs.push({
+            title,
+            company: company || "Non sp\xE9cifi\xE9",
+            location: loc || location,
+            sourceUrl,
+            source: "welcometothejungle",
+            postedAt,
+            contractType: inferContractType(title, description),
+            description: description.slice(0, 2500),
+            sector: "",
+            keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 8)
+          });
+        }
+      });
+    }
+  } catch (error) {
+    console.error("WTTJ scraping error:", error.message);
+  }
+  const seen = /* @__PURE__ */ new Set();
+  const unique = jobs.filter((j) => {
+    const key = `${j.title.toLowerCase()}|${j.company.toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
+}
+async function scrapeManpower(keywords, location = "Maroc", userProfile = null) {
+  const jobs = [];
+  try {
+    const searchQuery = encodeURIComponent(keywords.slice(0, 4).join(" "));
+    const url = `https://www.manpower.ma/fr/recherche-d-emploi?keywords=${searchQuery}`;
+    const { data } = await fetchWithRetry(url);
+    const $ = cheerio.load(data);
+    const cardSelectors = [
+      "article",
+      ".job-offer",
+      ".offer-item",
+      ".card-job",
+      ".result-item",
+      'div[class*="offer"]',
+      'div[class*="job"]'
+    ];
+    for (const cardSel of cardSelectors) {
+      $(cardSel).each((_, el) => {
+        const card = $(el);
+        const title = normalizeText(card.find("h2, h3, .job-title, a").first().text());
+        const company = normalizeText(card.find(".company, .company-name, .employer").text());
+        const loc = normalizeText(card.find(".location, .job-location, .city").text());
+        const href = card.find("a").first().attr("href") || "";
+        const sourceUrl = href.startsWith("http") ? href : `https://www.manpower.ma${href}`;
+        const description = normalizeText(card.find(".description, p, .job-desc").text());
+        const postedAt = extractPostedDate($, card) || /* @__PURE__ */ new Date();
+        if (title && title.length > 3) {
+          jobs.push({
+            title,
+            company: company || "Manpower Maroc",
+            location: loc || location,
+            sourceUrl,
+            source: "manpower",
+            postedAt,
+            contractType: inferContractType(title, description),
+            description: description.slice(0, 2500),
+            sector: "",
+            keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 8)
+          });
+        }
+      });
+    }
+  } catch (error) {
+    console.error("Manpower scraping error:", error.message);
+  }
+  const seen = /* @__PURE__ */ new Set();
+  const unique = jobs.filter((j) => {
+    const key = `${j.title.toLowerCase()}|${j.company.toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
+}
+async function scrapeAllSources(keywords, location = "Maroc", enabledSources = ["linkedin", "indeed", "rekrute"], userProfile = null) {
+  const results = {
+    linkedin: { jobs: [], status: "pending", duration: 0 },
+    indeed: { jobs: [], status: "pending", duration: 0 },
+    rekrute: { jobs: [], status: "pending", duration: 0 },
+    welcometothejungle: { jobs: [], status: "pending", duration: 0 },
+    manpower: { jobs: [], status: "pending", duration: 0 }
+  };
+  const scrapers = {
+    linkedin: () => scrapeLinkedIn(keywords, location, userProfile),
+    indeed: () => scrapeIndeed(keywords, location, userProfile),
+    rekrute: () => scrapeRekrute(keywords, userProfile),
+    welcometothejungle: () => scrapeWTTJ(keywords, location, userProfile),
+    manpower: () => scrapeManpower(keywords, location, userProfile)
+  };
+  for (const source of enabledSources) {
+    if (!scrapers[source]) continue;
+    const start = Date.now();
+    try {
+      const jobs = await scrapers[source]();
+      results[source] = {
+        jobs,
+        status: jobs.length > 0 ? "success" : "partial",
+        duration: Date.now() - start
+      };
+    } catch (error) {
+      results[source] = {
+        jobs: [],
+        status: "failed",
+        duration: Date.now() - start,
+        error: error.message
+      };
+    }
+    await delay(2e3 + Math.random() * 1500);
+  }
+  return results;
+}
+var MOROCCAN_COMPANIES = [
+  { name: "TechMaroc Solutions", domain: "tech", size: "201-500", city: "Casablanca", website: "https://techmaroc.ma", industry: "Technologie / IT" },
+  { name: "CloudAfrica", domain: "tech", size: "51-200", city: "Rabat", website: "https://cloudafrica.com", industry: "Cloud / DevOps" },
+  { name: "DigitalCraft", domain: "digital", size: "51-200", city: "Marrakech", website: "https://digitalcraft.ma", industry: "Marketing / Digital" },
+  { name: "AppWorks", domain: "mobile", size: "11-50", city: "Tanger", website: "https://appworks.ma", industry: "Mobile / Tech" },
+  { name: "SecuNet", domain: "cybersecurity", size: "11-50", city: "Rabat", website: "https://secunet.ma", industry: "Cybers\xE9curit\xE9" },
+  { name: "OCP Digital", domain: "tech", size: "501-1000", city: "Casablanca", website: "https://ocp.ma", industry: "Industrie / Tech" },
+  { name: "Involys", domain: "tech", size: "201-500", city: "Casablanca", website: "https://involys.com", industry: "Technologie / IT" },
+  { name: "Telnet", domain: "tech", size: "201-500", city: "Tanger", website: "https://telnet.ma", industry: "Technologie / IT" },
+  { name: "Vermeg", domain: "fintech", size: "201-500", city: "Casablanca", website: "https://vermeg.com", industry: "Finance / Tech" },
+  { name: "Sofrecom", domain: "telecom", size: "201-500", city: "Casablanca", website: "https://sofrecom.ma", industry: "T\xE9l\xE9coms" },
+  { name: "MarocTelecom", domain: "telecom", size: "1000+", city: "Casablanca", website: "https://maroctelecom.ma", industry: "T\xE9l\xE9coms" },
+  { name: "Orange Maroc", domain: "telecom", size: "1000+", city: "Casablanca", website: "https://orange.ma", industry: "T\xE9l\xE9coms" },
+  { name: "BMCE Bank", domain: "finance", size: "1000+", city: "Casablanca", website: "https://bmcebank.ma", industry: "Finance / Banque" },
+  { name: "Attijariwafa Bank", domain: "finance", size: "1000+", city: "Casablanca", website: "https://attijariwafabank.com", industry: "Finance / Banque" },
+  { name: "CIH Bank", domain: "finance", size: "501-1000", city: "Casablanca", website: "https://cihbank.ma", industry: "Finance / Banque" },
+  { name: "CDG Capital", domain: "finance", size: "501-1000", city: "Casablanca", website: "https://cdgcapital.ma", industry: "Finance" },
+  { name: "Renault Maroc", domain: "automobile", size: "1000+", city: "Casablanca", website: "https://group.renault.com", industry: "Automobile" },
+  { name: "Danone Maroc", domain: "agroalimentaire", size: "501-1000", city: "Casablanca", website: "https://danone.com", industry: "Agroalimentaire" },
+  { name: "LafargeHolcim", domain: "industrie", size: "1000+", city: "Casablanca", website: "https://lafargeholcim.com", industry: "Construction / Industrie" },
+  { name: "ONCF", domain: "transport", size: "1000+", city: "Rabat", website: "https://oncf.ma", industry: "Transport / Public" },
+  { name: "ONEE", domain: "energie", size: "1000+", city: "Rabat", website: "https://onee.ma", industry: "\xC9nergie / Public" },
+  { name: "Holmarcom", domain: "diversifie", size: "1000+", city: "Casablanca", website: "https://holmarcom.com", industry: "Diversifi\xE9" },
+  { name: "AXA Assurance", domain: "assurance", size: "501-1000", city: "Casablanca", website: "https://axa.ma", industry: "Assurance" },
+  { name: "Wana Corporate", domain: "telecom", size: "1000+", city: "Casablanca", website: "https://wanamaroc.com", industry: "T\xE9l\xE9coms" },
+  { name: "Procter & Gamble", domain: "fmcg", size: "501-1000", city: "Casablanca", website: "https://pg.com", industry: "FMCG" },
+  { name: "Unilever Maroc", domain: "fmcg", size: "501-1000", city: "Casablanca", website: "https://unilever.com", industry: "FMCG" },
+  { name: "IBM Maroc", domain: "tech", size: "201-500", city: "Casablanca", website: "https://ibm.com", industry: "Technologie / IT" },
+  { name: "CGI Maroc", domain: "tech", size: "201-500", city: "Casablanca", website: "https://cgi.com", industry: "Technologie / IT" },
+  { name: "Accenture Maroc", domain: "consulting", size: "201-500", city: "Casablanca", website: "https://accenture.com", industry: "Conseil / IT" },
+  { name: "Sopriam", domain: "automobile", size: "201-500", city: "Casablanca", website: "https://sopriam.com", industry: "Automobile" }
+];
+function extractLinkedInUrl(href) {
+  if (!href) return "";
+  let url = href;
+  if (url.includes("/url?q=")) {
+    url = decodeURIComponent(url.split("/url?q=")[1].split("&")[0]);
+  }
+  url = url.split("?")[0].split("#")[0];
+  if (url.match(/linkedin\.com\/in\/[a-z0-9-%]+(-[a-z0-9-%]+)*\/?$/i)) {
+    if (!url.startsWith("http")) url = "https://www." + url;
+    return url;
+  }
+  return "";
+}
+async function scrapeRecruiters(keywords, location = "Maroc", count = 30, userProfile = null) {
+  const recruiters = [];
+  const seenUrls = /* @__PURE__ */ new Set();
+  const domains = userProfile?.domains || keywords || ["tech", "finance", "RH"];
+  const queries = Array.isArray(domains) ? domains : [domains];
+  for (const query of queries.slice(0, 3)) {
+    try {
+      const searchQuery = encodeURIComponent(`site:linkedin.com/in "recruteur" OR "talent acquisition" OR "HR" "${query}" "Maroc" OR "Casablanca" OR "Rabat"`);
+      const url = `https://www.google.com/search?q=${searchQuery}&num=20&hl=fr`;
+      const { data } = await fetchWithRetry(url, {
+        headers: { "Accept": "text/html,application/xhtml+xml" }
+      });
+      const $ = cheerio.load(data);
+      $("div.g, div[data-sokoban-container]").each((_, el) => {
+        const card = $(el);
+        const linkEl = card.find('a[href*="linkedin.com/in/"]').first();
+        const href = linkEl.attr("href") || "";
+        const linkedinUrl = extractLinkedInUrl(href);
+        if (!linkedinUrl || seenUrls.has(linkedinUrl)) return;
+        const titleText = normalizeText(card.find("h3").text());
+        const snippetText = normalizeText(card.find(".VwiC3b, .IsZvec, .st").text());
+        const nameMatch = titleText.match(/^([A-ZÀ-Ü][a-zà-ü]+(?:\s+[A-ZÀ-Ü][a-zà-ü]+)*)\s*[-–|]\s*/i);
+        let firstName = "", lastName = "", headline = "";
+        if (nameMatch) {
+          const parts = nameMatch[1].trim().split(" ");
+          firstName = parts[0] || "";
+          lastName = parts.slice(1).join(" ") || "";
+          headline = titleText.replace(nameMatch[0], "").trim();
+        } else {
+          const parts = titleText.split(" ").filter(Boolean);
+          firstName = parts[0] || "";
+          lastName = parts.slice(1).join(" ") || "";
+          headline = snippetText.slice(0, 120);
+        }
+        const companyMatch = headline.match(/(?:at|chez|@)\s*(.+?)(?:\s*[-–|]|$)/i);
+        const company = companyMatch ? companyMatch[1].trim() : MOROCCAN_COMPANIES.find((c) => headline.toLowerCase().includes(c.name.toLowerCase()))?.name || "";
+        let sector = "";
+        const sectorKeywords = {
+          "Technologie / IT": ["tech", "digital", "software", "informatique", "developer", "engineer", "devops"],
+          "Finance / Banque": ["finance", "bank", "banque", "comptable", "auditeur", "cr\xE9dit"],
+          "Industrie": ["industrie", "manufactur", "production", "usine", "ing\xE9nieur"],
+          "Marketing / Digital": ["marketing", "communication", "digital", "social media", "growth"],
+          "Ressources Humaines": ["hr", "rh", "recrutement", "talent", "people", "recruiter"]
+        };
+        const headlineLower = headline.toLowerCase();
+        for (const [sec, words] of Object.entries(sectorKeywords)) {
+          if (words.some((w) => headlineLower.includes(w))) {
+            sector = sec;
+            break;
+          }
+        }
+        if (firstName && firstName.length > 1) {
+          seenUrls.add(linkedinUrl);
+          recruiters.push({
+            firstName,
+            lastName,
+            title: headline || "Recruteur",
+            company: company || "Non sp\xE9cifi\xE9",
+            linkedinUrl,
+            location: location || "Casablanca",
+            sector: sector || query,
+            connectionDegree: ["1st", "2nd", "3rd+"][Math.floor(Math.random() * 3)],
+            profilePicture: ""
+          });
+        }
+      });
+      await delay(2500 + Math.random() * 2e3);
+    } catch (error) {
+      console.error(`Recruiter Google scraping error for ${query}:`, error.message);
+    }
+  }
+  if (recruiters.length < count) {
+    const filteredCompanies = userProfile?.domains?.length ? MOROCCAN_COMPANIES.filter((c) => {
+      const domainLower = c.domain.toLowerCase();
+      return userProfile.domains.some((d) => d.toLowerCase().includes(domainLower) || domainLower.includes(d.toLowerCase().split(" ")[0]));
+    }) : MOROCCAN_COMPANIES;
+    const companies = filteredCompanies.length > 0 ? filteredCompanies : MOROCCAN_COMPANIES;
+    for (const company of companies) {
+      if (recruiters.length >= count) break;
+      try {
+        const q = encodeURIComponent(`site:linkedin.com/in "recruteur" OR "RH" OR "talent" "${company.name}" Maroc`);
+        const url = `https://www.google.com/search?q=${q}&num=10&hl=fr`;
+        const { data } = await fetchWithRetry(url, {
+          headers: { "Accept": "text/html,application/xhtml+xml" }
+        });
+        const $ = cheerio.load(data);
+        $("div.g, div[data-sokoban-container]").each((_, el) => {
+          if (recruiters.length >= count) return;
+          const card = $(el);
+          const linkEl = card.find('a[href*="linkedin.com/in/"]').first();
+          const href = linkEl.attr("href") || "";
+          const linkedinUrl = extractLinkedInUrl(href);
+          if (!linkedinUrl || seenUrls.has(linkedinUrl)) return;
+          const titleText = normalizeText(card.find("h3").text());
+          const snippetText = normalizeText(card.find(".VwiC3b, .IsZvec, .st").text());
+          const nameMatch = titleText.match(/^([A-ZÀ-Ü][a-zà-ü]+(?:\s+[A-ZÀ-Ü][a-zà-ü]+)*)\s*[-–|]\s*/i);
+          let firstName = "", lastName = "", headline = "";
+          if (nameMatch) {
+            const parts = nameMatch[1].trim().split(" ");
+            firstName = parts[0] || "";
+            lastName = parts.slice(1).join(" ") || "";
+            headline = titleText.replace(nameMatch[0], "").trim();
+          } else {
+            const parts = titleText.split(" ").filter(Boolean);
+            firstName = parts[0] || "";
+            lastName = parts.slice(1).join(" ") || "";
+            headline = snippetText.slice(0, 120);
+          }
+          if (firstName && firstName.length > 1) {
+            seenUrls.add(linkedinUrl);
+            recruiters.push({
+              firstName,
+              lastName,
+              title: headline || "Recruteur",
+              company: company.name,
+              linkedinUrl,
+              location: company.city || location || "Casablanca",
+              sector: company.industry || "G\xE9n\xE9ral",
+              connectionDegree: ["1st", "2nd", "3rd+"][Math.floor(Math.random() * 3)],
+              profilePicture: ""
+            });
+          }
+        });
+        await delay(2e3 + Math.random() * 2e3);
+      } catch (error) {
+        console.error(`Company LinkedIn search error for ${company.name}:`, error.message);
+      }
+    }
+  }
+  return recruiters.slice(0, count);
+}
+function calculateCandidateMatch(candidateProfile, jobOffer) {
+  let score = 0;
+  let maxScore = 0;
+  const jobText = `${jobOffer.title} ${jobOffer.description || ""} ${jobOffer.sector || ""} ${jobOffer.domain || ""} ${(jobOffer.keywords || []).join(" ")}`.toLowerCase();
+  maxScore += 30;
+  const skills = candidateProfile.skills || [];
+  let skillMatches = 0;
+  for (const skill of skills) {
+    if (skill.toLowerCase().length > 2 && jobText.includes(skill.toLowerCase())) skillMatches++;
+  }
+  score += Math.min(skillMatches / Math.max(skills.length, 1) * 30, 30);
+  maxScore += 25;
+  const domains = candidateProfile.domains || [];
+  let domainMatch = false;
+  for (const domain of domains) {
+    if (domain.toLowerCase().length > 2 && (jobText.includes(domain.toLowerCase()) || (jobOffer.sector || "").toLowerCase().includes(domain.toLowerCase()))) {
+      domainMatch = true;
+      break;
+    }
+  }
+  if (domainMatch) score += 25;
+  maxScore += 25;
+  const experience = candidateProfile.experience || [];
+  let expMatches = 0;
+  for (const exp of experience) {
+    const expText = `${exp.position || ""} ${exp.description || ""}`.toLowerCase();
+    const expWords = expText.split(/\s+/).filter((w) => w.length > 3);
+    for (const word of expWords) {
+      if (jobText.includes(word)) expMatches++;
+    }
+  }
+  score += Math.min(expMatches * 3, 25);
+  maxScore += 10;
+  const education = candidateProfile.education || [];
+  for (const edu of education) {
+    const eduText = `${edu.field || ""} ${edu.degree || ""}`.toLowerCase();
+    if (eduText.split(/\s+/).some((w) => w.length > 3 && jobText.includes(w))) {
+      score += 10;
+      break;
+    }
+  }
+  maxScore += 10;
+  const candidateCity = (candidateProfile.location?.city || "").toLowerCase();
+  const jobLocation = (jobOffer.location || "").toLowerCase();
+  if (candidateCity && jobLocation.includes(candidateCity)) {
+    score += 10;
+  } else if (candidateProfile.location?.isRemoteOpen && jobOffer.isRemote) {
+    score += 8;
+  }
+  return maxScore > 0 ? Math.round(score / maxScore * 100) : 50;
+}
+
+// backend/services/candidateInfo.js
+import mongoose9 from "mongoose";
+async function buildCandidateInfo(userId, jobOffer) {
+  const [user, profile] = await Promise.all([
+    User_default.findById(userId),
+    UserProfile_default.findOne({ userId })
+  ]);
+  const CV3 = mongoose9.models.CV;
+  const cv = CV3 ? await CV3.findOne({ userId, isActive: true }) : null;
+  const cvSkills = cv?.parsedData?.skills || [];
+  const profileSkills = profile?.skills || [];
+  const allSkills = [.../* @__PURE__ */ new Set([...profileSkills, ...cvSkills])];
+  const jobData = jobOffer && typeof jobOffer.toObject === "function" ? jobOffer.toObject() : jobOffer;
+  const matchScore = profile && jobData ? calculateCandidateMatch(profile, jobData) : 0;
+  return {
+    firstName: user?.firstName || "",
+    lastName: user?.lastName || "",
+    email: user?.email || "",
+    phone: user?.phone || cv?.parsedData?.phone || "",
+    city: profile?.location?.city || cv?.parsedData?.location || "",
+    title: profile?.title || "",
+    linkedin: profile?.socialLinks?.linkedin || "",
+    github: profile?.socialLinks?.github || "",
+    portfolio: profile?.socialLinks?.portfolio || "",
+    summary: profile?.presentation || profile?.summary || "",
+    skills: allSkills.slice(0, 30),
+    domains: profile?.domains || [],
+    experience: (profile?.experience || []).map((e) => ({
+      position: e.position || "",
+      company: e.company || "",
+      startDate: e.startDate,
+      endDate: e.endDate,
+      isCurrent: !!e.isCurrent,
+      description: e.description || ""
+    })),
+    education: (profile?.education || []).map((e) => ({
+      degree: e.degree || "",
+      institution: e.institution || "",
+      field: e.field || "",
+      endDate: e.endDate
+    })),
+    languages: (profile?.languages || []).map((l) => ({
+      language: l.language || "",
+      level: l.level || ""
+    })),
+    cvSummary: cv?.candidateSummary || "",
+    cvFileName: cv?.originalName || "",
+    cvFileData: cv?.fileData || "",
+    cvMimeType: cv?.mimeType || "",
+    keywords: [.../* @__PURE__ */ new Set([
+      ...cv?.keywords || [],
+      ...profile?.searchKeywords || [],
+      ...cv?.parsedData?.languages || []
+    ])].slice(0, 20),
+    matchScore
+  };
+}
 
 // backend/routes/jobs.js
 var router3 = express3.Router();
@@ -768,7 +1947,7 @@ router3.get("/", protect, async (req, res) => {
 });
 router3.get("/recruiter-board", protect, async (req, res) => {
   try {
-    const { domain, contractType, location, search, sort, page = 1, limit = 20 } = req.query;
+    const { domain, contractType, location, search, sort, matched, page = 1, limit = 20 } = req.query;
     const query = { source: "recruiter", isActive: true };
     if (domain) query.domain = domain;
     if (contractType) query.contractType = contractType;
@@ -783,17 +1962,38 @@ router3.get("/recruiter-board", protect, async (req, res) => {
     let sortOption = { createdAt: -1 };
     if (sort === "date") sortOption = { postedAt: -1 };
     else if (sort === "salary") sortOption = { "salary.max": -1 };
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const [jobs, total] = await Promise.all([
-      JobOffer_default.find(query).populate("postedBy", "firstName lastName").sort(sortOption).skip(skip).limit(parseInt(limit)),
-      JobOffer_default.countDocuments(query)
-    ]);
+    const jobs = await JobOffer_default.find(query).populate("postedBy", "firstName lastName company").sort(sortOption).limit(500);
+    const totalUnfiltered = jobs.length;
     const appliedJobIds = await Application_default.find({ userId: req.user._id }).distinct("jobOfferId");
-    const jobsWithStatus = jobs.map((job) => ({
-      ...job.toObject(),
-      hasApplied: appliedJobIds.some((id) => id.toString() === job._id.toString())
-    }));
-    res.json({ jobs: jobsWithStatus, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) });
+    const profile = await UserProfile_default.findOne({ userId: req.user._id });
+    const hasProfile = profile && ((profile.skills || []).length > 0 || (profile.domains || []).length > 0 || (profile.experience || []).length > 0 || (profile.title || "").trim() !== "");
+    const jobsWithStatus = jobs.map((job) => {
+      const jobObj = job.toObject();
+      let matchScore = 0;
+      if (profile && hasProfile) {
+        matchScore = calculateCandidateMatch(profile, jobObj);
+      }
+      return {
+        ...jobObj,
+        matchScore,
+        hasApplied: appliedJobIds.some((id) => id.toString() === job._id.toString())
+      };
+    });
+    let visibleJobs = jobsWithStatus;
+    if (profile && hasProfile && matched !== "false") {
+      visibleJobs.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+    }
+    const total = visibleJobs.length;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const paginatedJobs = visibleJobs.slice(skip, skip + parseInt(limit));
+    res.json({
+      jobs: paginatedJobs,
+      total,
+      totalUnfiltered,
+      profileMatched: !!(profile && hasProfile),
+      page: parseInt(page),
+      pages: Math.max(1, Math.ceil(total / parseInt(limit)))
+    });
   } catch (error) {
     console.error("Recruiter board error:", error);
     res.status(500).json({ error: "Erreur serveur" });
@@ -821,9 +2021,16 @@ router3.get("/recommended", protect, async (req, res) => {
 });
 router3.get("/:id", protect, async (req, res) => {
   try {
-    const job = await JobOffer_default.findOne({ _id: req.params.id, userId: req.user._id });
+    const job = await JobOffer_default.findOne({
+      _id: req.params.id,
+      $or: [
+        { userId: req.user._id },
+        { source: "recruiter" }
+      ]
+    }).populate("postedBy", "firstName lastName company email phone");
     if (!job) return res.status(404).json({ error: "Offre non trouv\xE9e" });
-    res.json({ job });
+    const hasApplied = await Application_default.exists({ userId: req.user._id, jobOfferId: job._id });
+    res.json({ job: { ...job.toObject(), hasApplied: !!hasApplied } });
   } catch (error) {
     res.status(500).json({ error: "Erreur serveur" });
   }
@@ -831,6 +2038,7 @@ router3.get("/:id", protect, async (req, res) => {
 router3.post("/", protect, async (req, res) => {
   try {
     const job = await JobOffer_default.create({ ...req.body, userId: req.user._id, source: "manual" });
+    notifyNewJobOffer(job);
     res.status(201).json({ job, message: "Offre cr\xE9\xE9e" });
   } catch (error) {
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation" });
@@ -855,15 +2063,19 @@ router3.post("/:id/apply", protect, async (req, res) => {
     if (existing) {
       return res.status(400).json({ error: "Vous avez d\xE9j\xE0 postul\xE9 \xE0 cette offre" });
     }
+    const candidateInfo = await buildCandidateInfo(req.user._id, job);
     const application = await Application_default.create({
       userId: req.user._id,
       jobOfferId: job._id,
       status: "envoyee",
       coverLetter: req.body.coverLetter || "",
-      appliedAt: /* @__PURE__ */ new Date()
+      appliedAt: /* @__PURE__ */ new Date(),
+      statusHistory: [{ status: "envoyee", changedAt: /* @__PURE__ */ new Date(), changedBy: "candidat", note: "Candidature envoy\xE9e" }],
+      candidateInfo
     });
     job.applicationsCount = (job.applicationsCount || 0) + 1;
     await job.save();
+    notifyNewApplicationToRecruiter(application, job);
     res.status(201).json({ application, message: "Candidature envoy\xE9e avec succ\xE8s" });
   } catch (error) {
     res.status(500).json({ error: "Erreur lors de la candidature" });
@@ -917,8 +2129,13 @@ router4.post("/", protect, async (req, res) => {
       userId: req.user._id,
       jobOfferId,
       status: "envoyee",
-      appliedAt: /* @__PURE__ */ new Date()
+      appliedAt: /* @__PURE__ */ new Date(),
+      statusHistory: [{ status: "envoyee", changedAt: /* @__PURE__ */ new Date(), changedBy: "candidat", note: "Candidature envoy\xE9e" }]
     });
+    const jobOffer = await JobOffer_default.findById(jobOfferId);
+    if (jobOffer) {
+      notifyNewApplicationToRecruiter(application, jobOffer);
+    }
     res.status(201).json({ application, message: "Candidature enregistr\xE9e" });
   } catch (error) {
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation" });
@@ -939,8 +2156,13 @@ router4.post("/mark-applied", protect, async (req, res) => {
       userId: req.user._id,
       jobOfferId,
       status: "envoyee",
-      appliedAt: /* @__PURE__ */ new Date()
+      appliedAt: /* @__PURE__ */ new Date(),
+      statusHistory: [{ status: "envoyee", changedAt: /* @__PURE__ */ new Date(), changedBy: "candidat", note: "Candidature envoy\xE9e" }]
     });
+    const jobOffer = await JobOffer_default.findById(jobOfferId);
+    if (jobOffer) {
+      notifyNewApplicationToRecruiter(application, jobOffer);
+    }
     res.status(201).json({ application, message: "Candidature enregistr\xE9e avec succ\xE8s" });
   } catch (error) {
     res.status(500).json({ error: "Erreur serveur" });
@@ -952,7 +2174,13 @@ router4.post("/:id/send", protect, async (req, res) => {
     if (!app2) return res.status(404).json({ error: "Candidature non trouv\xE9e" });
     app2.status = "envoyee";
     app2.appliedAt = /* @__PURE__ */ new Date();
+    if (!app2.statusHistory) app2.statusHistory = [];
+    app2.statusHistory.push({ status: "envoyee", changedAt: /* @__PURE__ */ new Date(), changedBy: "candidat", note: "Candidature envoy\xE9e" });
     await app2.save();
+    const jobOffer = await JobOffer_default.findById(app2.jobOfferId);
+    if (jobOffer) {
+      notifyNewApplicationToRecruiter(app2, jobOffer);
+    }
     res.json({ application: app2, message: "Candidature envoy\xE9e avec succ\xE8s !" });
   } catch (error) {
     res.status(500).json({ error: "Erreur lors de l'envoi" });
@@ -975,16 +2203,20 @@ router4.put("/:id", protect, async (req, res) => {
 router4.put("/:id/status", protect, async (req, res) => {
   try {
     const { status } = req.body;
-    const allowedStatuses = ["brouillon", "envoyee", "ouverte", "en_cours", "acceptee", "refusee", "retiree"];
+    const allowedStatuses = ["brouillon", "envoyee", "consulte", "valide_entretien", "appel_attente", "entretien_fait", "accepte_final", "refusee"];
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ error: "Statut invalide" });
     }
-    const app2 = await Application_default.findOneAndUpdate(
-      { _id: req.params.id, userId: req.user._id },
-      { status },
-      { new: true, runValidators: true }
-    );
-    if (!app2) return res.status(404).json({ error: "Candidature non trouv\xE9e" });
+    const app2 = await Application_default.findById(req.params.id);
+    if (!app2 || app2.userId.toString() !== req.user._id.toString()) {
+      return res.status(404).json({ error: "Candidature non trouv\xE9e" });
+    }
+    const oldStatus = app2.status;
+    app2.status = status;
+    if (!app2.statusHistory) app2.statusHistory = [];
+    app2.statusHistory.push({ status, changedAt: /* @__PURE__ */ new Date(), changedBy: "candidat", note: `Statut mis \xE0 jour: ${status}` });
+    await app2.save();
+    notifyApplicationStatusChange(app2, oldStatus, status, "candidat");
     res.json({ application: app2, message: "Statut mis \xE0 jour" });
   } catch (error) {
     res.status(500).json({ error: "Erreur serveur" });
@@ -1004,9 +2236,9 @@ var applications_default = router4;
 import express5 from "express";
 
 // backend/models/Recruiter.js
-import mongoose7 from "mongoose";
-var recruiterSchema = new mongoose7.Schema({
-  userId: { type: mongoose7.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose10 from "mongoose";
+var recruiterSchema = new mongoose10.Schema({
+  userId: { type: mongoose10.Schema.Types.ObjectId, ref: "User", required: true },
   firstName: { type: String, required: true },
   lastName: { type: String, required: true },
   title: String,
@@ -1024,693 +2256,7 @@ var recruiterSchema = new mongoose7.Schema({
   lastContactedAt: Date,
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
-var Recruiter_default = mongoose7.model("Recruiter", recruiterSchema);
-
-// backend/services/jobScraper.js
-import axios from "axios";
-import * as cheerio from "cheerio";
-var USER_AGENTS = [
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0"
-];
-function getRandomUA() {
-  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
-}
-var delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-function inferContractType(title) {
-  const t = title.toLowerCase();
-  if (t.includes("stage") || t.includes("intern") || t.includes("stagiaire")) return "Stage";
-  if (t.includes("freelance") || t.includes("consultant") || t.includes("ind\xE9pendant")) return "Freelance";
-  if (t.includes("cdd") || t.includes("contract") || t.includes("temporaire")) return "CDD";
-  if (t.includes("temps partiel") || t.includes("part-time") || t.includes("mi-temps")) return "Temps partiel";
-  return "CDI";
-}
-function normalizeText(text) {
-  if (!text) return "";
-  return text.replace(/\s+/g, " ").replace(/\n+/g, " ").trim();
-}
-function parseRelativeDate(text) {
-  if (!text) return null;
-  const lower = text.toLowerCase();
-  const now = /* @__PURE__ */ new Date();
-  const match = lower.match(/(\d+)\s*(minute|heure|jour|semaine|mois|an)/);
-  if (!match) return null;
-  const num = parseInt(match[1]);
-  const unit = match[2];
-  if (unit.includes("minute")) return new Date(now - num * 60 * 1e3);
-  if (unit.includes("heure")) return new Date(now - num * 3600 * 1e3);
-  if (unit.includes("jour")) return new Date(now - num * 864e5);
-  if (unit.includes("semaine")) return new Date(now - num * 7 * 864e5);
-  if (unit.includes("mois")) return new Date(now - num * 30 * 864e5);
-  if (unit.includes("an")) return new Date(now - num * 365 * 864e5);
-  return null;
-}
-function calculateRelevance(job, userProfile) {
-  let score = 50;
-  if (!userProfile) return Math.floor(Math.random() * 20) + 60;
-  const userSkills = (userProfile.skills || []).map((s) => s.toLowerCase());
-  const userDomains = (userProfile.domains || []).map((d) => d.toLowerCase());
-  const userKeywords = (userProfile.searchKeywords || []).map((k) => k.toLowerCase());
-  const userEducation = (userProfile.education || []).map((e) => (e.field || "").toLowerCase());
-  const userExperience = (userProfile.experience || []).map((e) => (e.position || "").toLowerCase());
-  const jobText = `${job.title} ${job.description} ${job.sector || ""} ${job.keywords?.join(" ") || ""}`.toLowerCase();
-  let skillMatches = 0;
-  for (const skill of userSkills) {
-    if (skill.length > 2 && jobText.includes(skill)) skillMatches++;
-  }
-  score += Math.min(skillMatches * 8, 30);
-  let domainMatch = false;
-  for (const domain of userDomains) {
-    if (domain.length > 2 && (jobText.includes(domain) || (job.sector || "").toLowerCase().includes(domain))) {
-      domainMatch = true;
-      break;
-    }
-  }
-  if (domainMatch) score += 15;
-  let keywordMatches = 0;
-  for (const kw of userKeywords) {
-    if (kw.length > 2 && jobText.includes(kw)) keywordMatches++;
-  }
-  score += Math.min(keywordMatches * 5, 20);
-  let educationMatch = false;
-  for (const edu of userEducation) {
-    if (edu.length > 2 && jobText.includes(edu)) {
-      educationMatch = true;
-      break;
-    }
-  }
-  if (educationMatch) score += 5;
-  let experienceMatch = false;
-  for (const exp of userExperience) {
-    if (exp.length > 2 && jobText.includes(exp)) {
-      experienceMatch = true;
-      break;
-    }
-  }
-  if (experienceMatch) score += 5;
-  return Math.min(Math.max(score, 10), 99);
-}
-async function scrapeLinkedIn(keywords, location = "Morocco", userProfile = null) {
-  const jobs = [];
-  const pages = [0, 25, 50];
-  for (const pageNum of pages) {
-    try {
-      const searchQuery = encodeURIComponent(keywords.slice(0, 5).join(" OR "));
-      const url = `https://www.linkedin.com/jobs/search?keywords=${searchQuery}&location=${encodeURIComponent(location)}&trk=public_jobs_jobs-search-bar_search-submit&position=1&pageNum=${pageNum}&f_TPR=r604800`;
-      const { data } = await axios.get(url, {
-        headers: {
-          "User-Agent": getRandomUA(),
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-          "Accept-Encoding": "gzip, deflate, br",
-          "Connection": "keep-alive",
-          "Cache-Control": "max-age=0"
-        },
-        timeout: 2e4
-      });
-      const $ = cheerio.load(data);
-      const cardSelectors = [
-        ".base-card",
-        ".job-search-card",
-        "li.jobs-search__result-card",
-        ".base-search-card",
-        "[data-entity-urn]"
-      ];
-      let foundOnPage = 0;
-      for (const cardSel of cardSelectors) {
-        $(cardSel).each((_, el) => {
-          const card = $(el);
-          const title = normalizeText(
-            card.find(".base-search-card__title, .result__title, h3.base-card__full-link, h3").text()
-          );
-          const company = normalizeText(
-            card.find(".base-search-card__subtitle, .result__company, h4.base-search-card__subtitle, .hidden-nested-link").text()
-          );
-          const loc = normalizeText(
-            card.find(".job-search-card__location, .result__location, .job-search-card__bullet").text()
-          );
-          const linkEl = card.find("a.base-card__full-link, a.base-search-card__full-link, a.result__card");
-          const href = (linkEl.attr("href") || "").split("?")[0];
-          const sourceUrl = href.startsWith("http") ? href : `https://www.linkedin.com${href}`;
-          const timeEl = card.find("time");
-          const datetime = timeEl.attr("datetime") || timeEl.text().trim();
-          let postedAt = /* @__PURE__ */ new Date();
-          if (datetime && datetime.includes("T")) {
-            postedAt = new Date(datetime);
-          } else {
-            const parsed = parseRelativeDate(datetime);
-            if (parsed) postedAt = parsed;
-          }
-          const description = normalizeText(
-            card.find(".base-search-card__description, .job-search-card__snippet, .show-more-less-html__markup").text()
-          ) || normalizeText(card.find("p, span.description").text().slice(0, 500));
-          if (title && title.length > 3) {
-            jobs.push({
-              title,
-              company: company || "Non sp\xE9cifi\xE9",
-              location: loc || location,
-              sourceUrl,
-              source: "linkedin",
-              postedAt,
-              contractType: inferContractType(title),
-              description: description.slice(0, 2e3),
-              sector: "",
-              keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 6)
-            });
-            foundOnPage++;
-          }
-        });
-      }
-      if (foundOnPage === 0 && pageNum === 0) break;
-      await delay(2e3 + Math.random() * 1500);
-    } catch (error) {
-      console.error(`LinkedIn page ${pageNum} error:`, error.message);
-      if (pageNum === 0) break;
-    }
-  }
-  return jobs.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
-}
-async function scrapeIndeed(keywords, location = "Maroc", userProfile = null) {
-  const jobs = [];
-  const pages = ["0", "10", "20"];
-  for (const start of pages) {
-    try {
-      const searchQuery = encodeURIComponent(keywords.slice(0, 4).join(" "));
-      const url = `https://ma.indeed.com/jobs?q=${searchQuery}&l=${encodeURIComponent(location)}&sort=date&start=${start}`;
-      const { data } = await axios.get(url, {
-        headers: {
-          "User-Agent": getRandomUA(),
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "fr-FR,fr;q=0.9",
-          "Accept-Encoding": "gzip, deflate, br"
-        },
-        timeout: 2e4
-      });
-      const $ = cheerio.load(data);
-      const cardSelectors = [
-        "div.job_seen_beacon",
-        "div.jobsearch-ResultsList div.result",
-        "td.resultContent",
-        ".resultContent",
-        ".jobsearch-SerpJobCard"
-      ];
-      let foundOnPage = 0;
-      for (const cardSel of cardSelectors) {
-        $(cardSel).each((_, el) => {
-          const card = $(el);
-          const titleEl = card.find("h2.jobTitle a, a.jcs-JobTitle, h2 a, a[data-jk]");
-          const title = normalizeText(titleEl.text());
-          const company = normalizeText(
-            card.find('span[data-testid="company-name"], .companyName, .company, span.company').text()
-          );
-          const loc = normalizeText(
-            card.find('div[data-testid="text-location"], .companyLocation, .location').text()
-          );
-          const href = titleEl.attr("href") || "";
-          const sourceUrl = href.startsWith("http") ? href.split("&")[0] : `https://ma.indeed.com${href.split("&")[0]}`;
-          const dateEl = card.find('.date, span[data-testid="myJobsStateDate"], .new');
-          const dateText = dateEl.text().trim();
-          let postedAt = /* @__PURE__ */ new Date();
-          if (dateText.includes("Publi\xE9") || dateText.includes("aujourd") || dateText.includes("Il y a")) {
-            const parsed = parseRelativeDate(dateText);
-            if (parsed) postedAt = parsed;
-          }
-          const description = normalizeText(
-            card.find(".job-snippet, .jobCardShelfContainer, .jobsearch-jobDescriptionText").text()
-          );
-          const salaryText = normalizeText(card.find(".salary-snippet, .attribute_snippet").text());
-          if (title && title.length > 3) {
-            jobs.push({
-              title,
-              company: company || "Non sp\xE9cifi\xE9",
-              location: loc || location,
-              sourceUrl,
-              source: "indeed",
-              postedAt,
-              contractType: inferContractType(title),
-              description: description.slice(0, 2e3),
-              sector: "",
-              salary: salaryText ? { min: 0, max: 0, currency: "MAD", period: "monthly" } : void 0,
-              keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 6)
-            });
-            foundOnPage++;
-          }
-        });
-      }
-      if (foundOnPage === 0 && start === "0") break;
-      await delay(2500 + Math.random() * 2e3);
-    } catch (error) {
-      console.error(`Indeed page ${start} error:`, error.message);
-      if (start === "0") break;
-    }
-  }
-  return jobs.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
-}
-async function scrapeRekrute(keywords, userProfile = null) {
-  const jobs = [];
-  try {
-    const searchQuery = encodeURIComponent(keywords.slice(0, 4).join(" "));
-    const url = `https://www.rekrute.com/offres-emploi?mots-cles=${searchQuery}&tri=date`;
-    const { data } = await axios.get(url, {
-      headers: {
-        "User-Agent": getRandomUA(),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "fr-FR,fr;q=0.9"
-      },
-      timeout: 2e4
-    });
-    const $ = cheerio.load(data);
-    const cardSelectors = [
-      "div.offre-item",
-      "li.offre",
-      "div.job-item",
-      "article.offre",
-      ".offre-list-item"
-    ];
-    for (const cardSel of cardSelectors) {
-      $(cardSel).each((_, el) => {
-        const card = $(el);
-        const titleEl = card.find("h2 a, h3 a, a.job-title, a.offre-title, a[title]");
-        const title = normalizeText(titleEl.text()) || normalizeText(titleEl.attr("title") || "");
-        const company = normalizeText(
-          card.find("span.company, div.company-name, p.company, .offre-company").text()
-        );
-        const loc = normalizeText(
-          card.find("span.location, div.location, span.ville, .offre-location").text()
-        );
-        const href = titleEl.attr("href") || "";
-        const sourceUrl = href.startsWith("http") ? href : `https://www.rekrute.com${href}`;
-        const dateEl = card.find('.date, time, .offre-date, span[class*="date"]');
-        const dateText = dateEl.text().trim();
-        let postedAt = /* @__PURE__ */ new Date();
-        if (dateText) {
-          const parsed = parseRelativeDate(dateText);
-          if (parsed) postedAt = parsed;
-        }
-        const description = normalizeText(
-          card.find(".offre-description, .description, .job-description, p").first().text()
-        );
-        if (title && title.length > 3) {
-          jobs.push({
-            title,
-            company: company || "Non sp\xE9cifi\xE9",
-            location: loc || "Maroc",
-            sourceUrl,
-            source: "rekrute",
-            postedAt,
-            contractType: inferContractType(title),
-            description: description.slice(0, 2e3),
-            sector: "",
-            keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 6)
-          });
-        }
-      });
-    }
-  } catch (error) {
-    console.error("Rekrute scraping error:", error.message);
-  }
-  return jobs.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
-}
-async function scrapeWTTJ(keywords, location = "Maroc", userProfile = null) {
-  const jobs = [];
-  try {
-    const searchQuery = encodeURIComponent(keywords.slice(0, 4).join(" "));
-    const url = `https://www.welcometothejungle.com/fr/jobs?query=${searchQuery}&refinementList[locations][0]=Maroc`;
-    const { data } = await axios.get(url, {
-      headers: {
-        "User-Agent": getRandomUA(),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "fr-FR,fr;q=0.9"
-      },
-      timeout: 2e4
-    });
-    const $ = cheerio.load(data);
-    $('article, .card-job, [data-testid="job-card"], .ais-Hits-item').each((_, el) => {
-      const card = $(el);
-      const title = normalizeText(card.find('h2, h3, .job-title, [data-testid="job-title"]').text());
-      const company = normalizeText(card.find('.company-name, .job-company, [data-testid="company-name"]').text());
-      const loc = normalizeText(card.find('.job-location, .location, [data-testid="location"]').text());
-      const href = card.find("a").first().attr("href") || "";
-      const sourceUrl = href.startsWith("http") ? href : `https://www.welcometothejungle.com${href}`;
-      const description = normalizeText(card.find(".job-description, .description, p").text());
-      if (title && title.length > 3) {
-        jobs.push({
-          title,
-          company: company || "Non sp\xE9cifi\xE9",
-          location: loc || location,
-          sourceUrl,
-          source: "welcometothejungle",
-          postedAt: /* @__PURE__ */ new Date(),
-          contractType: inferContractType(title),
-          description: description.slice(0, 2e3),
-          sector: "",
-          keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 6)
-        });
-      }
-    });
-  } catch (error) {
-    console.error("WTTJ scraping error:", error.message);
-  }
-  return jobs.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
-}
-async function scrapeManpower(keywords, location = "Maroc", userProfile = null) {
-  const jobs = [];
-  try {
-    const searchQuery = encodeURIComponent(keywords.slice(0, 4).join(" "));
-    const url = `https://www.manpower.ma/fr/recherche-d-emploi? keywords=${searchQuery}`;
-    const { data } = await axios.get(url, {
-      headers: {
-        "User-Agent": getRandomUA(),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "fr-FR,fr;q=0.9"
-      },
-      timeout: 2e4
-    });
-    const $ = cheerio.load(data);
-    $("article, .job-offer, .offer-item, .card-job").each((_, el) => {
-      const card = $(el);
-      const title = normalizeText(card.find("h2, h3, .job-title, a").first().text());
-      const company = normalizeText(card.find(".company, .company-name").text());
-      const loc = normalizeText(card.find(".location, .job-location").text());
-      const href = card.find("a").first().attr("href") || "";
-      const sourceUrl = href.startsWith("http") ? href : `https://www.manpower.ma${href}`;
-      const description = normalizeText(card.find(".description, p").text());
-      if (title && title.length > 3) {
-        jobs.push({
-          title,
-          company: company || "Manpower Maroc",
-          location: loc || location,
-          sourceUrl,
-          source: "manpower",
-          postedAt: /* @__PURE__ */ new Date(),
-          contractType: inferContractType(title),
-          description: description.slice(0, 2e3),
-          sector: "",
-          keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 6)
-        });
-      }
-    });
-  } catch (error) {
-    console.error("Manpower scraping error:", error.message);
-  }
-  return jobs.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
-}
-async function scrapeAllSources(keywords, location = "Maroc", enabledSources = ["linkedin", "indeed", "rekrute"], userProfile = null) {
-  const results = {
-    linkedin: { jobs: [], status: "pending", duration: 0 },
-    indeed: { jobs: [], status: "pending", duration: 0 },
-    rekrute: { jobs: [], status: "pending", duration: 0 },
-    welcometothejungle: { jobs: [], status: "pending", duration: 0 },
-    manpower: { jobs: [], status: "pending", duration: 0 }
-  };
-  const scrapers = {
-    linkedin: () => scrapeLinkedIn(keywords, location, userProfile),
-    indeed: () => scrapeIndeed(keywords, location, userProfile),
-    rekrute: () => scrapeRekrute(keywords, userProfile),
-    welcometothejungle: () => scrapeWTTJ(keywords, location, userProfile),
-    manpower: () => scrapeManpower(keywords, location, userProfile)
-  };
-  for (const source of enabledSources) {
-    if (!scrapers[source]) continue;
-    const start = Date.now();
-    try {
-      const jobs = await scrapers[source]();
-      const seen = /* @__PURE__ */ new Set();
-      const uniqueJobs = jobs.filter((j) => {
-        const key = `${j.title.toLowerCase()}|${j.company.toLowerCase()}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-      results[source] = {
-        jobs: uniqueJobs,
-        status: uniqueJobs.length > 0 ? "success" : "partial",
-        duration: Date.now() - start
-      };
-    } catch (error) {
-      results[source] = {
-        jobs: [],
-        status: "failed",
-        duration: Date.now() - start,
-        error: error.message
-      };
-    }
-    await delay(2e3 + Math.random() * 1e3);
-  }
-  return results;
-}
-async function scrapeRecruiters(keywords, location = "Maroc", count = 30, userProfile = null) {
-  const recruiters = [];
-  const domains = userProfile?.domains || keywords || ["recruteur", "HR"];
-  const queries = Array.isArray(domains) ? domains : [domains];
-  for (const query of queries.slice(0, 3)) {
-    try {
-      const searchQuery = encodeURIComponent(`recruteur ${query} ${location}`);
-      const url = `https://www.linkedin.com/search/results/people/?keywords=${searchQuery}&origin=FACETED_SEARCH`;
-      const { data } = await axios.get(url, {
-        headers: {
-          "User-Agent": getRandomUA(),
-          "Accept": "text/html,application/xhtml+xml",
-          "Accept-Language": "fr-FR,fr;q=0.9"
-        },
-        timeout: 15e3
-      });
-      const $ = cheerio.load(data);
-      const peopleSelectors = [
-        ".reusable-search__result-container",
-        "li.reusable-search__result-container",
-        ".entity-result",
-        "li.entity-result"
-      ];
-      for (const sel of peopleSelectors) {
-        $(sel).each((_, el) => {
-          const card = $(el);
-          const nameEl = card.find('.entity-result__title-text a span[aria-hidden="true"], .app-aware-link span[aria-hidden="true"]');
-          const fullName = normalizeText(nameEl.text());
-          if (!fullName || fullName.length < 3) return;
-          const parts = fullName.split(" ");
-          const firstName = parts[0] || "";
-          const lastName = parts.slice(1).join(" ") || "";
-          const headline = normalizeText(card.find(".entity-result__primary-subtitle, .entity-result__subtitle").text());
-          const company = normalizeText(card.find(".entity-result__secondary-subtitle").text()) || "";
-          const locationText = normalizeText(card.find(".entity-result__secondary-subtitle").last().text()) || location;
-          const profileLink = card.find('a.app-aware-link, a[href*="/in/"]').first().attr("href") || "";
-          const sectorMatch = headline || company;
-          let sector = "";
-          const sectorKeywords = {
-            "IT": ["tech", "digital", "software", "informatique", "d\xE9veloppeur", "engineer"],
-            "Finance": ["finance", "bank", "banque", "comptable", "auditeur"],
-            "Industrie": ["industrie", "manufactur", "production", "usine"],
-            "G\xE9nie Civil": ["civil", "construction", "btp", "architecte", "b\xE2timent"],
-            "Marketing": ["marketing", "communication", "digital", "social media"],
-            "Ressources Humaines": ["hr", "rh", "recrutement", "talent", "people"]
-          };
-          for (const [sec, words] of Object.entries(sectorKeywords)) {
-            if (words.some((w) => sectorMatch.toLowerCase().includes(w))) {
-              sector = sec;
-              break;
-            }
-          }
-          if (firstName) {
-            recruiters.push({
-              firstName,
-              lastName,
-              title: headline,
-              company: company.replace(/\s*-\s*.*$/, "").trim(),
-              linkedinUrl: profileLink.split("?")[0],
-              location: locationText,
-              sector: sector || query,
-              connectionDegree: ["1st", "2nd", "3rd+"][Math.floor(Math.random() * 3)],
-              profilePicture: ""
-            });
-          }
-        });
-      }
-      await delay(2e3 + Math.random() * 1500);
-    } catch (error) {
-      console.error(`Recruiter scraping error for ${query}:`, error.message);
-    }
-  }
-  if (recruiters.length < count) {
-    const supplemented = generateSupplementaryRecruiters(keywords, location, count - recruiters.length, userProfile);
-    recruiters.push(...supplemented);
-  }
-  return recruiters.slice(0, count);
-}
-function generateSupplementaryRecruiters(keywords, location, count, userProfile) {
-  const firstNames = [
-    "Fatima",
-    "Mohammed",
-    "Salma",
-    "Youssef",
-    "Amina",
-    "Hassan",
-    "Nadia",
-    "Karim",
-    "Leila",
-    "Omar",
-    "Sara",
-    "Rachid",
-    "Meryem",
-    "Ali",
-    "Khadija",
-    "Mehdi",
-    "Zineb",
-    "Aziz",
-    "Hanane",
-    "Tariq",
-    "Samira",
-    "Driss",
-    "Imane",
-    "Said",
-    "Loubna",
-    "Abdelilah",
-    "Najat",
-    "Reda",
-    "Malika",
-    "Younes"
-  ];
-  const lastNames = [
-    "Benali",
-    "Alami",
-    "Tazi",
-    "Idrissi",
-    "Fassi",
-    "El Mansouri",
-    "Chraibi",
-    "Berrada",
-    "Filali",
-    "Tahiri",
-    "Ait Ouakrim",
-    "Lahlou",
-    "Seghir",
-    "Mouline",
-    "Bouzid",
-    "Hajji",
-    "Ennaji",
-    "Chaoui",
-    "Bennani",
-    "Skalli",
-    "Kettani",
-    "Cadi",
-    "Benchekroun",
-    "Oukhouya",
-    "Aouad",
-    "Zeroual",
-    "El Fadili",
-    "Kabbaj",
-    "Lamrani",
-    "Bouhaddioui"
-  ];
-  const titles = [
-    "Recruteur HR",
-    "Talent Acquisition Specialist",
-    "Responsable RH",
-    "HR Business Partner",
-    "Charg\xE9 de Recrutement",
-    "Directeur des Ressources Humaines",
-    "Recruiter",
-    "Head of Talent",
-    "People Operations Manager",
-    "Technical Recruiter",
-    "HR Manager",
-    "Chef de Projet Recrutement"
-  ];
-  const companies = [
-    "TechMaroc",
-    "MarocNumeric",
-    "OCP Group",
-    "BMCE Bank",
-    "Attijariwafa Bank",
-    "Maroc Telecom",
-    "Orange Maroc",
-    "Renault Maroc",
-    "Danone Maroc",
-    "LafargeHolcim",
-    "CDG Capital",
-    "CIH Bank",
-    "Wana Corporate",
-    "Holmarcom",
-    "Groupe ONA"
-  ];
-  const sectors = userProfile?.domains || ["IT", "Finance", "Industrie", "Technologie"];
-  const sectorsArray = Array.isArray(sectors) ? sectors : [sectors];
-  const recruiters = [];
-  for (let i = 0; i < count; i++) {
-    const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
-    const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
-    const company = companies[Math.floor(Math.random() * companies.length)];
-    const titleVal = titles[Math.floor(Math.random() * titles.length)];
-    const cleanFirst = firstName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    const cleanLast = lastName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    recruiters.push({
-      firstName,
-      lastName,
-      title: titleVal,
-      company,
-      email: `${cleanFirst}.${cleanLast}@${["gmail.com", "yahoo.com", "outlook.com"][Math.floor(Math.random() * 3)]}`,
-      linkedinUrl: `https://www.linkedin.com/in/${cleanFirst}-${cleanLast}-${Math.floor(1e4 + Math.random() * 9e4)}/`,
-      location: location || "Casablanca",
-      sector: sectorsArray[Math.floor(Math.random() * sectorsArray.length)],
-      connectionDegree: ["1st", "2nd", "3rd+"][Math.floor(Math.random() * 3)],
-      phone: `+212 6${Math.floor(Math.random() * 10)} ${String(Math.floor(Math.random() * 100)).padStart(2, "0")} ${String(Math.floor(Math.random() * 100)).padStart(2, "0")} ${String(Math.floor(Math.random() * 100)).padStart(2, "0")}`
-    });
-  }
-  return recruiters;
-}
-function calculateCandidateMatch(candidateProfile, jobOffer) {
-  let score = 0;
-  let maxScore = 0;
-  const jobText = `${jobOffer.title} ${jobOffer.description} ${jobOffer.sector || ""} ${jobOffer.domain || ""} ${(jobOffer.keywords || []).join(" ")}`.toLowerCase();
-  maxScore += 30;
-  const skills = candidateProfile.skills || [];
-  let skillMatches = 0;
-  for (const skill of skills) {
-    if (skill.toLowerCase().length > 2 && jobText.includes(skill.toLowerCase())) skillMatches++;
-  }
-  score += Math.min(skillMatches / Math.max(skills.length, 1) * 30, 30);
-  maxScore += 25;
-  const domains = candidateProfile.domains || [];
-  let domainMatch = false;
-  for (const domain of domains) {
-    if (domain.toLowerCase().length > 2 && (jobText.includes(domain.toLowerCase()) || (jobOffer.sector || "").toLowerCase().includes(domain.toLowerCase()))) {
-      domainMatch = true;
-      break;
-    }
-  }
-  if (domainMatch) score += 25;
-  maxScore += 25;
-  const experience = candidateProfile.experience || [];
-  let expMatches = 0;
-  for (const exp of experience) {
-    const expText = `${exp.position || ""} ${exp.description || ""}`.toLowerCase();
-    const expWords = expText.split(/\s+/).filter((w) => w.length > 3);
-    for (const word of expWords) {
-      if (jobText.includes(word)) expMatches++;
-    }
-  }
-  score += Math.min(expMatches * 3, 25);
-  maxScore += 10;
-  const education = candidateProfile.education || [];
-  for (const edu of education) {
-    const eduText = `${edu.field || ""} ${edu.degree || ""}`.toLowerCase();
-    if (eduText.split(/\s+/).some((w) => w.length > 3 && jobText.includes(w))) {
-      score += 10;
-      break;
-    }
-  }
-  maxScore += 10;
-  const candidateCity = (candidateProfile.location?.city || "").toLowerCase();
-  const jobLocation = (jobOffer.location || "").toLowerCase();
-  if (candidateCity && jobLocation.includes(candidateCity)) {
-    score += 10;
-  } else if (candidateProfile.location?.isRemoteOpen && jobOffer.isRemote) {
-    score += 8;
-  }
-  return maxScore > 0 ? Math.round(score / maxScore * 100) : 50;
-}
+var Recruiter_default = mongoose10.model("Recruiter", recruiterSchema);
 
 // backend/routes/recruiters.js
 var router5 = express5.Router();
@@ -1896,32 +2442,39 @@ var dashboard_default = router6;
 
 // backend/routes/notifications.js
 import express7 from "express";
-
-// backend/models/Notification.js
-import mongoose8 from "mongoose";
-var notificationSchema = new mongoose8.Schema({
-  userId: { type: mongoose8.Schema.Types.ObjectId, ref: "User", required: true },
-  type: { type: String, enum: ["nouvelle_offre", "candidature", "email", "scrapping", "rappel"], required: true },
-  title: { type: String, required: true },
-  message: { type: String, required: true },
-  data: mongoose8.Schema.Types.Mixed,
-  isRead: { type: Boolean, default: false },
-  actionUrl: String
-}, { timestamps: true });
-notificationSchema.index({ userId: 1, createdAt: -1 });
-var Notification_default = mongoose8.model("Notification", notificationSchema);
-
-// backend/routes/notifications.js
 var router7 = express7.Router();
 router7.get("/", protect, async (req, res) => {
   try {
-    const { type, unreadOnly } = req.query;
+    const { type, unreadOnly, page = 1, limit = 50 } = req.query;
     const query = { userId: req.user._id };
     if (type) query.type = type;
     if (unreadOnly === "true") query.isRead = false;
-    const notifications = await Notification_default.find(query).sort({ createdAt: -1 }).limit(50);
-    const unreadCount = await Notification_default.countDocuments({ userId: req.user._id, isRead: false });
-    res.json({ notifications, unreadCount });
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [notifications, total, unreadCount] = await Promise.all([
+      Notification_default.find(query).sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)),
+      Notification_default.countDocuments(query),
+      Notification_default.countDocuments({ userId: req.user._id, isRead: false })
+    ]);
+    res.json({ notifications, total, unreadCount, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router7.post("/", protect, async (req, res) => {
+  try {
+    const { type, title, message, data, actionUrl } = req.body;
+    if (!type || !title || !message) {
+      return res.status(400).json({ error: "type, title et message requis" });
+    }
+    const notification = await createNotification({
+      userId: req.user._id,
+      type,
+      title,
+      message,
+      data,
+      actionUrl
+    });
+    res.status(201).json({ notification, message: "Notification cr\xE9\xE9e" });
   } catch (error) {
     res.status(500).json({ error: "Erreur serveur" });
   }
@@ -1947,15 +2500,23 @@ router7.put("/:id/read", protect, async (req, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
+router7.delete("/:id", protect, async (req, res) => {
+  try {
+    await Notification_default.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    res.json({ message: "Notification supprim\xE9e" });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
 var notifications_default = router7;
 
 // backend/routes/scraping.js
 import express8 from "express";
 
 // backend/models/ScrapingLog.js
-import mongoose9 from "mongoose";
-var scrapingLogSchema = new mongoose9.Schema({
-  userId: { type: mongoose9.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose11 from "mongoose";
+var scrapingLogSchema = new mongoose11.Schema({
+  userId: { type: mongoose11.Schema.Types.ObjectId, ref: "User", required: true },
   status: { type: String, enum: ["running", "success", "partial", "failed"], default: "running" },
   sources: [{
     source: String,
@@ -1971,7 +2532,7 @@ var scrapingLogSchema = new mongoose9.Schema({
   startedAt: { type: Date, default: Date.now },
   completedAt: Date
 }, { timestamps: true, suppressReservedKeysWarning: true });
-var ScrapingLog_default = mongoose9.model("ScrapingLog", scrapingLogSchema);
+var ScrapingLog_default = mongoose11.model("ScrapingLog", scrapingLogSchema);
 
 // backend/routes/scraping.js
 var router8 = express8.Router();
@@ -2043,6 +2604,11 @@ router8.post("/run", protect, async (req, res) => {
     log.totalNewOffers = createdJobs.length;
     log.completedAt = /* @__PURE__ */ new Date();
     await log.save();
+    notifyScrapingComplete(req.user._id, {
+      count: createdJobs.length,
+      source: enabledSources.join(", "),
+      jobs: createdJobs
+    });
     res.json({
       message: `${createdJobs.length} nouvelles offres trouv\xE9es`,
       log,
@@ -2076,9 +2642,9 @@ var scraping_default = router8;
 import express9 from "express";
 
 // backend/models/EmailTemplate.js
-import mongoose10 from "mongoose";
-var emailTemplateSchema = new mongoose10.Schema({
-  userId: { type: mongoose10.Schema.Types.ObjectId, ref: "User" },
+import mongoose12 from "mongoose";
+var emailTemplateSchema = new mongoose12.Schema({
+  userId: { type: mongoose12.Schema.Types.ObjectId, ref: "User" },
   name: { type: String, required: true },
   subject: { type: String, required: true },
   body: { type: String, required: true },
@@ -2087,7 +2653,7 @@ var emailTemplateSchema = new mongoose10.Schema({
   category: { type: String, enum: ["candidature", "relance", "remerciement", "autre"], default: "candidature" },
   usageCount: { type: Number, default: 0 }
 }, { timestamps: true });
-var EmailTemplate_default = mongoose10.model("EmailTemplate", emailTemplateSchema);
+var EmailTemplate_default = mongoose12.model("EmailTemplate", emailTemplateSchema);
 
 // backend/routes/emailTemplates.js
 var router9 = express9.Router();
@@ -2151,9 +2717,9 @@ var emailTemplates_default = router9;
 import express10 from "express";
 
 // backend/models/SearchProfile.js
-import mongoose11 from "mongoose";
-var searchProfileSchema = new mongoose11.Schema({
-  userId: { type: mongoose11.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose13 from "mongoose";
+var searchProfileSchema = new mongoose13.Schema({
+  userId: { type: mongoose13.Schema.Types.ObjectId, ref: "User", required: true },
   name: { type: String, required: true },
   sectors: [String],
   keywords: [String],
@@ -2172,7 +2738,7 @@ var searchProfileSchema = new mongoose11.Schema({
   isActive: { type: Boolean, default: true },
   frequency: { type: String, enum: ["quotidien", "hebdomadaire", "manuel"], default: "manuel" }
 }, { timestamps: true });
-var SearchProfile_default = mongoose11.model("SearchProfile", searchProfileSchema);
+var SearchProfile_default = mongoose13.model("SearchProfile", searchProfileSchema);
 
 // backend/routes/searchProfiles.js
 var router10 = express10.Router();
@@ -2330,10 +2896,10 @@ var analytics_default = router11;
 
 // backend/routes/cv.js
 import express12 from "express";
-import mongoose12 from "mongoose";
+import mongoose14 from "mongoose";
 var router12 = express12.Router();
-var cvSchema = new mongoose12.Schema({
-  userId: { type: mongoose12.Schema.Types.ObjectId, ref: "User", required: true },
+var cvSchema = new mongoose14.Schema({
+  userId: { type: mongoose14.Schema.Types.ObjectId, ref: "User", required: true },
   fileName: String,
   originalName: String,
   fileData: String,
@@ -2360,7 +2926,7 @@ var cvSchema = new mongoose12.Schema({
   isActive: { type: Boolean, default: true },
   version: { type: Number, default: 1 }
 }, { timestamps: true });
-var CV = mongoose12.models.CV || mongoose12.model("CV", cvSchema);
+var CV = mongoose14.models.CV || mongoose14.model("CV", cvSchema);
 function analyzeCV(text, parsedData) {
   let score = 0;
   const strengths = [];
@@ -3057,7 +3623,7 @@ router12.post("/match-jobs", protect, async (req, res) => {
     const { keywords } = req.body || {};
     const cv = await CV.findOne({ userId: req.user._id, isActive: true });
     if (!cv) return res.status(404).json({ error: "Aucun CV trouv\xE9" });
-    const JobOffer = mongoose12.model("JobOffer");
+    const JobOffer = mongoose14.model("JobOffer");
     const query = { userId: req.user._id, isActive: true };
     const allJobs = await JobOffer.find(query);
     const cvSkills = (cv.parsedData?.skills || []).map((s) => s.toLowerCase());
@@ -3180,10 +3746,10 @@ var cv_default = router12;
 
 // backend/routes/portfolio.js
 import express13 from "express";
-import mongoose13 from "mongoose";
+import mongoose15 from "mongoose";
 var router13 = express13.Router();
-var portfolioSchema = new mongoose13.Schema({
-  userId: { type: mongoose13.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
+var portfolioSchema = new mongoose15.Schema({
+  userId: { type: mongoose15.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
   url: { type: String, default: "" },
   description: { type: String, default: "" },
   projects: [{
@@ -3194,7 +3760,7 @@ var portfolioSchema = new mongoose13.Schema({
     technologies: [String]
   }]
 }, { timestamps: true });
-var Portfolio = mongoose13.models.Portfolio || mongoose13.model("Portfolio", portfolioSchema);
+var Portfolio = mongoose15.models.Portfolio || mongoose15.model("Portfolio", portfolioSchema);
 router13.get("/", protect, async (req, res) => {
   try {
     let portfolio = await Portfolio.findOne({ userId: req.user._id });
@@ -3222,10 +3788,10 @@ var portfolio_default = router13;
 
 // backend/routes/recruiterSpace.js
 import express14 from "express";
-import mongoose14 from "mongoose";
+import mongoose16 from "mongoose";
 var router14 = express14.Router();
-var cvSchema2 = new mongoose14.Schema({
-  userId: { type: mongoose14.Schema.Types.ObjectId, ref: "User", required: true },
+var cvSchema2 = new mongoose16.Schema({
+  userId: { type: mongoose16.Schema.Types.ObjectId, ref: "User", required: true },
   fileName: String,
   originalName: String,
   fileData: String,
@@ -3252,7 +3818,7 @@ var cvSchema2 = new mongoose14.Schema({
   isActive: { type: Boolean, default: true },
   version: { type: Number, default: 1 }
 }, { timestamps: true });
-var CV2 = mongoose14.models.CV || mongoose14.model("CV", cvSchema2);
+var CV2 = mongoose16.models.CV || mongoose16.model("CV", cvSchema2);
 function generateCandidateSummary2(text, parsedData, userProfile) {
   const parts = [];
   const firstName = userProfile?.userId?.firstName || "Le candidat";
@@ -3482,8 +4048,14 @@ router14.get("/jobs/:id", protect, authorize("recruiter"), async (req, res) => {
     const job = await JobOffer_default.findOne({ _id: req.params.id, postedBy: req.user._id });
     if (!job) return res.status(404).json({ error: "Offre non trouv\xE9e" });
     const applications = await Application_default.find({ jobOfferId: job._id }).populate("userId", "firstName lastName email avatar jobSearchStatus").sort({ createdAt: -1 });
+    const profiles = await UserProfile_default.find({ userId: { $in: applications.map((a) => a.userId?._id).filter(Boolean) } });
+    const profileMap = new Map(profiles.map((p) => [p.userId.toString(), p]));
     const applicationsWithMatch = applications.map((app2) => {
-      const matchScore = app2.userId ? calculateCandidateMatch(app2.userId, job.toObject()) : 0;
+      let matchScore = app2.candidateInfo?.matchScore || 0;
+      if (!matchScore && app2.userId) {
+        const profile = profileMap.get(app2.userId._id.toString());
+        if (profile) matchScore = calculateCandidateMatch(profile, job.toObject());
+      }
       return { ...app2.toObject(), matchScore };
     });
     res.json({ job, applications: applicationsWithMatch });
@@ -3495,22 +4067,50 @@ router14.post("/jobs", protect, authorize("recruiter"), async (req, res) => {
   try {
     const profile = await RecruiterProfile_default.findOne({ userId: req.user._id });
     const company = profile?.companyName || req.body.company || "Entreprise";
+    const body = { ...req.body };
+    if (!body.applicationDeadline) delete body.applicationDeadline;
+    if (body.salary && typeof body.salary === "object") {
+      if (!Number.isFinite(body.salary.min)) delete body.salary.min;
+      if (!Number.isFinite(body.salary.max)) delete body.salary.max;
+      if (Object.keys(body.salary).length === 0) delete body.salary;
+    }
+    const titleWords = (req.body.title || "").split(/\s+/).filter((w) => w.length > 2);
+    const keywords = [.../* @__PURE__ */ new Set([
+      ...titleWords,
+      ...body.requirements || [],
+      ...body.responsibilities || []
+    ])].slice(0, 20);
     const job = await JobOffer_default.create({
-      ...req.body,
+      ...body,
       postedBy: req.user._id,
       company,
       source: "recruiter",
       postedAt: /* @__PURE__ */ new Date(),
-      isActive: true
+      isActive: true,
+      keywords
     });
-    if (profile) {
-      profile.jobPostingsCount = await JobOffer_default.countDocuments({ postedBy: req.user._id, source: "recruiter" });
-      await profile.save();
-    }
+    Promise.resolve().then(async () => {
+      try {
+        if (profile) {
+          profile.jobPostingsCount = await JobOffer_default.countDocuments({ postedBy: req.user._id, source: "recruiter" });
+          await profile.save();
+        }
+        await notifyNewJobOffer(job);
+        const matchingCount = await UserProfile_default.countDocuments({
+          $or: [
+            { domains: { $regex: job.sector || "", $options: "i" } },
+            { skills: { $in: (job.requirements || []).map((r) => new RegExp(r, "i")) } }
+          ]
+        });
+        if (matchingCount > 0) await notifySuggestedCandidates(req.user._id, job, matchingCount);
+      } catch (sideErr) {
+        console.error("Post-create side effects error:", sideErr);
+      }
+    });
     res.status(201).json({ job, message: "Offre cr\xE9\xE9e avec succ\xE8s" });
   } catch (error) {
     console.error("Create recruiter job error:", error);
-    res.status(500).json({ error: "Erreur lors de la cr\xE9ation" });
+    res.status(500).json({ error: `Erreur lors de la cr\xE9ation : ${error.message || "erreur inconnue"}` });
   }
 });
 router14.put("/jobs/:id", protect, authorize("recruiter"), async (req, res) => {
@@ -3669,7 +4269,7 @@ router14.get("/candidates", protect, authorize("recruiter"), async (req, res) =>
 router14.get("/candidates/:userId", protect, authorize("recruiter"), async (req, res) => {
   try {
     const { userId } = req.params;
-    if (!mongoose14.Types.ObjectId.isValid(userId)) {
+    if (!mongoose16.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ error: "ID invalide" });
     }
     const profile = await UserProfile_default.findOne({ userId }).populate("userId", "firstName lastName email avatar jobSearchStatus lastLogin");
@@ -3685,7 +4285,7 @@ router14.get("/candidates/:userId", protect, authorize("recruiter"), async (req,
 });
 router14.get("/candidates/:userId/cv/download", protect, authorize("recruiter"), async (req, res) => {
   try {
-    if (!mongoose14.Types.ObjectId.isValid(req.params.userId)) {
+    if (!mongoose16.Types.ObjectId.isValid(req.params.userId)) {
       return res.status(400).json({ error: "ID invalide" });
     }
     const cv = await CV2.findOne({ userId: req.params.userId, isActive: true });
@@ -3704,7 +4304,7 @@ router14.get("/candidates/:userId/cv/download", protect, authorize("recruiter"),
 });
 router14.get("/candidates/:userId/cv/preview", protect, authorize("recruiter"), async (req, res) => {
   try {
-    if (!mongoose14.Types.ObjectId.isValid(req.params.userId)) {
+    if (!mongoose16.Types.ObjectId.isValid(req.params.userId)) {
       return res.status(400).json({ error: "ID invalide" });
     }
     const cv = await CV2.findOne({ userId: req.params.userId, isActive: true }).select("fileData fileSize mimeType originalName");
@@ -3769,17 +4369,19 @@ router14.get("/applications", protect, authorize("recruiter"), async (req, res) 
 router14.put("/applications/:id/status", protect, authorize("recruiter"), async (req, res) => {
   try {
     const { status } = req.body;
-    const allowedStatuses = ["envoyee", "ouverte", "en_cours", "acceptee", "refusee"];
+    const allowedStatuses = ["envoyee", "consulte", "valide_entretien", "appel_attente", "entretien_fait", "accepte_final", "refusee"];
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ error: "Statut invalide" });
     }
     const jobIds = await JobOffer_default.find({ postedBy: req.user._id }).distinct("_id");
-    const app2 = await Application_default.findOneAndUpdate(
-      { _id: req.params.id, jobOfferId: { $in: jobIds } },
-      { status },
-      { new: true, runValidators: true }
-    );
+    const app2 = await Application_default.findOne({ _id: req.params.id, jobOfferId: { $in: jobIds } });
     if (!app2) return res.status(404).json({ error: "Candidature non trouv\xE9e" });
+    const oldStatus = app2.status;
+    app2.status = status;
+    if (!app2.statusHistory) app2.statusHistory = [];
+    app2.statusHistory.push({ status, changedAt: /* @__PURE__ */ new Date(), changedBy: "recruteur", note: `Statut mis \xE0 jour par le recruteur: ${status}` });
+    await app2.save();
+    notifyApplicationStatusChange(app2, oldStatus, status, "recruteur");
     res.json({ application: app2, message: "Statut mis \xE0 jour" });
   } catch (error) {
     res.status(500).json({ error: "Erreur serveur" });
@@ -3817,15 +4419,19 @@ router14.post("/public/jobs/:id/apply", protect, async (req, res) => {
     if (existing) {
       return res.status(400).json({ error: "Vous avez d\xE9j\xE0 postul\xE9 \xE0 cette offre" });
     }
+    const candidateInfo = await buildCandidateInfo(req.user._id, job);
     const application = await Application_default.create({
       userId: req.user._id,
       jobOfferId: job._id,
       status: "envoyee",
       coverLetter: req.body.coverLetter || "",
-      appliedAt: /* @__PURE__ */ new Date()
+      appliedAt: /* @__PURE__ */ new Date(),
+      statusHistory: [{ status: "envoyee", changedAt: /* @__PURE__ */ new Date(), changedBy: "candidat", note: "Candidature envoy\xE9e" }],
+      candidateInfo
     });
     job.applicationsCount = (job.applicationsCount || 0) + 1;
     await job.save();
+    notifyNewApplicationToRecruiter(application, job);
     res.status(201).json({ application, message: "Candidature envoy\xE9e avec succ\xE8s" });
   } catch (error) {
     res.status(500).json({ error: "Erreur lors de la candidature" });
@@ -3871,6 +4477,7 @@ ${message}
       html
     });
     if (result.success) {
+      notifyEmailFromCompany(req.params.userId, profile?.companyName || `${req.user.firstName} ${req.user.lastName}`, subject);
       res.json({ message: "Email envoy\xE9 avec succ\xE8s", messageId: result.messageId });
     } else {
       res.status(500).json({ error: "Erreur lors de l'envoi de l'email" });
@@ -3882,10 +4489,247 @@ ${message}
 });
 var recruiterSpace_default = router14;
 
+// backend/routes/companyEmails.js
+import express15 from "express";
+var router15 = express15.Router();
+router15.get("/", protect, async (req, res) => {
+  try {
+    const { search, sector, domain, companyType, companySize, city, page = 1, limit = 30 } = req.query;
+    const query = { isActive: true };
+    if (search) {
+      query.$or = [
+        { companyName: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { sector: { $regex: search, $options: "i" } },
+        { domain: { $regex: search, $options: "i" } },
+        { city: { $regex: search, $options: "i" } }
+      ];
+    }
+    if (sector) query.sector = { $regex: `^${sector}$`, $options: "i" };
+    if (domain) query.domain = { $regex: `^${domain}$`, $options: "i" };
+    if (companyType) query.companyType = companyType;
+    if (companySize) query.companySize = companySize;
+    if (city) query.city = { $regex: `^${city}$`, $options: "i" };
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [companies, total] = await Promise.all([
+      CompanyEmail_default.find(query).sort({ companyName: 1 }).skip(skip).limit(parseInt(limit)),
+      CompanyEmail_default.countDocuments(query)
+    ]);
+    res.json({
+      companies,
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit))
+    });
+  } catch (error) {
+    console.error("Company emails error:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router15.get("/filters", protect, async (req, res) => {
+  try {
+    const [sectors, domains, types, sizes, cities] = await Promise.all([
+      CompanyEmail_default.distinct("sector", { isActive: true }),
+      CompanyEmail_default.distinct("domain", { isActive: true }),
+      CompanyEmail_default.distinct("companyType", { isActive: true }),
+      CompanyEmail_default.distinct("companySize", { isActive: true }),
+      CompanyEmail_default.distinct("city", { isActive: true })
+    ]);
+    res.json({
+      sectors: sectors.filter(Boolean).sort(),
+      domains: domains.filter(Boolean).sort(),
+      types: types.filter(Boolean).sort(),
+      sizes: sizes.filter(Boolean).sort(),
+      cities: cities.filter(Boolean).sort()
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router15.get("/:id", protect, async (req, res) => {
+  try {
+    const company = await CompanyEmail_default.findById(req.params.id);
+    if (!company) return res.status(404).json({ error: "Entreprise non trouv\xE9e" });
+    res.json({ company });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router15.post("/", protect, async (req, res) => {
+  try {
+    const existing = await CompanyEmail_default.findOne({ email: req.body.email });
+    if (existing) return res.status(400).json({ error: "Cet email existe d\xE9j\xE0" });
+    const company = await CompanyEmail_default.create(req.body);
+    notifyNewCompany(company);
+    res.status(201).json({ company, message: "Entreprise ajout\xE9e" });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur lors de l'ajout" });
+  }
+});
+router15.put("/:id", protect, async (req, res) => {
+  try {
+    const company = await CompanyEmail_default.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    if (!company) return res.status(404).json({ error: "Entreprise non trouv\xE9e" });
+    res.json({ company, message: "Entreprise mise \xE0 jour" });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur lors de la mise \xE0 jour" });
+  }
+});
+router15.delete("/:id", protect, async (req, res) => {
+  try {
+    const company = await CompanyEmail_default.findByIdAndDelete(req.params.id);
+    if (!company) return res.status(404).json({ error: "Entreprise non trouv\xE9e" });
+    res.json({ message: "Entreprise supprim\xE9e" });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur lors de la suppression" });
+  }
+});
+var companyEmails_default = router15;
+
+// backend/routes/seed.js
+import express16 from "express";
+var router16 = express16.Router();
+var sampleJobs = [
+  {
+    title: "D\xE9veloppeur Full Stack React/Node.js",
+    company: "TechPro Maroc",
+    location: "Casablanca",
+    isRemote: true,
+    contractType: "CDI",
+    description: "Nous recherchons un d\xE9veloppeur Full Stack exp\xE9riment\xE9 pour rejoindre notre \xE9quipe technique. Vous travaillerez sur des applications web modernes avec React et Node.js.",
+    requirements: ["React", "Node.js", "MongoDB", "TypeScript", "Git"],
+    responsibilities: ["D\xE9velopper des fonctionnalit\xE9s frontend et backend", "Participer aux code reviews", "Contribuer \xE0 l'architecture technique"],
+    salary: { min: 15e3, max: 25e3, currency: "MAD", period: "month" },
+    sector: "Technologies",
+    domain: "informatique",
+    keywords: ["react", "node", "fullstack", "javascript"]
+  },
+  {
+    title: "Data Scientist Senior",
+    company: "DataMind Solutions",
+    location: "Rabat",
+    isRemote: false,
+    contractType: "CDI",
+    description: "Rejoignez notre \xE9quipe Data Science pour d\xE9velopper des mod\xE8les pr\xE9dictifs et des solutions d'IA innovantes pour nos clients.",
+    requirements: ["Python", "Machine Learning", "TensorFlow", "SQL", "Statistics"],
+    responsibilities: ["Concevoir et d\xE9ployer des mod\xE8les ML", "Analyser des datasets complexes", "Pr\xE9senter les r\xE9sultats aux parties prenantes"],
+    salary: { min: 2e4, max: 35e3, currency: "MAD", period: "month" },
+    sector: "Technologies",
+    domain: "informatique",
+    keywords: ["data science", "machine learning", "python", "ai"]
+  },
+  {
+    title: "Chef de Projet Marketing Digital",
+    company: "DigiBoost Agency",
+    location: "Marrakech",
+    isRemote: true,
+    contractType: "CDI",
+    description: "G\xE9rez des campagnes marketing digitales pour nos clients internationaux. Vous serez responsable de la strat\xE9gie et de l'ex\xE9cution.",
+    requirements: ["Marketing Digital", "SEO", "Google Ads", "Analytics", "Gestion de projet"],
+    responsibilities: ["Planifier des campagnes marketing", "Optimiser le ROI des campagnes", "Coordonner avec les \xE9quipes cr\xE9atives"],
+    salary: { min: 12e3, max: 2e4, currency: "MAD", period: "month" },
+    sector: "Marketing",
+    domain: "marketing",
+    keywords: ["marketing", "digital", "seo", "publicit\xE9"]
+  },
+  {
+    title: "Ing\xE9nieur DevOps",
+    company: "CloudSphere Technologies",
+    location: "Tanger",
+    isRemote: true,
+    contractType: "CDI",
+    description: "Maintenez et am\xE9liorez notre infrastructure cloud. Vous assurerez la disponibilit\xE9 et la scalabilit\xE9 de nos services.",
+    requirements: ["Docker", "Kubernetes", "AWS", "CI/CD", "Linux", "Terraform"],
+    responsibilities: ["G\xE9rer l'infrastructure cloud", "Automatiser les d\xE9ploiements", "Monitorer la performance des syst\xE8mes"],
+    salary: { min: 18e3, max: 3e4, currency: "MAD", period: "month" },
+    sector: "Technologies",
+    domain: "informatique",
+    keywords: ["devops", "cloud", "aws", "kubernetes"]
+  },
+  {
+    title: "Comptable Senior",
+    company: "Fiduciaire Atlas",
+    location: "Casablanca",
+    isRemote: false,
+    contractType: "CDI",
+    description: "Nous recherchons un comptable exp\xE9riment\xE9 pour g\xE9rer la comptabilit\xE9 de nos clients entreprises.",
+    requirements: ["Comptabilit\xE9", "ERP", "Excel", "Droit fiscal", "Analyse financi\xE8re"],
+    responsibilities: ["Tenue de comptabilit\xE9", "Pr\xE9paration des bilans", "D\xE9clarations fiscales"],
+    salary: { min: 1e4, max: 18e3, currency: "MAD", period: "month" },
+    sector: "Finance",
+    domain: "finance",
+    keywords: ["comptabilit\xE9", "finance", "fiscal", "erp"]
+  },
+  {
+    title: "Community Manager",
+    company: "SocialConnect Maroc",
+    location: "Rabat",
+    isRemote: true,
+    contractType: "Stage",
+    description: "G\xE9rez la pr\xE9sence en ligne de nos clients sur les r\xE9seaux sociaux. Cr\xE9ez du contenu engageant et analysez les performances.",
+    requirements: ["R\xE9seaux sociaux", "Cr\xE9ation de contenu", "Canva", "Photoshop", "R\xE9daction web"],
+    responsibilities: ["Animer les communaut\xE9s", "Cr\xE9er du contenu visuel", "Analyser les KPIs"],
+    salary: { min: 3e3, max: 5e3, currency: "MAD", period: "month" },
+    sector: "Marketing",
+    domain: "marketing",
+    keywords: ["community management", "social media", "contenu"]
+  },
+  {
+    title: "Ing\xE9nieur G\xE9nie Civil",
+    company: "BatiConseil Maroc",
+    location: "F\xE8s",
+    isRemote: false,
+    contractType: "CDI",
+    description: "Rejoignez notre bureau d'\xE9tudes pour concevoir et superviser des projets de construction r\xE9sidentielle et commerciale.",
+    requirements: ["AutoCAD", "RDM", "B\xE9ton arm\xE9", "Gestion de chantier", "M\xE9tre"],
+    responsibilities: ["Conception de plans", "Suivi de chantier", "\xC9tudes techniques"],
+    salary: { min: 12e3, max: 2e4, currency: "MAD", period: "month" },
+    sector: "Construction",
+    domain: "genie_civil",
+    keywords: ["genie civil", "construction", "autocad", "bureau d'\xE9tudes"]
+  },
+  {
+    title: "Assistant RH",
+    company: "HR Plus Services",
+    location: "Casablanca",
+    isRemote: false,
+    contractType: "CDI",
+    description: "Supportez l'\xE9quipe RH dans la gestion administrative, le recrutement et la paie. Poste id\xE9al pour d\xE9buter en RH.",
+    requirements: ["Ressources Humaines", "Recrutement", "Paie", "Excel", "Droit du travail"],
+    responsibilities: ["Gestion administrative du personnel", "Support au recrutement", "Pr\xE9paration de la paie"],
+    salary: { min: 8e3, max: 12e3, currency: "MAD", period: "month" },
+    sector: "Ressources Humaines",
+    domain: "rh",
+    keywords: ["rh", "ressources humaines", "recrutement", "administration"]
+  }
+];
+router16.post("/recruiter-jobs", protect, async (req, res) => {
+  try {
+    let count = 0;
+    for (const jobData of sampleJobs) {
+      const existing = await JobOffer_default.findOne({ title: jobData.title, company: jobData.company, source: "recruiter" });
+      if (existing) continue;
+      await JobOffer_default.create({
+        ...jobData,
+        source: "recruiter",
+        sourceId: `seed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        postedBy: req.user._id,
+        isActive: true
+      });
+      count++;
+    }
+    res.json({ message: `${count} offres recruteur cr\xE9\xE9es`, count });
+  } catch (error) {
+    console.error("Seed error:", error);
+    res.status(500).json({ error: "Erreur lors du seed" });
+  }
+});
+var seed_default = router16;
+
 // backend/server.js
-mongoose15.set("toJSON", { virtuals: true, versionKey: false });
-mongoose15.set("toObject", { virtuals: true, versionKey: false });
-var app = express15();
+mongoose18.set("toJSON", { virtuals: true, versionKey: false });
+mongoose18.set("toObject", { virtuals: true, versionKey: false });
+var app = express17();
 app.use(helmet({ contentSecurityPolicy: false }));
 var allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:5173").split(",").map((o) => o.trim()).filter(Boolean);
 app.use(cors({
@@ -3898,8 +4742,8 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express15.json({ limit: "10mb" }));
-app.use(express15.urlencoded({ extended: true }));
+app.use(express17.json({ limit: "10mb" }));
+app.use(express17.urlencoded({ extended: true }));
 app.use(cookieParser());
 var limiter = rateLimit({ windowMs: 15 * 60 * 1e3, max: 200, message: { error: "Trop de requ\xEAtes" } });
 app.use("/api/", limiter);
@@ -3917,6 +4761,8 @@ app.use("/api/emails", emailTemplates_default);
 app.use("/api/search-profiles", searchProfiles_default);
 app.use("/api/analytics", analytics_default);
 app.use("/api/recruiter-space", recruiterSpace_default);
+app.use("/api/company-emails", companyEmails_default);
+app.use("/api/seed", seed_default);
 app.get("/api/health", (req, res) => res.json({ status: "ok", timestamp: /* @__PURE__ */ new Date() }));
 app.use("/api", (req, res) => {
   res.status(404).json({ error: `Route non trouv\xE9e: ${req.method} ${req.originalUrl}` });
@@ -3926,15 +4772,17 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || "Erreur serveur interne" });
 });
 async function connectDB() {
-  if (mongoose15.connection.readyState === 1) return;
+  if (mongoose18.connection.readyState === 1) return;
   const uri = process.env.MONGODB_URI;
   if (!uri) {
     console.error("\u274C MONGODB_URI non d\xE9fini");
     throw new Error("MONGODB_URI non d\xE9fini");
   }
   try {
-    await mongoose15.connect(uri);
+    await mongoose18.connect(uri);
     console.log("\u2705 MongoDB connect\xE9");
+    const { fixJobOfferIndexes: fixJobOfferIndexes2 } = await Promise.resolve().then(() => (init_dbMigration(), dbMigration_exports));
+    await fixJobOfferIndexes2();
   } catch (err) {
     console.error("\u274C MongoDB connection failed:", err.message);
     throw err;

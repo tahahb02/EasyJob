@@ -18,7 +18,7 @@ export const useUpdateProfile = () => {
 }
 
 // Jobs hooks
-export const useJobs = (filters = {}) => useQuery({
+export const useJobs = (filters = {}, options = {}) => useQuery({
   queryKey: ['jobs', filters],
   queryFn: async () => {
     const params = new URLSearchParams()
@@ -26,6 +26,7 @@ export const useJobs = (filters = {}) => useQuery({
     const { data } = await api.get(`/jobs?${params}`)
     return data
   },
+  ...options,
 })
 
 export const useJob = (id) => useQuery({
@@ -513,7 +514,7 @@ export const useRecruiterSendEmail = () => {
 }
 
 // ─── RECRUITER JOB BOARD (for candidates) ────────────────────
-export const useRecruiterJobBoard = (filters = {}) => useQuery({
+export const useRecruiterJobBoard = (filters = {}, options = {}) => useQuery({
   queryKey: ['jobs', 'recruiterBoard', filters],
   queryFn: async () => {
     const params = new URLSearchParams()
@@ -521,6 +522,7 @@ export const useRecruiterJobBoard = (filters = {}) => useQuery({
     const { data } = await api.get(`/jobs/recruiter-board?${params}`)
     return data
   },
+  ...options,
 })
 
 export const useApplyToRecruiterJob = () => {

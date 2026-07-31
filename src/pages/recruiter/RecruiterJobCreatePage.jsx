@@ -48,11 +48,16 @@ export default function RecruiterJobCreatePage() {
   })
 
   const onSubmit = async (data) => {
+    const salary = {}
+    if (Number.isFinite(data.salary?.min)) salary.min = data.salary.min
+    if (Number.isFinite(data.salary?.max)) salary.max = data.salary.max
+
     const payload = {
       ...data,
       requirements,
       responsibilities,
-      salary: data.salary?.min ? data.salary : undefined,
+      salary: Object.keys(salary).length > 0 ? salary : undefined,
+      applicationDeadline: data.applicationDeadline?.trim() ? data.applicationDeadline : undefined,
     }
     try {
       await createJob.mutateAsync(payload)
@@ -139,11 +144,11 @@ export default function RecruiterJobCreatePage() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Salaire min (MAD)</label>
-            <input type="number" {...register('salary.min', { valueAsNumber: true })} className={inputClass} placeholder="5000" />
+            <input type="number" {...register('salary.min', { setValueAs: (v) => (v === '' ? undefined : Number(v)) })} className={inputClass} placeholder="5000" />
           </div>
           <div>
             <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Salaire max (MAD)</label>
-            <input type="number" {...register('salary.max', { valueAsNumber: true })} className={inputClass} placeholder="15000" />
+            <input type="number" {...register('salary.max', { setValueAs: (v) => (v === '' ? undefined : Number(v)) })} className={inputClass} placeholder="15000" />
           </div>
         </div>
 

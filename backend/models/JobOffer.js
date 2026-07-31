@@ -37,7 +37,10 @@ const jobOfferSchema = new mongoose.Schema({
   applicationDeadline: Date,
 }, { timestamps: true })
 
-jobOfferSchema.index({ userId: 1, source: 1, sourceId: 1 }, { unique: true, sparse: true })
+jobOfferSchema.index(
+  { userId: 1, source: 1, sourceId: 1 },
+  { unique: true, partialFilterExpression: { sourceId: { $type: 'string' } } }
+)
 jobOfferSchema.index({ userId: 1, isActive: 1 })
 jobOfferSchema.index({ postedBy: 1, isActive: 1 })
 jobOfferSchema.index({ title: 'text', company: 'text', description: 'text' })

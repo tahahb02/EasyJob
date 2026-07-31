@@ -38,9 +38,12 @@ export async function createNotification({ userId, type, title, message, data, a
 
 export async function notifyNewJobOffer(jobOffer) {
   try {
-    const profiles = await UserProfile.find({
-      domains: { $in: [new RegExp(jobOffer.sector, 'i'), new RegExp(jobOffer.domain, 'i')] }
-    }).populate('userId')
+    const profileQuery = {}
+    const regexPatterns = [jobOffer.sector, jobOffer.domain].filter(Boolean)
+    if (regexPatterns.length > 0) {
+      profileQuery.domains = { $in: regexPatterns.map(p => new RegExp(p, 'i')) }
+    }
+    const profiles = await UserProfile.find(profileQuery).populate('userId')
 
     for (const profile of profiles) {
       const user = profile.userId

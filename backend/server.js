@@ -89,6 +89,8 @@ async function connectDB() {
   try {
     await mongoose.connect(uri)
     console.log('✅ MongoDB connecté')
+    const { fixJobOfferIndexes } = await import('./services/dbMigration.js')
+    await fixJobOfferIndexes()
   } catch (err) {
     console.error('❌ MongoDB connection failed:', err.message)
     throw err
