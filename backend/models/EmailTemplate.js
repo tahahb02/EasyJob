@@ -7,7 +7,7 @@ const emailTemplateSchema = new mongoose.Schema({
   body: { type: String, required: true },
   variables: [String],
   isDefault: { type: Boolean, default: false },
-  category: { type: String, enum: ['candidature', 'relance', 'remerciement', 'autre'], default: 'candidature' },
+  category: { type: String, enum: ['Candidature','Relance','Remerciement','Suivi','Personnalisé'], default: 'Candidature' },
   usageCount: { type: Number, default: 0 },
 }, { timestamps: true })
 

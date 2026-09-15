@@ -119,18 +119,18 @@ export default function ComposeEmailPage() {
   const [generatingField, setGeneratingField] = useState(null)
 
   const templates = useMemo(() => {
-    if (!templatesData) return {}
-    if (Array.isArray(templatesData)) {
-      return templatesData.reduce((acc, t) => {
-        acc[t.key || t.id || t.name] = {
-          label: t.label || t.name,
-          subject: t.subject || '',
-          body: t.body || t.content || '',
-        }
-        return acc
-      }, {})
-    }
-    return templatesData
+    const list = Array.isArray(templatesData)
+      ? templatesData
+      : templatesData?.templates
+    if (!list) return {}
+    return list.reduce((acc, t) => {
+      acc[t.key || t.id || t.name] = {
+        label: t.label || t.name,
+        subject: t.subject || '',
+        body: t.body || t.content || '',
+      }
+      return acc
+    }, {})
   }, [templatesData])
 
   const templateOptions = useMemo(

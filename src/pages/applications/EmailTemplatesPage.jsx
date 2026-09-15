@@ -8,6 +8,7 @@ import {
   Mail,
   Tag,
   Copy,
+  CopyPlus,
   Variable,
   Hash,
   User,
@@ -16,6 +17,7 @@ import {
   BookOpen,
   Calendar,
   Loader2,
+  Sparkles,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -31,6 +33,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -38,6 +47,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import ConfirmDialog from '@/components/ui/confirm-dialog'
+import { cn } from '@/lib/utils'
 
 const availableVariables = [
   { variable: '{{userName}}', description: 'Votre nom complet', icon: User },
@@ -51,11 +61,28 @@ const availableVariables = [
 
 const categoryColors = {
   Candidature: 'bg-primary/10 text-primary',
-  Stage: 'bg-accent/10 text-accent',
   Relance: 'bg-accent/10 text-accent',
-  Suivi: 'bg-purple-100 text-purple-700',
+  Remerciement: 'bg-[#8B5CF6]/10 text-[#8B5CF6]',
+  Suivi: 'bg-warning/10 text-warning',
   Personnalisé: 'bg-muted text-foreground',
 }
+
+const categories = Object.keys(categoryColors)
+
+const normalizeCategory = (category) => {
+  const map = {
+    candidature: 'Candidature',
+    relance: 'Relance',
+    remerciement: 'Remerciement',
+    suivi: 'Suivi',
+    'personnalisé': 'Personnalisé',
+    'personnalise': 'Personnalisé',
+  }
+  return map[category] || category || 'Candidature'
+}
+
+const categoryClass = (category) =>
+  categoryColors[normalizeCategory(category)] || categoryColors.Personnalisé
 
 const container = {
   hidden: { opacity: 0 },
@@ -74,10 +101,11 @@ const defaultTemplate = {
   name: '',
   subject: '',
   body: '',
+  category: 'Candidature',
 }
 
 export default function EmailTemplatesPage() {
-  const { data: templates, isLoading, isError } = useEmailTemplates()
+  const { data, isLoading, isError } = useEmailTemplates()
   const createMutation = useCreateEmailTemplate()
   const updateMutation = useUpdateEmailTemplate()
   const deleteMutation = useDeleteEmailTemplate()
@@ -87,20 +115,32 @@ export default function EmailTemplatesPage() {
   const [form, setForm] = useState(defaultTemplate)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
 
-  const templateList = Array.isArray(templates) ? templates : []
+  const templateList = data?.templates ?? []
 
-  const handleCreate = () => {
+  const openCreateFromScratch = () => {
     setEditingTemplate(null)
     setForm(defaultTemplate)
     setIsModalOpen(true)
   }
 
-  const handleEdit = (template) => {
+  const openCreateFromTemplate = (template) => {
+    setEditingTemplate(null)
+    setForm({
+      name: template.name,
+      subject: template.subject,
+      body: template.body,
+      category: normalizeCategory(template.category),
+    })
+    setIsModalOpen(true)
+  }
+
+  const openEdit = (template) => {
     setEditingTemplate(template)
     setForm({
       name: template.name,
       subject: template.subject,
       body: template.body,
+      category: normalizeCategory(template.category),
     })
     setIsModalOpen(true)
   }
@@ -111,13 +151,18 @@ export default function EmailTemplatesPage() {
       return
     }
 
+    const payload = {
+      name: form.name.trim(),
+      subject: form.subject.trim(),
+      body: form.body.trim(),
+      category: form.category,
+    }
+
     if (editingTemplate) {
       updateMutation.mutate(
         {
           id: editingTemplate._id || editingTemplate.id,
-          name: form.name,
-          subject: form.subject,
-          body: form.body,
+          ...payload,
         },
         {
           onSuccess: () => {
@@ -131,12 +176,7 @@ export default function EmailTemplatesPage() {
       )
     } else {
       createMutation.mutate(
-        {
-          name: form.name,
-          subject: form.subject,
-          body: form.body,
-          category: 'Personnalisé',
-        },
+        payload,
         {
           onSuccess: () => {
             toast.success('Template créé')
@@ -166,6 +206,8 @@ export default function EmailTemplatesPage() {
     toast.success(`"${variable}" copié`)
   }
 
+  const isDefaultTemplate = (template) => template.isDefault === true || !template.userId
+
   return (
     <motion.div
       variants={container}
@@ -183,7 +225,7 @@ export default function EmailTemplatesPage() {
             Gérez vos modèles d'email pour vos candidatures
           </p>
         </div>
-        <Button onClick={handleCreate}>
+        <Button onClick={openCreateFromScratch}>
           <Plus className="h-4 w-4" />
           Créer un template
         </Button>
@@ -191,8 +233,8 @@ export default function EmailTemplatesPage() {
 
       {/* Content Grid: Templates + Variables Sidebar */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Templates Grid */}
-        <div className="space-y-4 lg:col-span-2">
+        {/* Templates Column */}
+        <div className="min-w-0 space-y-4 lg:col-span-2">
           <motion.div variants={item}>
             <p className="text-sm font-medium text-muted-foreground">
               <span className="font-bold text-foreground">
@@ -248,13 +290,18 @@ export default function EmailTemplatesPage() {
               <AnimatePresence mode="popLayout">
                 {templateList.map((template) => (
                   <motion.div
-                    key={template.id}
+                    key={template._id || template.id}
                     layout
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
                     whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                    className="group flex h-full flex-col rounded-xl border border-border bg-card p-5 shadow-sm transition-shadow hover:shadow-[var(--shadow-md)]"
+                    className={cn(
+                      'group flex h-full flex-col rounded-xl border bg-card p-5 shadow-sm transition-shadow hover:shadow-[var(--shadow-md)]',
+                      isDefaultTemplate(template)
+                        ? 'border-dashed border-primary/30 bg-primary/[0.03]'
+                        : 'border-border'
+                    )}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
@@ -262,23 +309,32 @@ export default function EmailTemplatesPage() {
                           <h3 className="text-base font-bold text-foreground">
                             {template.name}
                           </h3>
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
                           <Badge
                             variant="secondary"
-                            className={`h-auto rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                              categoryColors[template.category] || categoryColors.Personnalisé
-                            }`}
+                            className={cn(
+                              'h-auto rounded-full px-2.5 py-0.5 text-xs font-semibold',
+                              categoryClass(template.category)
+                            )}
                           >
-                            {template.category}
+                            {normalizeCategory(template.category)}
                           </Badge>
+                          {isDefaultTemplate(template) && (
+                            <Badge variant="outline" className="h-auto gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium text-primary">
+                              <Sparkles className="size-3" />
+                              Par défaut
+                            </Badge>
+                          )}
                         </div>
                         <p className="mt-1.5 line-clamp-1 text-sm text-muted-foreground">
                           <span className="font-medium text-muted-foreground">Objet :</span>{' '}
                           {template.subject}
                         </p>
 
-                        <div className="mt-3 max-h-0 overflow-hidden opacity-0 transition-all duration-300 group-hover:max-h-32 group-hover:opacity-100">
+                        <div className="mt-3 max-h-0 overflow-hidden opacity-0 transition-all duration-300 group-hover:max-h-40 group-hover:opacity-100">
                           <div className="rounded-lg bg-muted/60 px-3 py-2">
-                            <p className="line-clamp-4 text-xs leading-relaxed text-muted-foreground">
+                            <p className="line-clamp-5 whitespace-pre-line text-xs leading-relaxed text-muted-foreground">
                               {template.body}
                             </p>
                           </div>
@@ -287,25 +343,38 @@ export default function EmailTemplatesPage() {
                     </div>
 
                     <div className="mt-auto flex items-center gap-2 border-t border-border pt-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(template)}
-                      >
-                        <Edit3 className="h-3 w-3" />
-                        Modifier
-                      </Button>
-                      <div className="relative ml-auto">
+                      {isDefaultTemplate(template) ? (
                         <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => setDeleteConfirm(deleteConfirm === template.id ? null : template.id)}
-                          aria-label="Supprimer"
-                          className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openCreateFromTemplate(template)}
                         >
-                          <Trash2 className="h-3 w-3" />
+                          <CopyPlus className="h-3 w-3" />
+                          Utiliser le modèle
                         </Button>
-                      </div>
+                      ) : (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEdit(template)}
+                          >
+                            <Edit3 className="h-3 w-3" />
+                            Modifier
+                          </Button>
+                          <div className="relative ml-auto">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => setDeleteConfirm(deleteConfirm === (template._id || template.id) ? null : (template._id || template.id))}
+                              aria-label="Supprimer"
+                              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </motion.div>
                 ))}
@@ -320,6 +389,10 @@ export default function EmailTemplatesPage() {
                   <p className="mt-1 text-xs text-muted-foreground">
                     Créez votre premier template pour gagner du temps
                   </p>
+                  <Button onClick={openCreateFromScratch} className="mt-5">
+                    <Plus className="h-4 w-4" />
+                    Créer mon premier template
+                  </Button>
                 </div>
               )}
             </motion.div>
@@ -380,7 +453,7 @@ export default function EmailTemplatesPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {editingTemplate ? 'Modifier le template' : 'Créer un template'}
+              {editingTemplate ? 'Modifier le template' : form.name ? 'Créer à partir d\'un modèle' : 'Créer un template'}
             </DialogTitle>
           </DialogHeader>
 
@@ -400,6 +473,28 @@ export default function EmailTemplatesPage() {
                   placeholder="Mon template personnalisé"
                 />
               </div>
+            </div>
+
+            {/* Category */}
+            <div>
+              <Label className="mb-1.5">
+                Catégorie
+              </Label>
+              <Select
+                value={form.category}
+                onValueChange={(category) => setForm((prev) => ({ ...prev, category }))}
+              >
+                <SelectTrigger className="w-full bg-muted">
+                  <SelectValue placeholder="Choisir une catégorie" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Subject */}
