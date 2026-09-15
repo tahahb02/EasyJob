@@ -10,15 +10,15 @@ function Layout() {
   const location = useLocation()
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <div className="flex min-h-screen w-full overflow-x-clip bg-background text-foreground">
       <AppSidebar />
       <div
-        className="flex flex-1 flex-col transition-[margin-left] duration-200 ease-in-out lg:ml-[var(--w)]"
+        className="flex min-w-0 flex-1 flex-col transition-[margin-left] duration-200 ease-in-out lg:ml-[var(--w)]"
         style={{ '--w': collapsed ? '72px' : '260px' }}
       >
         <MobileHeader />
         <AppHeader />
-        <main className="flex-1 p-4 md:p-6 lg:p-8">
+        <main className="min-w-0 flex-1 overflow-x-clip p-4 md:p-6 lg:p-8">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={location.pathname}

@@ -33,43 +33,53 @@ const sourceColors = {
 }
 
 function RelevanceCircle({ score }) {
-  const radius = 16
+  const size = 44
+  const stroke = 3.5
+  const radius = (size - stroke) / 2
   const circumference = 2 * Math.PI * radius
   const offset = circumference - ((score || 0) / 100) * circumference
-
-  const color =
-    score >= 90
-      ? 'hsl(var(--accent))'
-      : score >= 75
-        ? 'hsl(var(--warning))'
-        : 'hsl(var(--destructive))'
+  const gradId = `rel-saved-${score}`
 
   return (
-    <div className="relative flex h-10 w-10 items-center justify-center">
-      <svg className="absolute h-10 w-10 -rotate-90" viewBox="0 0 40 40">
+    <div
+      className="relative flex flex-col items-center justify-center rounded-full bg-primary/[0.06] ring-1 ring-primary/20"
+      style={{ width: size, height: size }}
+      title={`Score de pertinence : ${score ?? 0}/100`}
+    >
+      <svg className="absolute -rotate-90" width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+        <defs>
+          <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="hsl(var(--primary))" />
+            <stop offset="100%" stopColor="hsl(var(--accent))" />
+          </linearGradient>
+        </defs>
         <circle
-          cx="20"
-          cy="20"
+          cx={size / 2}
+          cy={size / 2}
           r={radius}
           fill="none"
-          stroke="currentColor"
-          strokeWidth="3"
-          className="text-border"
+          stroke="hsl(var(--primary)/0.12)"
+          strokeWidth={stroke}
         />
         <circle
-          cx="20"
-          cy="20"
+          cx={size / 2}
+          cy={size / 2}
           r={radius}
           fill="none"
-          stroke={color}
-          strokeWidth="3"
+          stroke={`url(#${gradId})`}
+          strokeWidth={stroke}
           strokeDasharray={circumference}
           strokeDashoffset={offset}
           strokeLinecap="round"
+          className="transition-all duration-700 ease-out"
+          style={{ filter: 'drop-shadow(0 0 3px hsl(var(--primary)/0.3))' }}
         />
       </svg>
-      <span className="text-xs font-bold text-foreground">
+      <span className="text-sm font-bold leading-none tabular-nums text-foreground">
         {score ?? 0}
+      </span>
+      <span className="mt-0.5 text-[8px] font-semibold leading-none text-primary/80">
+        /100
       </span>
     </div>
   )
@@ -230,11 +240,8 @@ export default function SavedJobsPage() {
                   </div>
                 </div>
 
-                <div className="flex shrink-0 flex-col items-center gap-1">
+                <div className="flex shrink-0 items-center gap-1">
                   <RelevanceCircle score={job.relevanceScore} />
-                  <span className="text-[10px] font-medium text-muted-foreground">
-                    pertinence
-                  </span>
                 </div>
               </div>
 

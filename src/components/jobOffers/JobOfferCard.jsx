@@ -44,43 +44,53 @@ const contractColors = {
   'Temps partiel': 'bg-muted text-muted-foreground',
 }
 
-function RelevanceCircle({ score, size = 40 }) {
-  const radius = size / 2 - 4
+function RelevanceCircle({ score, size = 46 }) {
+  const stroke = size >= 44 ? 4 : 3
+  const radius = (size - stroke) / 2
   const circumference = 2 * Math.PI * radius
   const offset = circumference - ((score || 0) / 100) * circumference
-  const color =
-    score >= 80
-      ? 'hsl(var(--accent))'
-      : score >= 50
-        ? 'hsl(var(--warning))'
-        : 'hsl(var(--destructive))'
+  const gradId = `rel-${score}-${size}`
 
   return (
-    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
-      <svg className="absolute -rotate-90" width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <div
+      className="relative flex shrink-0 flex-col items-center justify-center rounded-full bg-primary/[0.06] ring-1 ring-primary/20"
+      style={{ width: size, height: size }}
+      title={`Score de pertinence : ${score ?? 0}/100`}
+    >
+      <svg className="absolute -rotate-90" width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+        <defs>
+          <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="hsl(var(--primary))" />
+            <stop offset="100%" stopColor="hsl(var(--accent))" />
+          </linearGradient>
+        </defs>
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="hsl(var(--border))"
-          strokeWidth="3"
+          stroke="hsl(var(--primary)/0.12)"
+          strokeWidth={stroke}
         />
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke={color}
-          strokeWidth="3"
+          stroke={`url(#${gradId})`}
+          strokeWidth={stroke}
           strokeDasharray={circumference}
           strokeDashoffset={offset}
           strokeLinecap="round"
           className="transition-all duration-700 ease-out"
+          style={{ filter: 'drop-shadow(0 0 3px hsl(var(--primary)/0.3))' }}
         />
       </svg>
-      <span className="text-[10px] font-bold tabular-nums text-foreground">
+      <span className={`font-bold leading-none tabular-nums text-foreground ${size >= 44 ? 'text-sm' : 'text-[11px]'}`}>
         {score ?? 0}
+      </span>
+      <span className="mt-0.5 text-[8px] font-semibold leading-none text-primary/80">
+        /100
       </span>
     </div>
   )
@@ -157,7 +167,7 @@ export default function JobOfferCard({ job, view = 'grid', onSave, onApply, appl
         </div>
 
         <div className="hidden items-center gap-3 sm:flex">
-          <RelevanceCircle score={score} size={34} />
+          <RelevanceCircle score={score} size={42} />
           <span className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap">
             <Clock className="size-3" />
             {formatDistanceToNow(new Date(job.postedAt || job.createdAt), { addSuffix: true, locale: fr })}

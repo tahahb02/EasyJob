@@ -7,13 +7,11 @@ import {
   Phone,
   MapPin,
   Building2,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
   Filter,
   X,
-  Loader2,
   Building,
   Users,
   Briefcase,
@@ -28,6 +26,17 @@ import {
 } from 'lucide-react'
 
 import { useCompanyEmails, useCompanyEmailFilters } from '@/api/hooks'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
 
 const companyTypeLabels = {
   multinationale: 'Multinationale',
@@ -50,13 +59,13 @@ const companyTypeIcons = {
 }
 
 const companyTypeColors = {
-  multinationale: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
-  publique: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400',
-  privee: 'bg-surface-100 text-surface-700 dark:bg-surface-600 dark:text-surface-400',
-  startup: 'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400',
-  pme: 'bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400',
-  cabinet: 'bg-pink-100 text-pink-700 dark:bg-pink-500/15 dark:text-pink-400',
-  ong: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-400',
+  multinationale: 'bg-primary/10 text-primary',
+  publique: 'bg-accent/10 text-accent',
+  privee: 'bg-muted text-muted-foreground',
+  startup: 'bg-[#8B5CF6]/10 text-[#8B5CF6]',
+  pme: 'bg-warning/10 text-warning',
+  cabinet: 'bg-destructive/10 text-destructive',
+  ong: 'bg-[#0EA5E9]/10 text-[#0EA5E9]',
 }
 
 const sizeLabels = {
@@ -80,26 +89,24 @@ const item = {
 
 function FilterDropdown({ value, options, onChange, label, icon: Icon, labelMap }) {
   return (
-    <div className="relative">
-      <label className="mb-1.5 block text-xs font-medium text-surface-500 dark:text-surface-400">
-        {Icon && <Icon className="mr-1 inline h-3 w-3" />}
+    <div className="space-y-1.5">
+      <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        {Icon && <Icon className="size-3" />}
         {label}
       </label>
-      <div className="relative">
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full appearance-none rounded-xl border border-surface-200 bg-white py-2.5 pl-3 pr-10 text-sm font-medium text-surface-700 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-surface-600 dark:bg-surface-800 dark:text-surface-300 dark:focus:border-primary-400"
-        >
-          <option value="">Tous</option>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Tous" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">Tous</SelectItem>
           {options.map((opt) => (
-            <option key={opt} value={opt}>
+            <SelectItem key={opt} value={opt}>
               {labelMap ? (labelMap[opt] || opt) : opt}
-            </option>
+            </SelectItem>
           ))}
-        </select>
-        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" />
-      </div>
+        </SelectContent>
+      </Select>
     </div>
   )
 }
@@ -139,18 +146,16 @@ function CopyEmailButton({ email }) {
     }
   }, [email])
   return (
-    <button
+    <Button
+      variant={copied ? 'success' : 'outline'}
+      size="sm"
+      className="h-7 px-2.5 text-xs"
       onClick={handleCopy}
-      title="Copier l'email"
-      className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
-        copied
-          ? 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400'
-          : 'bg-primary-100 text-primary-600 hover:bg-primary-200 dark:bg-primary-500/15 dark:text-primary-400 dark:hover:bg-primary-500/25'
-      }`}
+      aria-label="Copier l'email"
     >
-      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
       {copied ? 'Copié !' : 'Copier'}
-    </button>
+    </Button>
   )
 }
 
@@ -168,22 +173,22 @@ function CompanyCard({ company, index }) {
       exit={{ opacity: 0, y: -10, transition: { duration: 0.2 } }}
       transition={{ duration: 0.4, delay: index * 0.03, ease: 'easeOut' }}
       whileHover={{ y: -2, transition: { duration: 0.2 } }}
-      className="group rounded-2xl border border-surface-200 bg-white p-5 shadow-sm transition-all hover:shadow-md dark:border-surface-700 dark:bg-surface-800"
+      className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-shadow hover:shadow-[var(--shadow-md)]"
     >
       <div className="flex items-start gap-4">
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-primary-50 dark:bg-primary-500/10">
-          <TypeIcon className="h-6 w-6 text-primary-500" />
+        <div className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+          <TypeIcon className="size-6 text-primary" />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="text-base font-bold text-surface-900 group-hover:text-primary-600 dark:text-surface-50 dark:group-hover:text-primary-400">
+          <h3 className="text-base font-bold text-foreground group-hover:text-primary">
             {company.companyName}
           </h3>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${typeColor}`}>
-              <TypeIcon className="h-3 w-3" />
+            <Badge variant="secondary" className={`rounded-full ${typeColor}`}>
+              <TypeIcon className="mr-1 size-3" />
               {typeLabel}
-            </span>
-            <span className="text-xs text-surface-500 dark:text-surface-400">
+            </Badge>
+            <span className="text-xs text-muted-foreground">
               {sizeLabels[company.companySize] || company.companySize} employés
             </span>
           </div>
@@ -191,11 +196,11 @@ function CompanyCard({ company, index }) {
       </div>
 
       <div className="mt-4 space-y-2.5">
-        <div className="flex items-center gap-2 rounded-xl bg-primary-50/70 px-3 py-2 dark:bg-primary-500/10">
-          <MailCheck className="h-4 w-4 shrink-0 text-primary-500" />
+        <div className="flex items-center gap-2 rounded-lg bg-primary/5 px-3 py-2">
+          <MailCheck className="size-4 shrink-0 text-primary" />
           <a
             href={`mailto:${company.email}?subject=Candidature spontanée - EasyJob`}
-            className="flex-1 truncate text-sm font-semibold text-primary-600 hover:text-primary-700 hover:underline dark:text-primary-400"
+            className="flex-1 truncate text-sm font-semibold text-primary hover:underline"
           >
             {company.email}
           </a>
@@ -203,52 +208,52 @@ function CompanyCard({ company, index }) {
         </div>
 
         {company.phone && (
-          <div className="flex items-center gap-2 text-sm text-surface-600 dark:text-surface-400">
-            <Phone className="h-4 w-4 shrink-0 text-surface-400" />
-            <a href={`tel:${company.phone}`} className="hover:text-primary-500 hover:underline">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Phone className="size-4 shrink-0" />
+            <a href={`tel:${company.phone}`} className="hover:text-primary hover:underline">
               {company.phone}
             </a>
           </div>
         )}
 
-        <div className="flex items-center gap-2 text-sm text-surface-600 dark:text-surface-400">
-          <Building2 className="h-4 w-4 shrink-0 text-surface-400" />
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Building2 className="size-4 shrink-0" />
           <span>{company.sector}</span>
         </div>
 
-        <div className="flex items-center gap-2 text-sm text-surface-600 dark:text-surface-400">
-          <MapPin className="h-4 w-4 shrink-0 text-surface-400" />
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <MapPin className="size-4 shrink-0" />
           <span>{company.city}, {company.country}</span>
         </div>
 
         {websiteDomain && (
-          <div className="flex items-center gap-2 text-sm text-surface-600 dark:text-surface-400">
-            <Globe className="h-4 w-4 shrink-0 text-surface-400" />
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Globe className="size-4 shrink-0" />
             <a
               href={websiteUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 hover:text-primary-500 hover:underline"
+              className="flex items-center gap-1 hover:text-primary hover:underline"
             >
               {websiteDomain}
-              <ExternalLink className="h-3 w-3" />
+              <ExternalLink className="size-3" />
             </a>
           </div>
         )}
       </div>
 
       {company.description && (
-        <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-surface-500 dark:text-surface-400">
+        <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
           {company.description}
         </p>
       )}
 
-      <div className="mt-4 flex gap-2 border-t border-surface-100 pt-4 dark:border-surface-700">
+      <div className="mt-4 flex gap-2 border-t border-border pt-4">
         <a
           href={`mailto:${company.email}?subject=Candidature spontanée - EasyJob`}
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-500"
+          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
         >
-          <Mail className="h-4 w-4" />
+          <Mail className="size-4" />
           Envoyer un email
         </a>
         {company.website && (
@@ -256,9 +261,9 @@ function CompanyCard({ company, index }) {
             href={websiteUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-surface-200 bg-white px-4 py-2.5 text-sm font-medium text-surface-600 transition-colors hover:bg-surface-50 dark:border-surface-600 dark:bg-surface-700 dark:text-surface-400 dark:hover:bg-surface-600"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
           >
-            <ExternalLink className="h-4 w-4" />
+            <ExternalLink className="size-4" />
           </a>
         )}
       </div>
@@ -268,18 +273,18 @@ function CompanyCard({ company, index }) {
 
 function CompanyCardSkeleton() {
   return (
-    <div className="rounded-2xl border border-surface-200 bg-white p-5 shadow-sm dark:border-surface-700 dark:bg-surface-800">
+    <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
       <div className="flex items-start gap-4">
-        <div className="h-14 w-14 shrink-0 animate-pulse rounded-xl bg-surface-200 dark:bg-surface-700" />
+        <Skeleton className="size-14 shrink-0 rounded-xl" />
         <div className="flex-1 space-y-2">
-          <div className="h-5 w-40 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
-          <div className="h-4 w-28 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-4 w-28" />
         </div>
       </div>
       <div className="mt-4 space-y-2.5">
-        <div className="h-4 w-48 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
-        <div className="h-4 w-32 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
-        <div className="h-4 w-36 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
+        <Skeleton className="h-4 w-48" />
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-4 w-36" />
       </div>
     </div>
   )
@@ -327,43 +332,41 @@ export default function CompanyEmailsPage() {
       variants={container}
       initial="hidden"
       animate="show"
-      className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8"
+      className="mx-auto max-w-7xl space-y-6 overflow-x-clip"
     >
       {/* Header */}
       <motion.div variants={item} className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-surface-900 dark:text-surface-50">
+          <h1 className="text-3xl font-semibold tracking-tight">
             Annuaire d'entreprises
           </h1>
-          <p className="mt-1 text-surface-500 dark:text-surface-400">
+          <p className="mt-1 text-sm text-muted-foreground">
             Trouvez les emails des entreprises et recruteurs au Maroc
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button
+            variant={showFilters ? 'default' : 'outline'}
+            size="sm"
+            className="gap-2"
             onClick={() => setShowFilters(!showFilters)}
-            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${
-              showFilters
-                ? 'border-primary-200 bg-primary-50 text-primary-600 dark:border-primary-500/30 dark:bg-primary-500/10 dark:text-primary-400'
-                : 'border-surface-200 bg-white text-surface-600 hover:bg-surface-50 dark:border-surface-600 dark:bg-surface-800 dark:text-surface-400'
-            }`}
           >
-            <Filter className="h-4 w-4" />
+            <Filter className="size-4" />
             Filtres
-          </button>
+          </Button>
         </div>
       </motion.div>
 
       {/* Search Bar */}
       <motion.div variants={item}>
         <div className="relative">
-          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-surface-400" />
-          <input
+          <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+          <Input
             type="text"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1) }}
             placeholder="Rechercher par nom d'entreprise, email, secteur..."
-            className="w-full rounded-2xl border border-surface-200 bg-white py-4 pl-12 pr-4 text-surface-700 shadow-sm transition-shadow placeholder:text-surface-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:shadow-md dark:border-surface-600 dark:bg-surface-800 dark:text-surface-200 dark:placeholder:text-surface-500 dark:focus:border-primary-400"
+            className="h-12 rounded-xl pl-12"
           />
         </div>
       </motion.div>
@@ -419,13 +422,15 @@ export default function CompanyEmailsPage() {
             </div>
             {hasActiveFilters && (
               <div className="mt-3 flex items-center gap-2">
-                <button
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-xs"
                   onClick={clearFilters}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-surface-200 px-3 py-1.5 text-xs font-medium text-surface-700 transition-colors hover:bg-surface-300 dark:bg-surface-600 dark:text-surface-300 dark:hover:bg-surface-500"
                 >
-                  <X className="h-3 w-3" />
+                  <X className="size-3" />
                   Réinitialiser les filtres
-                </button>
+                </Button>
               </div>
             )}
           </motion.div>
@@ -434,8 +439,8 @@ export default function CompanyEmailsPage() {
 
       {/* Results Count */}
       <motion.div variants={item}>
-        <p className="text-sm font-medium text-surface-500 dark:text-surface-400">
-          <span className="font-bold text-surface-900 dark:text-surface-100">
+        <p className="text-sm text-muted-foreground">
+          <span className="font-semibold text-foreground">
             {isLoading ? '...' : total}
           </span>{' '}
           {total === 1 ? 'entreprise trouvée' : 'entreprises trouvées'}
@@ -465,23 +470,25 @@ export default function CompanyEmailsPage() {
       ) : (
         <motion.div
           variants={item}
-          className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-surface-300 bg-surface-50 py-16 dark:border-surface-600 dark:bg-surface-800/50"
+          className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-background py-16"
         >
-          <Building2 className="mb-4 h-12 w-12 text-surface-300 dark:text-surface-600" />
-          <h3 className="text-lg font-semibold text-surface-700 dark:text-surface-300">
-            Aucune entreprise trouvée
-          </h3>
-          <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
+          <div className="mb-4 flex size-14 items-center justify-center rounded-full bg-muted/60">
+            <Building2 className="size-7 text-muted-foreground/50" />
+          </div>
+          <h3 className="text-base font-semibold">Aucune entreprise trouvée</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
             Essayez de modifier vos filtres ou votre recherche
           </p>
           {hasActiveFilters && (
-            <button
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4 gap-1.5"
               onClick={clearFilters}
-              className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-surface-200 px-4 py-2 text-sm font-medium text-surface-700 transition-colors hover:bg-surface-300 dark:bg-surface-600 dark:text-surface-300 dark:hover:bg-surface-500"
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="size-3.5" />
               Réinitialiser les filtres
-            </button>
+            </Button>
           )}
         </motion.div>
       )}
@@ -489,22 +496,20 @@ export default function CompanyEmailsPage() {
       {/* Pagination */}
       {data && data.pages > 1 && (
         <motion.div variants={item} className="flex flex-col items-center gap-3">
-          <p className="text-xs text-surface-500 dark:text-surface-400">
+          <p className="text-xs text-muted-foreground">
             Page {page} sur {data.pages} — {total} entreprises
           </p>
           <div className="flex items-center gap-1.5">
-            <button
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1 px-3"
               onClick={() => setPage(Math.max(1, page - 1))}
               disabled={page === 1}
-              className={`inline-flex h-10 items-center gap-1 rounded-xl px-3 text-sm font-medium transition-colors ${
-                page === 1
-                  ? 'cursor-not-allowed bg-surface-100 text-surface-300 dark:bg-surface-700 dark:text-surface-600'
-                  : 'bg-surface-100 text-surface-600 hover:bg-surface-200 dark:bg-surface-700 dark:text-surface-400 dark:hover:bg-surface-600'
-              }`}
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="size-4" />
               Préc.
-            </button>
+            </Button>
             {Array.from({ length: Math.min(data.pages, 7) }, (_, i) => {
               let pageNum
               if (data.pages <= 7) {
@@ -517,31 +522,27 @@ export default function CompanyEmailsPage() {
                 pageNum = page - 3 + i
               }
               return (
-                <button
+                <Button
                   key={pageNum}
+                  variant={pageNum === page ? 'default' : 'outline'}
+                  size="icon"
+                  className="size-10"
                   onClick={() => setPage(pageNum)}
-                  className={`inline-flex h-10 w-10 items-center justify-center rounded-xl text-sm font-medium transition-colors ${
-                    pageNum === page
-                      ? 'bg-primary-500 text-white shadow-sm'
-                      : 'bg-surface-100 text-surface-600 hover:bg-surface-200 dark:bg-surface-700 dark:text-surface-400 dark:hover:bg-surface-600'
-                  }`}
                 >
                   {pageNum}
-                </button>
+                </Button>
               )
             })}
-            <button
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1 px-3"
               onClick={() => setPage(Math.min(data.pages, page + 1))}
               disabled={page === data.pages}
-              className={`inline-flex h-10 items-center gap-1 rounded-xl px-3 text-sm font-medium transition-colors ${
-                page === data.pages
-                  ? 'cursor-not-allowed bg-surface-100 text-surface-300 dark:bg-surface-700 dark:text-surface-600'
-                  : 'bg-surface-100 text-surface-600 hover:bg-surface-200 dark:bg-surface-700 dark:text-surface-400 dark:hover:bg-surface-600'
-              }`}
             >
               Suiv.
-              <ChevronRight className="h-4 w-4" />
-            </button>
+              <ChevronRight className="size-4" />
+            </Button>
           </div>
         </motion.div>
       )}

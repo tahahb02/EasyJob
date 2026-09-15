@@ -26,9 +26,9 @@ router.get('/', protect, async (req, res) => {
     if (location) query.location = { $regex: location, $options: 'i' }
     if (source) query.source = source
 
-    let sortOption = { relevanceScore: -1 }
-    if (sort === 'date') sortOption = { postedAt: -1 }
-    else if (sort === 'salary') sortOption = { 'salary.max': -1 }
+    let sortOption = { relevanceScore: -1, postedAt: -1, createdAt: -1 }
+    if (sort === 'date') sortOption = { postedAt: -1, createdAt: -1 }
+    else if (sort === 'salary') sortOption = { 'salary.max': -1, postedAt: -1, createdAt: -1 }
 
     const skip = (parseInt(page) - 1) * parseInt(limit)
     const [jobs, total] = await Promise.all([

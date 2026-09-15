@@ -202,7 +202,7 @@ export default function DashboardPage() {
       variants={container}
       initial="hidden"
       animate="show"
-      className="mx-auto max-w-7xl space-y-8"
+      className="mx-auto max-w-7xl space-y-8 overflow-x-clip"
     >
       <motion.div variants={item} className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -235,7 +235,7 @@ export default function DashboardPage() {
                   key={stat.title}
                   variants={item}
                   whileHover={{ y: -3, transition: { duration: 0.2 } }}
-                  className="group relative flex flex-col rounded-xl border border-border bg-card p-5 transition-shadow hover:shadow-md"
+                  className="group relative flex min-w-0 flex-col rounded-xl border border-border bg-card p-5 transition-shadow hover:shadow-md"
                 >
                   <div className="mb-4 flex items-center justify-between">
                     <div className={`flex size-10 items-center justify-center rounded-lg ${stat.color}`}>
@@ -256,7 +256,7 @@ export default function DashboardPage() {
       </motion.div>
 
       <motion.div variants={item}>
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-6">
           <h2 className="mb-6 text-lg font-semibold">Candidatures par semaine</h2>
           {isLoading ? (
             <SkeletonChart />
@@ -280,7 +280,7 @@ export default function DashboardPage() {
       </motion.div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <motion.div variants={item} className="rounded-xl border border-border bg-card p-6">
+        <motion.div variants={item} className="min-w-0 rounded-xl border border-border bg-card p-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold">Dernières offres</h2>
             <Button asChild variant="ghost" size="sm">
@@ -315,7 +315,7 @@ export default function DashboardPage() {
           )}
         </motion.div>
 
-        <motion.div variants={item} className="rounded-xl border border-border bg-card p-6">
+        <motion.div variants={item} className="min-w-0 rounded-xl border border-border bg-card p-6">
           <h2 className="mb-4 text-lg font-semibold">Activité récente</h2>
           {isLoadingActivity ? (
             <SkeletonList />
@@ -353,12 +353,12 @@ export default function DashboardPage() {
               <Link to="/jobs">Voir toutes<ArrowRight className="ml-1 size-4" /></Link>
             </Button>
           </div>
-          <div className="-mx-6 flex gap-4 overflow-x-auto px-6 pb-2 [scrollbar-width:thin]">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {recentJobs.slice(0, 8).map((job) => (
               <Link
                 key={job._id}
                 to={`/jobs/${job._id}`}
-                className="min-w-[240px] max-w-[260px] flex-1 rounded-xl border border-border bg-background p-4 transition-colors hover:border-primary/40"
+                className="min-w-0 rounded-xl border border-border bg-background p-4 transition-colors hover:border-primary/40"
               >
                 <div className="mb-3 flex items-center gap-2">
                   <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary">
