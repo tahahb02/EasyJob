@@ -15,6 +15,8 @@ const applicationSchema = new mongoose.Schema({
     to: String,
     subject: String,
     body: String,
+    attachCv: { type: Boolean, default: false },
+    messageId: String,
     sentAt: Date,
     openedAt: Date,
   },

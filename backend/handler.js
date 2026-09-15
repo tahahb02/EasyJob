@@ -1,3 +1,6 @@
+import dotenv from 'dotenv'
+dotenv.config({ path: new URL('../.env', import.meta.url) })
+
 import app, { connectDB } from './server.js'
 
 let isConnected = false

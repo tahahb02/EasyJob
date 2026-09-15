@@ -1201,3 +1201,5 @@ VITE_API_URL=http://localhost:5000/api
 - **Styling** : Tailwind CSS utility-first
 - **Animations** : Framer Motion
 - **Langue UI** : Français
+
+Tous les utilisateurs se connectent désormais avec 123456789.

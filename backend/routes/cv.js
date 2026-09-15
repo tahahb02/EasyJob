@@ -2,39 +2,9 @@ import express from 'express'
 import mongoose from 'mongoose'
 import { protect } from '../middlewares/auth.js'
 import { upload } from '../utils/fileUpload.js'
+import CV from '../models/CV.js'
 
 const router = express.Router()
-
-const cvSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  fileName: String,
-  originalName: String,
-  fileData: String,
-  fileSize: Number,
-  mimeType: String,
-  extractedText: { type: String, default: '' },
-  parsedData: {
-    skills: [String],
-    experience: [{ title: String, company: String, period: String, description: String }],
-    education: [{ degree: String, institution: String, year: String }],
-    languages: [String],
-    email: String,
-    phone: String,
-    location: String,
-  },
-  analysis: {
-    score: { type: Number, default: 0 },
-    strengths: [String],
-    improvements: [String],
-    suggestions: [String],
-  },
-  candidateSummary: { type: String, default: '' },
-  keywords: [String],
-  isActive: { type: Boolean, default: true },
-  version: { type: Number, default: 1 },
-}, { timestamps: true })
-
-const CV = mongoose.models.CV || mongoose.model('CV', cvSchema)
 
 function analyzeCV(text, parsedData) {
   let score = 0

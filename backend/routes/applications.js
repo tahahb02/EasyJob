@@ -2,7 +2,9 @@ import express from 'express'
 import Application from '../models/Application.js'
 import JobOffer from '../models/JobOffer.js'
 import User from '../models/User.js'
+import CV from '../models/CV.js'
 import { protect } from '../middlewares/auth.js'
+import { sendEmail, escapeHtml, brandLayout } from '../utils/sendEmail.js'
 import {
   notifyApplicationStatusChange,
   notifyNewApplicationToRecruiter
@@ -106,19 +108,73 @@ router.post('/:id/send', protect, async (req, res) => {
     const app = await Application.findOne({ _id: req.params.id, userId: req.user._id })
     if (!app) return res.status(404).json({ error: 'Candidature non trouvée' })
 
+    const emailData = req.body.email || {}
+    const { to, subject, body, attachCv } = emailData
+    if (!to || !subject || !body) {
+      return res.status(400).json({ error: 'Destinataire, objet et contenu de l\'email requis' })
+    }
+
+    const [jobOffer, user] = await Promise.all([
+      JobOffer.findById(app.jobOfferId),
+      User.findById(req.user._id),
+    ])
+
+    const recipientName = jobOffer?.recruiterName || 'Recruteur'
+    const company = jobOffer?.company || ''
+    const candidateName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim()
+
+    const attachments = []
+    if (attachCv) {
+      const cv = await CV.findOne({ userId: req.user._id, isActive: true })
+      if (cv && cv.fileData) {
+        const rawBase64 = cv.fileData.startsWith('data:') ? cv.fileData.split(',')[1] : cv.fileData
+        attachments.push({
+          filename: cv.originalName || 'CV.pdf',
+          content: Buffer.from(rawBase64, 'base64'),
+          contentType: cv.mimeType || 'application/pdf',
+        })
+      }
+    }
+
+    const safeRecipient = escapeHtml(recipientName) + (company ? ` (${escapeHtml(company)})` : '')
+    const content = `
+      <p style="margin:0 0 8px 0; font-size:14px; color:#334155; line-height:1.6;">Bonjour <strong>${safeRecipient}</strong>,</p>
+      <p style="margin:0 0 20px 0; font-size:14px; color:#334155; line-height:1.6;">Vous avez reçu une nouvelle candidature via EasyJob :</p>
+      <div style="background:#eff6ff; border-left:4px solid #2563eb; border-radius:12px; padding:18px 20px; margin:0 0 6px 0; white-space:pre-wrap; color:#334155; font-size:14px; line-height:1.7;">${escapeHtml(body)}</div>
+      <p style="margin:14px 0 0 0; font-size:13px; color:#94a3b8; line-height:1.6;">Candidature envoyée par <strong>${escapeHtml(candidateName)}</strong></p>
+    `
+    const html = brandLayout({
+      title: 'Nouvelle candidature reçue',
+      content,
+      footerText: 'Candidature envoyée via EasyJob — Votre carrière au Maroc',
+    })
+    const emailResult = await sendEmail({ to, subject, html, attachments })
+
+    if (!emailResult.success) {
+      return res.status(500).json({ error: 'Erreur lors de l\'envoi de l\'email', details: emailResult.error })
+    }
+
     app.status = 'envoyee'
     app.appliedAt = new Date()
+    app.email = {
+      to,
+      subject,
+      body,
+      attachCv: !!attachCv,
+      messageId: emailResult.messageId,
+      sentAt: new Date(),
+    }
     if (!app.statusHistory) app.statusHistory = []
     app.statusHistory.push({ status: 'envoyee', changedAt: new Date(), changedBy: 'candidat', note: 'Candidature envoyée' })
     await app.save()
 
-    const jobOffer = await JobOffer.findById(app.jobOfferId)
     if (jobOffer) {
       notifyNewApplicationToRecruiter(app, jobOffer)
     }
 
-    res.json({ application: app, message: 'Candidature envoyée avec succès !' })
+    res.json({ application: app, message: 'Candidature envoyée avec succès !', messageId: emailResult.messageId })
   } catch (error) {
+    console.error('Erreur envoi candidature:', error)
     res.status(500).json({ error: 'Erreur lors de l\'envoi' })
   }
 })

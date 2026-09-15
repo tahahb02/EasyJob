@@ -5,7 +5,9 @@ import Application from '../models/Application.js'
 import UserProfile from '../models/UserProfile.js'
 import User from '../models/User.js'
 import RecruiterProfile from '../models/RecruiterProfile.js'
+import CV from '../models/CV.js'
 import { protect, authorize } from '../middlewares/auth.js'
+import { escapeHtml } from '../utils/sendEmail.js'
 import { calculateCandidateMatch } from '../services/jobScraper.js'
 import { buildCandidateInfo } from '../services/candidateInfo.js'
 import {
@@ -17,37 +19,6 @@ import {
 } from '../services/NotificationService.js'
 
 const router = express.Router()
-
-const cvSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  fileName: String,
-  originalName: String,
-  fileData: String,
-  fileSize: Number,
-  mimeType: String,
-  extractedText: { type: String, default: '' },
-  parsedData: {
-    skills: [String],
-    experience: [{ title: String, company: String, period: String, description: String }],
-    education: [{ degree: String, institution: String, year: String }],
-    languages: [String],
-    email: String,
-    phone: String,
-    location: String,
-  },
-  analysis: {
-    score: { type: Number, default: 0 },
-    strengths: [String],
-    improvements: [String],
-    suggestions: [String],
-  },
-  candidateSummary: { type: String, default: '' },
-  keywords: [String],
-  isActive: { type: Boolean, default: true },
-  version: { type: Number, default: 1 },
-}, { timestamps: true })
-
-const CV = mongoose.models.CV || mongoose.model('CV', cvSchema)
 
 function generateCandidateSummary(text, parsedData, userProfile) {
   const parts = []
@@ -802,34 +773,32 @@ router.post('/candidates/:userId/email', protect, authorize('recruiter'), async 
 
     const profile = await RecruiterProfile.findOne({ userId: req.user._id })
 
-    const { sendEmail } = await import('../utils/sendEmail.js')
+    const { sendEmail, brandLayout } = await import('../utils/sendEmail.js')
 
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <h1 style="color: #10b981; font-size: 24px;">EasyJob — Message d'un recruteur</h1>
-        </div>
-        <div style="background: #f0fdf4; border-radius: 12px; padding: 24px; border: 1px solid #bbf7d0;">
-          <p style="color: #166534; font-weight: bold; margin-bottom: 8px;">
-            ${req.user.firstName} ${req.user.lastName} ${profile?.companyName ? `(${profile.companyName})` : ''}
-          </p>
-          <p style="color: #166534; font-size: 13px; margin-bottom: 16px;">
-            ${profile?.position || 'Recruteur'} ${profile?.companyName ? `chez ${profile.companyName}` : ''}
-          </p>
-          <hr style="border: none; border-top: 1px solid #bbf7d0; margin: 16px 0;" />
-          <div style="color: #334155; line-height: 1.6; white-space: pre-wrap;">
-${message}
-          </div>
-        </div>
-        <p style="color: #94a3b8; font-size: 12px; text-align: center; margin-top: 16px;">
-          Ce message a été envoyé via EasyJob. Veuillez ne pas répondre directement à cet email.
-        </p>
-      </div>
+    const candidateName = `${targetUser.firstName || ''} ${targetUser.lastName || ''}`.trim() || 'Candidat'
+    const recruiterName = escapeHtml(`${req.user.firstName} ${req.user.lastName}`)
+    const companyName = profile?.companyName ? escapeHtml(profile.companyName) : ''
+    const position = profile?.position ? escapeHtml(profile.position) : 'Recruteur'
+    const safeSubject = escapeHtml(subject)
+    const safeMessage = escapeHtml(message)
+
+    const content = `
+      <p style="margin:0 0 8px 0; font-size:14px; color:#334155; line-height:1.6;">Bonjour <strong>${escapeHtml(candidateName)}</strong>,</p>
+      <p style="margin:0 0 20px 0; font-size:14px; color:#334155; line-height:1.6;">${recruiterName}${companyName ? ` (${companyName})` : ''} vous a envoyé un message via EasyJob :</p>
+      <div style="background:#ecfdf5; border-left:4px solid #10b981; border-radius:12px; padding:18px 20px; margin:0 0 6px 0; white-space:pre-wrap; color:#334155; font-size:14px; line-height:1.7;">${safeMessage}</div>
+      <p style="margin:14px 0 0 0; font-size:12px; color:#94a3b8; line-height:1.6;">${position}${companyName ? ` chez ${companyName}` : ''}</p>
+      <p style="margin:4px 0 0 0; font-size:12px; color:#94a3b8; line-height:1.6;">Ce message a été envoyé via EasyJob. Veuillez ne pas répondre directement à cet email.</p>
     `
+
+    const html = brandLayout({
+      accent: '#10b981',
+      title: 'Message d\'un recruteur',
+      content,
+    })
 
     const result = await sendEmail({
       to: targetUser.email,
-      subject: `[EasyJob] ${subject}`,
+      subject: `[EasyJob] ${safeSubject}`,
       html,
     })
 
