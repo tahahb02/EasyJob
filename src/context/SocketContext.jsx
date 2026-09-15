@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from './AuthContext'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 const SocketContext = createContext(null)
 

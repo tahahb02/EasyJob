@@ -5,7 +5,8 @@ import {
   Plus, Briefcase, MapPin, Clock, Users, Eye, EyeOff, Trash2, Loader2
 } from 'lucide-react'
 import { useRecruiterJobs, useDeleteRecruiterJob, useToggleRecruiterJob } from '@/api/hooks'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
+import ConfirmDialog from '@/components/ui/confirm-dialog'
 
 const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.05 } } }
 const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }
@@ -20,6 +21,7 @@ const contractColors = {
 
 export default function RecruiterJobsPage() {
   const [filter, setFilter] = useState('all')
+  const [deleteId, setDeleteId] = useState(null)
   const { data, isLoading } = useRecruiterJobs({ status: filter === 'all' ? undefined : filter })
   const deleteJob = useDeleteRecruiterJob()
   const toggleJob = useToggleRecruiterJob()
@@ -27,9 +29,9 @@ export default function RecruiterJobsPage() {
   const jobs = data?.jobs || []
 
   const handleDelete = async (id) => {
-    if (!confirm('Supprimer cette offre ?')) return
     await deleteJob.mutateAsync(id)
     toast.success('Offre supprimée')
+    setDeleteId(null)
   }
 
   const handleToggle = async (id) => {
@@ -126,7 +128,7 @@ export default function RecruiterJobsPage() {
                     {job.isActive ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                   <button
-                    onClick={() => handleDelete(job._id)}
+                    onClick={() => setDeleteId(job._id)}
                     className="p-2 rounded-lg hover:bg-danger-50 dark:hover:bg-danger-500/10 text-surface-500 hover:text-danger-500 transition"
                     title="Supprimer"
                   >
@@ -138,6 +140,16 @@ export default function RecruiterJobsPage() {
           ))}
         </motion.div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteId}
+        onOpenChange={(open) => { if (!open) setDeleteId(null) }}
+        title="Supprimer cette offre ?"
+        description="Cette action est irréversible. L'offre et ses candidatures associées seront définitivement supprimées."
+        confirmText="Supprimer"
+        onConfirm={() => deleteId && handleDelete(deleteId)}
+        icon={Trash2}
+      />
     </motion.div>
   )
 }

@@ -8,6 +8,7 @@ import {
 import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 
 import { useAnalyticsOverview, useAnalyticsApplications, useAnalyticsSources } from '@/api/hooks';
+import { Button } from '@/components/ui/button';
 
 const dateRanges = ['Cette semaine', 'Ce mois', 'Ce trimestre'];
 
@@ -24,8 +25,8 @@ const container = {
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg shadow-lg p-3">
-      <p className="font-medium text-surface-900 dark:text-white text-sm">{label}</p>
+    <div className="bg-card border border-border rounded-lg shadow-lg p-3">
+      <p className="font-medium text-foreground text-sm">{label}</p>
       {payload.map((entry, i) => (
         <p key={i} className="text-sm" style={{ color: entry.color }}>
           {entry.name}: {entry.value}
@@ -37,23 +38,29 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 function ChartSkeleton() {
   return (
-    <div className="bg-white dark:bg-surface-800 rounded-2xl p-5 border border-surface-200 dark:border-surface-700 shadow-sm">
-      <div className="h-5 w-48 animate-pulse rounded bg-surface-200 dark:bg-surface-700 mb-4" />
-      <div className="h-[300px] animate-pulse rounded-xl bg-surface-100 dark:bg-surface-700/50" />
+    <div className="bg-card rounded-xl p-5 border border-border shadow-sm">
+      <div className="h-5 w-48 animate-pulse rounded bg-muted mb-4" />
+      <div className="h-[300px] animate-pulse rounded-lg bg-muted" />
     </div>
   );
 }
 
 function StatSkeleton() {
   return (
-    <div className="bg-white dark:bg-surface-800 rounded-2xl p-5 border border-surface-200 dark:border-surface-700 shadow-sm">
-      <div className="h-4 w-28 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
-      <div className="h-7 w-16 animate-pulse rounded bg-surface-200 dark:bg-surface-700 mt-2" />
+    <div className="bg-card rounded-xl p-5 border border-border shadow-sm">
+      <div className="h-4 w-28 animate-pulse rounded bg-muted" />
+      <div className="h-7 w-16 animate-pulse rounded bg-muted mt-2" />
     </div>
   );
 }
 
-const statusColors = ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+const statusColors = [
+  'hsl(var(--chart-1))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))',
+  'hsl(var(--chart-5))',
+];
 
 export default function AnalyticsPage() {
   const [selectedRange, setSelectedRange] = useState('Ce mois');
@@ -116,14 +123,14 @@ export default function AnalyticsPage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-surface-900 dark:text-white">Analytics</h1>
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-danger-300 bg-danger-50 py-12 dark:border-danger-500/30 dark:bg-danger-500/5">
-          <AlertTriangle className="mb-3 h-10 w-10 text-danger-400" />
-          <h3 className="text-lg font-semibold text-danger-700 dark:text-danger-400">Erreur de chargement</h3>
-          <p className="mt-1 text-sm text-danger-500">{error?.message || 'Une erreur est survenue.'}</p>
-          <button onClick={() => refetchOverview()} className="mt-4 rounded-xl bg-danger-500 px-4 py-2 text-sm font-semibold text-white hover:bg-danger-600">
+        <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-destructive/30 bg-destructive/10 py-12">
+          <AlertTriangle className="mb-3 h-10 w-10 text-destructive" />
+          <h3 className="text-lg font-semibold text-destructive">Erreur de chargement</h3>
+          <p className="mt-1 text-sm text-destructive">{error?.message || 'Une erreur est survenue.'}</p>
+          <Button onClick={() => refetchOverview()} variant="destructive" className="mt-4 px-4 py-2 text-sm font-semibold">
             Réessayer
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -137,20 +144,21 @@ export default function AnalyticsPage() {
       className="space-y-6"
     >
       <motion.div variants={fadeIn} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-2xl font-bold text-surface-900 dark:text-white">Analytics</h1>
-        <div className="flex items-center gap-2 bg-surface-100 dark:bg-surface-800 rounded-xl p-1">
+        <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
+        <div className="flex items-center gap-2 bg-muted rounded-lg p-1">
           {dateRanges.map(range => (
-            <button
+            <Button
               key={range}
+              variant={selectedRange === range ? "default" : "ghost"}
               onClick={() => setSelectedRange(range)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              className={`px-4 py-2 text-sm font-medium transition-all ${
                 selectedRange === range
-                  ? 'bg-primary-500 text-white shadow-md'
-                  : 'text-surface-600 dark:text-surface-400 hover:text-surface-900 dark:hover:text-white'
+                  ? 'bg-primary text-white shadow-[var(--shadow-md)]'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               {range}
-            </button>
+            </Button>
           ))}
         </div>
       </motion.div>
@@ -162,10 +170,10 @@ export default function AnalyticsPage() {
           : kpis.map((kpi) => (
             <div
               key={kpi.label}
-              className="bg-white dark:bg-surface-800 rounded-2xl p-5 border border-surface-200 dark:border-surface-700 shadow-sm"
+              className="bg-card rounded-xl p-5 border border-border shadow-sm"
             >
-              <p className="text-sm text-surface-500 dark:text-surface-400">{kpi.label}</p>
-              <p className="text-2xl font-bold text-surface-900 dark:text-white mt-1">
+              <p className="text-sm text-muted-foreground">{kpi.label}</p>
+              <p className="text-2xl font-bold text-foreground mt-1">
                 {kpi.value != null ? (
                   <>
                     {typeof kpi.value === 'number' ? kpi.value.toLocaleString('fr-FR') : kpi.value}
@@ -188,56 +196,56 @@ export default function AnalyticsPage() {
           </>
         ) : (
           <>
-            <div className="bg-white dark:bg-surface-800 rounded-2xl p-5 border border-surface-200 dark:border-surface-700 shadow-sm">
-              <h2 className="text-lg font-semibold text-surface-900 dark:text-white mb-4">Performance par source</h2>
+            <div className="bg-card rounded-xl p-5 border border-border shadow-sm">
+              <h2 className="text-lg font-semibold text-foreground mb-4">Performance par source</h2>
               {sourceChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={sourceChartData} barGap={4}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" className="dark:stroke-surface-700" />
-                    <XAxis dataKey="source" tick={{ fontSize: 12 }} stroke="#9CA3AF" />
-                    <YAxis tick={{ fontSize: 12 }} stroke="#9CA3AF" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="source" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend />
-                    <Bar dataKey="candidatures" name="Candidatures" fill="#2563EB" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="candidatures" name="Candidatures" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <p className="text-sm text-surface-400 dark:text-surface-500 text-center py-12">Aucune donnée de source disponible.</p>
+                <p className="text-sm text-muted-foreground text-center py-12">Aucune donnée de source disponible.</p>
               )}
             </div>
 
-            <div className="bg-white dark:bg-surface-800 rounded-2xl p-5 border border-surface-200 dark:border-surface-700 shadow-sm">
-              <h2 className="text-lg font-semibold text-surface-900 dark:text-white mb-4">Évolution des candidatures</h2>
+            <div className="bg-card rounded-xl p-5 border border-border shadow-sm">
+              <h2 className="text-lg font-semibold text-foreground mb-4">Évolution des candidatures</h2>
               {evolutionData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <AreaChart data={evolutionData}>
                     <defs>
                       <linearGradient id="gradCandidatures" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#2563EB" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#2563EB" stopOpacity={0} />
+                        <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" className="dark:stroke-surface-700" />
-                    <XAxis dataKey="mois" tick={{ fontSize: 12 }} stroke="#9CA3AF" />
-                    <YAxis tick={{ fontSize: 12 }} stroke="#9CA3AF" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="mois" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
                     <Tooltip content={<CustomTooltip />} />
                     <Area
                       type="monotone"
                       dataKey="candidatures"
                       name="Candidatures"
-                      stroke="#2563EB"
+                      stroke="hsl(var(--chart-1))"
                       strokeWidth={2}
                       fill="url(#gradCandidatures)"
                     />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
-                <p className="text-sm text-surface-400 dark:text-surface-500 text-center py-12">Aucune donnée d'évolution disponible.</p>
+                <p className="text-sm text-muted-foreground text-center py-12">Aucune donnée d'évolution disponible.</p>
               )}
             </div>
 
-            <div className="bg-white dark:bg-surface-800 rounded-2xl p-5 border border-surface-200 dark:border-surface-700 shadow-sm">
-              <h2 className="text-lg font-semibold text-surface-900 dark:text-white mb-4">Répartition par statut</h2>
+            <div className="bg-card rounded-xl p-5 border border-border shadow-sm">
+              <h2 className="text-lg font-semibold text-foreground mb-4">Répartition par statut</h2>
               {statusPieData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
@@ -259,24 +267,24 @@ export default function AnalyticsPage() {
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <p className="text-sm text-surface-400 dark:text-surface-500 text-center py-12">Aucune donnée de statut disponible.</p>
+                <p className="text-sm text-muted-foreground text-center py-12">Aucune donnée de statut disponible.</p>
               )}
             </div>
 
-            <div className="bg-white dark:bg-surface-800 rounded-2xl p-5 border border-surface-200 dark:border-surface-700 shadow-sm">
-              <h2 className="text-lg font-semibold text-surface-900 dark:text-white mb-4">Offres par semaine</h2>
+            <div className="bg-card rounded-xl p-5 border border-border shadow-sm">
+              <h2 className="text-lg font-semibold text-foreground mb-4">Offres par semaine</h2>
               {offersEvolutionData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={offersEvolutionData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" className="dark:stroke-surface-700" />
-                    <XAxis dataKey="mois" tick={{ fontSize: 12 }} stroke="#9CA3AF" />
-                    <YAxis tick={{ fontSize: 12 }} stroke="#9CA3AF" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="mois" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
                     <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="offres" name="Offres" fill="#10B981" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="offres" name="Offres" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <p className="text-sm text-surface-400 dark:text-surface-500 text-center py-12">Aucune donnée d'offres disponible.</p>
+                <p className="text-sm text-muted-foreground text-center py-12">Aucune donnée d'offres disponible.</p>
               )}
             </div>
           </>
@@ -285,16 +293,16 @@ export default function AnalyticsPage() {
 
       {/* Insights */}
       <motion.div variants={fadeIn}>
-        <h2 className="text-lg font-semibold text-surface-900 dark:text-white mb-4">Insights</h2>
+        <h2 className="text-lg font-semibold text-foreground mb-4">Insights</h2>
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="bg-white dark:bg-surface-800 rounded-2xl p-5 border border-surface-200 dark:border-surface-700 shadow-sm">
+              <div key={i} className="bg-card rounded-xl p-5 border border-border shadow-sm">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 animate-pulse rounded-xl bg-surface-200 dark:bg-surface-700" />
+                  <div className="h-10 w-10 animate-pulse rounded-lg bg-muted" />
                   <div className="space-y-2">
-                    <div className="h-3 w-24 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
-                    <div className="h-5 w-16 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
+                    <div className="h-3 w-24 animate-pulse rounded bg-muted" />
+                    <div className="h-5 w-16 animate-pulse rounded bg-muted" />
                   </div>
                 </div>
               </div>
@@ -308,28 +316,28 @@ export default function AnalyticsPage() {
               return (
                 <div
                   key={i}
-                  className="bg-white dark:bg-surface-800 rounded-2xl p-5 border border-surface-200 dark:border-surface-700 shadow-sm"
+                  className="bg-card rounded-xl p-5 border border-border shadow-sm"
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-xl ${
+                    <div className={`p-2 rounded-lg ${
                       isUp
-                        ? 'bg-secondary-500/10 text-secondary-500'
-                        : 'bg-red-500/10 text-red-500'
+                        ? 'bg-accent/10 text-accent'
+                        : 'bg-destructive/10 text-destructive'
                     }`}>
                       <Icon size={20} />
                     </div>
                     <div>
-                      <p className="text-sm text-surface-500 dark:text-surface-400">{insight.title}</p>
-                      <p className="text-xl font-bold text-surface-900 dark:text-white">{insight.value}</p>
+                      <p className="text-sm text-muted-foreground">{insight.title}</p>
+                      <p className="text-xl font-bold text-foreground">{insight.value}</p>
                     </div>
                   </div>
-                  <p className="text-xs text-surface-400 dark:text-surface-500 mt-2">{insight.description}</p>
+                  <p className="text-xs text-muted-foreground mt-2">{insight.description}</p>
                 </div>
               );
             })}
           </div>
         ) : (
-          <p className="text-sm text-surface-400 dark:text-surface-500">Aucun insight disponible.</p>
+          <p className="text-sm text-muted-foreground">Aucun insight disponible.</p>
         )}
       </motion.div>
     </motion.div>

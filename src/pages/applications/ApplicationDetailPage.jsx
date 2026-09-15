@@ -17,50 +17,52 @@ import {
   User,
   Building2,
   Calendar,
-  Loader2,
   AlertTriangle,
 } from 'lucide-react'
 import { format, formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
 import { useApplication, useUpdateApplicationNotes } from '@/api/hooks'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Textarea } from '@/components/ui/textarea'
 
 const statusConfig = {
   brouillon: {
     label: 'Brouillon',
-    color: 'bg-surface-100 text-surface-600 dark:bg-surface-700 dark:text-surface-400',
-    dot: 'bg-surface-400',
+    color: 'bg-muted text-foreground',
+    dot: 'bg-muted-foreground',
     icon: FileEdit,
   },
   envoyee: {
     label: 'Envoyée',
-    color: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
-    dot: 'bg-blue-500',
+    color: 'bg-primary/10 text-primary',
+    dot: 'bg-primary',
     icon: Send,
   },
   ouverte: {
     label: 'Ouverte',
-    color: 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400',
-    dot: 'bg-green-500',
+    color: 'bg-accent/10 text-accent',
+    dot: 'bg-accent',
     icon: Eye,
   },
   en_cours: {
     label: 'En cours',
-    color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-400',
-    dot: 'bg-yellow-500',
+    color: 'bg-warning/10 text-warning',
+    dot: 'bg-warning',
     icon: Clock,
   },
   acceptee: {
     label: 'Acceptée',
-    color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400',
+    color: 'bg-emerald-100 text-emerald-700',
     dot: 'bg-emerald-500',
     icon: CheckCircle2,
   },
   refusee: {
     label: 'Refusée',
-    color: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400',
-    dot: 'bg-red-500',
+    color: 'bg-destructive/10 text-destructive',
+    dot: 'bg-destructive',
     icon: XCircle,
   },
 }
@@ -100,12 +102,12 @@ function TimelineStep({ step, index, isCompleted, isCurrent, isFailed }) {
           transition={{ delay: index * 0.1, type: 'spring', stiffness: 300 }}
           className={`relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${
             isCompleted
-              ? 'border-secondary-500 bg-secondary-500 text-white'
+              ? 'border-accent bg-accent text-white'
               : isCurrent
-              ? 'border-primary-500 bg-primary-500 text-white'
+              ? 'border-primary bg-primary text-white'
               : isFailed
-              ? 'border-red-500 bg-red-500 text-white'
-              : 'border-surface-300 bg-white text-surface-400 dark:border-surface-600 dark:bg-surface-800 dark:text-surface-500'
+              ? 'border-destructive bg-destructive text-white'
+              : 'border-border bg-card text-muted-foreground'
           }`}
         >
           {isCompleted ? (
@@ -121,7 +123,7 @@ function TimelineStep({ step, index, isCompleted, isCurrent, isFailed }) {
             <motion.div
               animate={{ scale: [1, 1.4, 1] }}
               transition={{ duration: 2, repeat: Infinity }}
-              className="absolute inset-0 rounded-full border-2 border-primary-500"
+              className="absolute inset-0 rounded-full border-2 border-primary"
             />
           )}
         </motion.div>
@@ -129,8 +131,8 @@ function TimelineStep({ step, index, isCompleted, isCurrent, isFailed }) {
           <div
             className={`w-0.5 flex-1 ${
               isCompleted
-                ? 'bg-secondary-500'
-                : 'bg-surface-200 dark:bg-surface-700'
+                ? 'bg-accent'
+                : 'bg-border'
             }`}
           />
         )}
@@ -140,21 +142,21 @@ function TimelineStep({ step, index, isCompleted, isCurrent, isFailed }) {
         <p
           className={`text-sm font-semibold ${
             isCompleted
-              ? 'text-secondary-600 dark:text-secondary-400'
+              ? 'text-accent'
               : isCurrent
-              ? 'text-primary-600 dark:text-primary-400'
-              : 'text-surface-400 dark:text-surface-500'
+              ? 'text-primary'
+              : 'text-muted-foreground'
           }`}
         >
           {step.label}
         </p>
         {step.date && (
-          <p className="mt-0.5 text-xs text-surface-400 dark:text-surface-500">
+          <p className="mt-0.5 text-xs text-muted-foreground">
             {format(new Date(step.date), "dd MMM yyyy 'à' HH:mm", { locale: fr })}
           </p>
         )}
         {step.description && (
-          <p className="mt-1 text-xs text-surface-500 dark:text-surface-400">
+          <p className="mt-1 text-xs text-muted-foreground">
             {step.description}
           </p>
         )}
@@ -166,28 +168,28 @@ function TimelineStep({ step, index, isCompleted, isCurrent, isFailed }) {
 function DetailSkeleton() {
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
-      <div className="h-8 w-48 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
-      <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm dark:border-surface-700 dark:bg-surface-800 sm:p-8">
+      <div className="h-8 w-48 animate-pulse rounded bg-muted" />
+      <div className="rounded-xl border border-border bg-card p-6 shadow-sm sm:p-8">
         <div className="space-y-4">
-          <div className="h-8 w-64 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
+          <div className="h-8 w-64 animate-pulse rounded bg-muted" />
           <div className="flex gap-4">
-            <div className="h-5 w-32 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
-            <div className="h-5 w-24 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
+            <div className="h-5 w-32 animate-pulse rounded bg-muted" />
+            <div className="h-5 w-24 animate-pulse rounded bg-muted" />
           </div>
-          <div className="flex gap-3 pt-4 border-t border-surface-100 dark:border-surface-700">
-            <div className="h-10 w-24 animate-pulse rounded-xl bg-surface-200 dark:bg-surface-700" />
-            <div className="h-10 w-24 animate-pulse rounded-xl bg-surface-200 dark:bg-surface-700" />
-            <div className="h-10 w-24 animate-pulse rounded-xl bg-surface-200 dark:bg-surface-700" />
+          <div className="flex gap-3 border-t border-border pt-4">
+            <div className="h-10 w-24 animate-pulse rounded-lg bg-muted" />
+            <div className="h-10 w-24 animate-pulse rounded-lg bg-muted" />
+            <div className="h-10 w-24 animate-pulse rounded-lg bg-muted" />
           </div>
         </div>
       </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <div className="h-80 animate-pulse rounded-2xl border border-surface-200 bg-white p-6 dark:border-surface-700 dark:bg-surface-800" />
+          <div className="h-80 animate-pulse rounded-xl border border-border bg-card p-6" />
         </div>
         <div className="space-y-6">
-          <div className="h-48 animate-pulse rounded-2xl border border-surface-200 bg-white p-6 dark:border-surface-700 dark:bg-surface-800" />
-          <div className="h-40 animate-pulse rounded-2xl border border-surface-200 bg-white p-6 dark:border-surface-700 dark:bg-surface-800" />
+          <div className="h-48 animate-pulse rounded-xl border border-border bg-card p-6" />
+          <div className="h-40 animate-pulse rounded-xl border border-border bg-card p-6" />
         </div>
       </div>
     </div>
@@ -217,23 +219,23 @@ export default function ApplicationDetailPage() {
           className="flex flex-col items-center"
         >
           {error ? (
-            <AlertTriangle className="mb-4 h-16 w-16 text-danger-400" />
+            <AlertTriangle className="mb-4 h-16 w-16 text-destructive" />
           ) : (
-            <FileEdit className="mb-4 h-16 w-16 text-surface-300 dark:text-surface-600" />
+            <FileEdit className="mb-4 h-16 w-16 text-muted-foreground" />
           )}
-          <h1 className="text-2xl font-bold text-surface-900 dark:text-surface-50">
+          <h1 className="text-2xl font-bold text-foreground">
             {error ? 'Erreur de chargement' : 'Candidature non trouvée'}
           </h1>
-          <p className="mt-2 text-surface-500 dark:text-surface-400">
+          <p className="mt-2 text-muted-foreground">
             {error ? error.message : "Cette candidature n'existe pas ou a été supprimée."}
           </p>
-          <button
+          <Button
             onClick={() => navigate('/applications')}
-            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-600"
+            className="mt-6"
           >
             <ArrowLeft className="h-4 w-4" />
             Retour aux candidatures
-          </button>
+          </Button>
         </motion.div>
       </div>
     )
@@ -286,26 +288,28 @@ export default function ApplicationDetailPage() {
     >
       {/* Back Button */}
       <motion.div variants={item}>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => navigate('/applications')}
-          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-surface-600 transition-colors hover:bg-surface-100 hover:text-surface-900 dark:text-surface-400 dark:hover:bg-surface-700 dark:hover:text-surface-100"
+          className="text-muted-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
           Retour aux candidatures
-        </button>
+        </Button>
       </motion.div>
 
       {/* Header */}
       <motion.div
         variants={item}
-        className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm dark:border-surface-700 dark:bg-surface-800 sm:p-8"
+        className="rounded-xl border border-border bg-card p-6 shadow-sm sm:p-8"
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold text-surface-900 dark:text-surface-50 sm:text-3xl">
+            <h1 className="text-2xl font-bold text-foreground sm:text-3xl">
               {application.jobOfferId?.title || 'Offre inconnue'}
             </h1>
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-surface-500 dark:text-surface-400">
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <Building2 className="h-4 w-4" />
                 <span className="font-medium">{application.jobOfferId?.company || ''}</span>
@@ -321,43 +325,29 @@ export default function ApplicationDetailPage() {
               )}
             </div>
           </div>
-          <span
-            className={`inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold ${status.color}`}
+          <Badge
+            variant="secondary"
+            className={`h-auto shrink-0 gap-2 rounded-full px-4 py-2 text-sm font-semibold ${status.color}`}
           >
             <StatusIcon className="h-4 w-4" />
             {status.label}
-          </span>
+          </Badge>
         </div>
 
         {/* Actions */}
-        <div className="mt-6 flex flex-wrap gap-3 border-t border-surface-100 pt-6 dark:border-surface-700">
-          <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={handleFollow}
-            className="inline-flex items-center gap-2 rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-500"
-          >
+        <div className="mt-6 flex flex-wrap gap-3 border-t border-border pt-6">
+          <Button onClick={handleFollow}>
             <Bell className="h-4 w-4" />
             Suivre
-          </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={handleRelance}
-            className="inline-flex items-center gap-2 rounded-xl border border-surface-200 px-5 py-2.5 text-sm font-medium text-surface-700 transition-colors hover:bg-surface-50 dark:border-surface-600 dark:text-surface-300 dark:hover:bg-surface-700"
-          >
+          </Button>
+          <Button variant="outline" onClick={handleRelance}>
             <RefreshCw className="h-4 w-4" />
             Relancer
-          </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={handleEdit}
-            className="inline-flex items-center gap-2 rounded-xl border border-surface-200 px-5 py-2.5 text-sm font-medium text-surface-700 transition-colors hover:bg-surface-50 dark:border-surface-600 dark:text-surface-300 dark:hover:bg-surface-700"
-          >
+          </Button>
+          <Button variant="outline" onClick={handleEdit}>
             <PenLine className="h-4 w-4" />
             Modifier
-          </motion.button>
+          </Button>
         </div>
       </motion.div>
 
@@ -368,9 +358,9 @@ export default function ApplicationDetailPage() {
           {/* Timeline */}
           <motion.div
             variants={item}
-            className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm dark:border-surface-700 dark:bg-surface-800"
+            className="rounded-xl border border-border bg-card p-6 shadow-sm"
           >
-            <h2 className="mb-6 text-lg font-bold text-surface-900 dark:text-surface-50">
+            <h2 className="mb-6 text-lg font-bold text-foreground">
               Parcours de la candidature
             </h2>
             <div className="ml-1">
@@ -404,33 +394,33 @@ export default function ApplicationDetailPage() {
           {email && email.subject && (
             <motion.div
               variants={item}
-              className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm dark:border-surface-700 dark:bg-surface-800"
+              className="rounded-xl border border-border bg-card p-6 shadow-sm"
             >
-              <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-surface-900 dark:text-surface-50">
-                <Mail className="h-5 w-5 text-primary-500" />
+              <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-foreground">
+                <Mail className="h-5 w-5 text-primary" />
                 Détails de l'email
               </h2>
               <div className="space-y-4">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-surface-500 dark:text-surface-400">
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
                     Objet
                   </label>
-                  <p className="rounded-xl bg-surface-50 px-4 py-3 text-sm font-medium text-surface-700 dark:bg-surface-700/50 dark:text-surface-200">
+                  <p className="rounded-lg bg-muted px-4 py-3 text-sm font-medium text-foreground">
                     {email.subject}
                   </p>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-surface-500 dark:text-surface-400">
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
                     Contenu
                   </label>
-                  <div className="rounded-xl border border-surface-100 bg-surface-50 px-4 py-3 dark:border-surface-700 dark:bg-surface-700/30">
-                    <p className="whitespace-pre-line text-sm leading-relaxed text-surface-600 dark:text-surface-400">
+                  <div className="rounded-lg border border-border bg-muted px-4 py-3">
+                    <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
                       {email.body}
                     </p>
                   </div>
                 </div>
                 {email.sentAt && (
-                  <div className="flex items-center gap-2 text-xs text-surface-400 dark:text-surface-500">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Clock className="h-3.5 w-3.5" />
                     Envoyé le{' '}
                     {format(new Date(email.sentAt), "dd MMMM yyyy 'à' HH:mm", {
@@ -448,44 +438,44 @@ export default function ApplicationDetailPage() {
           {/* Candidate Info */}
           <motion.div
             variants={item}
-            className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm dark:border-surface-700 dark:bg-surface-800"
+            className="rounded-xl border border-border bg-card p-6 shadow-sm"
           >
-            <h3 className="mb-4 text-lg font-bold text-surface-900 dark:text-surface-50">
+            <h3 className="mb-4 text-lg font-bold text-foreground">
               Informations
             </h3>
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-surface-100 p-2 dark:bg-surface-700">
-                  <User className="h-4 w-4 text-surface-500 dark:text-surface-400" />
+                <div className="rounded-lg bg-muted p-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-surface-400 dark:text-surface-500">
+                  <p className="text-xs font-medium text-muted-foreground">
                     Candidat
                   </p>
-                  <p className="text-sm font-medium text-surface-700 dark:text-surface-300">
+                  <p className="text-sm font-medium text-foreground">
                     {application.candidateName || '—'}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-surface-100 p-2 dark:bg-surface-700">
-                  <Building2 className="h-4 w-4 text-surface-500 dark:text-surface-400" />
+                <div className="rounded-lg bg-muted p-2">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-surface-400 dark:text-surface-500">
+                  <p className="text-xs font-medium text-muted-foreground">
                     Entreprise
                   </p>
-                  <p className="text-sm font-medium text-surface-700 dark:text-surface-300">
+                  <p className="text-sm font-medium text-foreground">
                     {application.jobOfferId?.company || '—'}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-surface-100 p-2 dark:bg-surface-700">
-                  <StatusIcon className="h-4 w-4 text-surface-500 dark:text-surface-400" />
+                <div className="rounded-lg bg-muted p-2">
+                  <StatusIcon className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-surface-400 dark:text-surface-500">
+                  <p className="text-xs font-medium text-muted-foreground">
                     Statut actuel
                   </p>
                   <p className={`text-sm font-semibold ${status.color.split(' ').pop()}`}>
@@ -499,54 +489,54 @@ export default function ApplicationDetailPage() {
           {/* Notes */}
           <motion.div
             variants={item}
-            className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm dark:border-surface-700 dark:bg-surface-800"
+            className="rounded-xl border border-border bg-card p-6 shadow-sm"
           >
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-lg font-bold text-surface-900 dark:text-surface-50">
-                <StickyNote className="h-5 w-5 text-accent-500" />
+              <h3 className="flex items-center gap-2 text-lg font-bold text-foreground">
+                <StickyNote className="h-5 w-5 text-accent" />
                 Notes
               </h3>
               {!isEditingNotes && (
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setIsEditingNotes(true)}
-                  className="text-xs font-medium text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300"
+                  className="h-auto px-2 py-1 text-xs font-medium text-primary"
                 >
                   Modifier
-                </button>
+                </Button>
               )}
             </div>
 
             {isEditingNotes ? (
               <div className="space-y-3">
-                <textarea
+                <Textarea
                   value={notes || application.notes || ''}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={4}
-                  className="w-full rounded-xl border border-surface-200 bg-surface-50 px-4 py-3 text-sm text-surface-700 transition-colors placeholder:text-surface-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-surface-600 dark:bg-surface-700/50 dark:text-surface-200 dark:placeholder:text-surface-500 dark:focus:border-primary-400"
+                  className="bg-muted"
                   placeholder="Ajouter des notes..."
                 />
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleSaveNotes}
-                    className="rounded-lg bg-primary-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-primary-600"
-                  >
+                  <Button size="sm" onClick={handleSaveNotes}>
                     Sauvegarder
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => {
                       setIsEditingNotes(false)
                       setNotes('')
                     }}
-                    className="rounded-lg border border-surface-200 px-4 py-2 text-xs font-medium text-surface-600 transition-colors hover:bg-surface-50 dark:border-surface-600 dark:text-surface-400 dark:hover:bg-surface-700"
                   >
                     Annuler
-                  </button>
+                  </Button>
                 </div>
               </div>
             ) : (
-              <p className="text-sm leading-relaxed text-surface-600 dark:text-surface-400">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 {application.notes || (
-                  <span className="italic text-surface-400 dark:text-surface-500">
+                  <span className="italic text-muted-foreground">
                     Aucune note pour cette candidature.
                   </span>
                 )}

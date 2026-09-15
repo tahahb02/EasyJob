@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Search, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 const conversations = [
   {
@@ -62,8 +64,8 @@ const conversations = [
 ];
 
 const avatarColors = [
-  'bg-primary-500',
-  'bg-secondary-500',
+  'bg-primary',
+  'bg-accent',
   'bg-purple-500',
   'bg-orange-500'
 ];
@@ -148,25 +150,25 @@ export default function MessagesPage() {
       className="space-y-6"
     >
       <motion.div variants={fadeIn}>
-        <h1 className="text-2xl font-bold text-surface-900 dark:text-white">Messages</h1>
+        <h1 className="text-2xl font-bold text-foreground">Messages</h1>
       </motion.div>
 
       <motion.div
         variants={fadeIn}
-        className="bg-white dark:bg-surface-800 rounded-2xl border border-surface-200 dark:border-surface-700 shadow-sm overflow-hidden flex h-[calc(100vh-220px)] min-h-[500px]"
+        className="bg-card rounded-xl border border-border shadow-sm overflow-hidden flex h-[calc(100vh-220px)] min-h-[500px]"
       >
-        <div className={`w-full sm:w-80 lg:w-96 border-r border-surface-200 dark:border-surface-700 flex flex-col ${
+        <div className={`w-full sm:w-80 lg:w-96 border-r border-border flex flex-col ${
           selectedId ? 'hidden sm:flex' : 'flex'
         }`}>
-          <div className="p-4 border-b border-surface-200 dark:border-surface-700">
+          <div className="p-4 border-b border-border">
             <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
-              <input
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
                 type="text"
                 placeholder="Rechercher..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-surface-100 dark:bg-surface-700 rounded-xl text-sm text-surface-900 dark:text-white placeholder-surface-400 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                className="h-auto bg-muted pl-10 pr-4 py-2.5 rounded-lg text-foreground"
               />
             </div>
           </div>
@@ -176,10 +178,10 @@ export default function MessagesPage() {
               <button
                 key={conversation.id}
                 onClick={() => setSelectedId(conversation.id)}
-                className={`w-full flex items-start gap-3 p-4 text-left transition-colors border-b border-surface-100 dark:border-surface-700/50 ${
+                className={`w-full flex items-start gap-3 p-4 text-left transition-colors border-b border-border ${
                   selectedId === conversation.id
-                    ? 'bg-primary-500/10'
-                    : 'hover:bg-surface-50 dark:hover:bg-surface-700/50'
+                    ? 'bg-accent/10'
+                    : 'hover:bg-muted'
                 }`}
               >
                 <div className={`flex-shrink-0 w-11 h-11 rounded-full ${avatarColors[i % avatarColors.length]} flex items-center justify-center text-white text-sm font-semibold`}>
@@ -187,19 +189,19 @@ export default function MessagesPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-surface-900 dark:text-white truncate">
+                    <span className="text-sm font-semibold text-foreground truncate">
                       {conversation.name}
                     </span>
-                    <span className="text-xs text-surface-400 dark:text-surface-500 flex-shrink-0 ml-2">
+                    <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
                       {formatTime(conversation.time)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between mt-0.5">
-                    <p className="text-xs text-surface-500 dark:text-surface-400 truncate">
+                    <p className="text-xs text-muted-foreground truncate">
                       {conversation.lastMessage}
                     </p>
                     {conversation.unread > 0 && (
-                      <span className="flex-shrink-0 ml-2 w-5 h-5 bg-primary-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                      <span className="flex-shrink-0 ml-2 w-5 h-5 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                         {conversation.unread}
                       </span>
                     )}
@@ -213,19 +215,21 @@ export default function MessagesPage() {
         <div className={`flex-1 flex flex-col ${!selectedId ? 'hidden sm:flex' : 'flex'}`}>
           {selectedConversation ? (
             <>
-              <div className="flex items-center gap-3 px-4 py-3 border-b border-surface-200 dark:border-surface-700">
-                <button
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={() => setSelectedId(null)}
-                  className="sm:hidden p-1 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700"
+                  className="sm:hidden size-9"
                 >
-                  <ArrowLeft size={20} className="text-surface-600 dark:text-surface-400" />
-                </button>
-                <div className="w-9 h-9 bg-primary-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                  <ArrowLeft size={20} className="text-foreground" />
+                </Button>
+                <div className="w-9 h-9 bg-primary rounded-full flex items-center justify-center text-white text-sm font-semibold">
                   {selectedConversation.avatar}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-surface-900 dark:text-white">{selectedConversation.name}</p>
-                  <p className="text-xs text-secondary-500">En ligne</p>
+                  <p className="text-sm font-semibold text-foreground">{selectedConversation.name}</p>
+                  <p className="text-xs text-accent">En ligne</p>
                 </div>
               </div>
 
@@ -239,14 +243,14 @@ export default function MessagesPage() {
                       animate="visible"
                       className={`flex ${msg.sender === 'me' ? 'justify-end' : 'justify-start'}`}
                     >
-                      <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl ${
+                      <div className={`max-w-[75%] px-4 py-2.5 rounded-xl ${
                         msg.sender === 'me'
-                          ? 'bg-primary-500 text-white rounded-br-md'
-                          : 'bg-surface-100 dark:bg-surface-700 text-surface-900 dark:text-white rounded-bl-md'
+                          ? 'bg-primary text-primary-foreground rounded-br-md'
+                          : 'bg-muted text-foreground rounded-bl-md'
                       }`}>
                         <p className="text-sm leading-relaxed">{msg.text}</p>
                         <p className={`text-[10px] mt-1 ${
-                          msg.sender === 'me' ? 'text-white/60' : 'text-surface-400 dark:text-surface-500'
+                          msg.sender === 'me' ? 'text-white/60' : 'text-muted-foreground'
                         }`}>
                           {format(msg.time, 'HH:mm', { locale: fr })}
                         </p>
@@ -257,34 +261,35 @@ export default function MessagesPage() {
                 <div ref={messagesEndRef} />
               </div>
 
-              <div className="p-4 border-t border-surface-200 dark:border-surface-700">
+              <div className="p-4 border-t border-border">
                 <div className="flex items-end gap-2">
-                  <input
+                  <Input
                     type="text"
                     placeholder="Écrire un message..."
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className="flex-1 px-4 py-2.5 bg-surface-100 dark:bg-surface-700 rounded-xl text-sm text-surface-900 dark:text-white placeholder-surface-400 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                    className="flex-1 h-auto bg-muted px-4 py-2.5 rounded-lg text-foreground"
                   />
-                  <button
+                  <Button
                     onClick={handleSend}
                     disabled={!inputValue.trim()}
-                    className="p-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    size="icon"
+                    className="size-10 rounded-lg bg-primary hover:bg-primary/90 disabled:opacity-40"
                   >
                     <Send size={18} />
-                  </button>
+                  </Button>
                 </div>
               </div>
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center px-6">
-                <div className="w-16 h-16 bg-surface-100 dark:bg-surface-700 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Send size={24} className="text-surface-400 dark:text-surface-500" />
+                <div className="w-16 h-16 bg-muted rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <Send size={24} className="text-muted-foreground" />
                 </div>
-                <h3 className="text-lg font-semibold text-surface-900 dark:text-white">Vos messages</h3>
-                <p className="text-sm text-surface-500 dark:text-surface-400 mt-1">
+                <h3 className="text-lg font-semibold text-foreground">Vos messages</h3>
+                <p className="text-sm text-muted-foreground mt-1">
                   Sélectionnez une conversation pour commencer
                 </p>
               </div>

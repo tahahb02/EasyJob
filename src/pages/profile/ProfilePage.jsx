@@ -30,14 +30,20 @@ import {
   AlertTriangle,
   Lightbulb,
   Sparkles,
-  TrendingUp,
-  Download,
   MessageSquareQuote,
 } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { useProfile, useUpdateProfile, useUploadCV, useCV, useDeleteCV, useAnalyzeCV } from "@/api/hooks";
 import api from "@/api/axios";
 import { useAuth } from "@/context/AuthContext";
+import ConfirmDialog from "@/components/ui/confirm-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 const cities = [
   "Casablanca", "Rabat", "Marrakech", "Tanger", "Fès",
@@ -67,32 +73,34 @@ function Section({ title, icon: Icon, children, onRemove, removable, badge }) {
       variants={sectionVariants}
       initial="hidden"
       animate="visible"
-      className="bg-white dark:bg-surface-800 rounded-2xl p-6 shadow-sm border border-surface-200 dark:border-surface-700"
+      className="bg-card rounded-xl p-6 shadow-sm border border-border"
     >
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary-500/10 dark:bg-primary-500/20 flex items-center justify-center">
-            <Icon className="w-5 h-5 text-primary-500" />
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Icon className="w-5 h-5 text-primary" />
           </div>
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-surface-900 dark:text-white">
+            <h2 className="text-lg font-semibold text-foreground">
               {title}
             </h2>
             {badge && (
-              <span className="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-primary-500/10 text-primary-600 dark:text-primary-400">
+              <span className="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-primary/10 text-primary">
                 {badge}
               </span>
             )}
           </div>
         </div>
         {removable && onRemove && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-sm"
             onClick={onRemove}
-            className="p-2 rounded-lg text-surface-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+            className="text-muted-foreground hover:text-destructive"
           >
             <Trash2 className="w-4 h-4" />
-          </button>
+          </Button>
         )}
       </div>
       {children}
@@ -100,29 +108,26 @@ function Section({ title, icon: Icon, children, onRemove, removable, badge }) {
   );
 }
 
-function Input({ label, error, icon: Icon, ...props }) {
+function FormInput({ label, error, icon: Icon, ...props }) {
   return (
     <div className="space-y-1.5">
       {label && (
-        <label className="block text-sm font-medium text-surface-700 dark:text-surface-300">
+        <Label className="text-sm font-medium text-foreground">
           {label}
-        </label>
+        </Label>
       )}
       <div className="relative">
         {Icon && (
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400">
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
             <Icon className="w-4 h-4" />
           </div>
         )}
-        <input
+        <Input
           {...props}
-          className={`w-full px-4 py-2.5 rounded-xl border bg-surface-50 dark:bg-surface-900 text-surface-900 dark:text-white placeholder-surface-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 transition-all text-sm ${
-            Icon ? "pl-10" : ""
-          } ${
-            error
-              ? "border-red-400 focus:ring-red-500/40"
-              : "border-surface-300 dark:border-surface-600"
-          }`}
+          className={cn(
+            Icon ? "pl-10" : "",
+            error && "border-destructive/40 focus-visible:ring-destructive/20"
+          )}
         />
       </div>
       {error && <p className="text-xs text-red-500">{error.message}</p>}
@@ -130,21 +135,19 @@ function Input({ label, error, icon: Icon, ...props }) {
   );
 }
 
-function Select({ label, error, options, ...props }) {
+function FormSelect({ label, error, options, ...props }) {
   return (
     <div className="space-y-1.5">
       {label && (
-        <label className="block text-sm font-medium text-surface-700 dark:text-surface-300">
+        <Label className="text-sm font-medium text-foreground">
           {label}
-        </label>
+        </Label>
       )}
       <div className="relative">
         <select
           {...props}
-          className={`w-full px-4 py-2.5 rounded-xl border bg-surface-50 dark:bg-surface-900 text-surface-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 transition-all text-sm appearance-none ${
-            error
-              ? "border-red-400 focus:ring-red-500/40"
-              : "border-surface-300 dark:border-surface-600"
+          className={`w-full h-10 px-4 pr-10 rounded-lg border border-border bg-background text-foreground text-sm appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 ${
+            error ? "border-destructive/40" : ""
           }`}
         >
           <option value="">Sélectionner...</option>
@@ -154,7 +157,7 @@ function Select({ label, error, options, ...props }) {
             </option>
           ))}
         </select>
-        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400 pointer-events-none" />
+        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
       </div>
       {error && <p className="text-xs text-red-500">{error.message}</p>}
     </div>
@@ -185,27 +188,28 @@ function TagInput({ tags, onAdd, onRemove, placeholder }) {
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.8, opacity: 0 }}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-primary-500/10 dark:bg-primary-500/20 text-primary-600 dark:text-primary-400"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-primary/10 text-primary"
             >
               {tag}
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => onRemove(tag)}
-                className="hover:text-red-500 transition-colors"
+                className="size-5 p-0 [&_svg]:size-3 text-primary hover:text-destructive"
               >
                 <X className="w-3 h-3" />
-              </button>
+              </Button>
             </motion.span>
           ))}
         </AnimatePresence>
       </div>
-      <input
+      <Input
         type="text"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className="w-full px-4 py-2.5 rounded-xl border border-surface-300 dark:border-surface-600 bg-surface-50 dark:bg-surface-900 text-surface-900 dark:text-white placeholder-surface-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 transition-all text-sm"
       />
     </div>
   );
@@ -215,18 +219,15 @@ function ChipSelect({ options, selected, onToggle, columns = 3 }) {
   return (
     <div className={`grid grid-cols-2 sm:grid-cols-${columns} gap-2`}>
       {options.map((opt) => (
-        <button
+        <Button
           key={opt}
           type="button"
           onClick={() => onToggle(opt)}
-          className={`px-3 py-2 rounded-xl text-sm font-medium transition-all border text-left ${
-            selected.includes(opt)
-              ? "bg-primary-500 text-white border-primary-500 shadow-sm"
-              : "bg-white dark:bg-surface-700 text-surface-700 dark:text-surface-300 border-surface-200 dark:border-surface-600 hover:border-primary-300"
-          }`}
+          variant={selected.includes(opt) ? "default" : "outline"}
+          className="justify-start text-left text-sm font-medium"
         >
           {opt}
-        </button>
+        </Button>
       ))}
     </div>
   );
@@ -234,31 +235,31 @@ function ChipSelect({ options, selected, onToggle, columns = 3 }) {
 
 function SkeletonBlock({ className }) {
   return (
-    <div className={`animate-pulse rounded-xl bg-surface-200 dark:bg-surface-700 ${className}`} />
+    <div className={`animate-pulse rounded-lg bg-muted ${className}`} />
   );
 }
 
 function ProfileSkeleton() {
   return (
-    <div className="min-h-screen bg-surface-50 dark:bg-surface-950 pb-24">
+    <div className="min-h-screen bg-background pb-24">
       <div className="max-w-3xl mx-auto px-4 py-8">
         <div className="mb-8 space-y-2">
           <SkeletonBlock className="h-9 w-48" />
           <SkeletonBlock className="h-5 w-72" />
         </div>
         <div className="space-y-6">
-          <div className="bg-white dark:bg-surface-800 rounded-2xl p-6 shadow-sm border border-surface-200 dark:border-surface-700 flex flex-col sm:flex-row items-center gap-6">
+          <div className="bg-card rounded-xl p-6 shadow-sm border border-border flex flex-col sm:flex-row items-center gap-6">
             <SkeletonBlock className="w-24 h-24 rounded-full shrink-0" />
             <div className="space-y-2">
               <SkeletonBlock className="h-5 w-36" />
               <SkeletonBlock className="h-4 w-52" />
-              <SkeletonBlock className="h-9 w-36 rounded-xl" />
+              <SkeletonBlock className="h-9 w-36 rounded-lg" />
             </div>
           </div>
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white dark:bg-surface-800 rounded-2xl p-6 shadow-sm border border-surface-200 dark:border-surface-700 space-y-4">
+            <div key={i} className="bg-card rounded-xl p-6 shadow-sm border border-border space-y-4">
               <div className="flex items-center gap-3">
-                <SkeletonBlock className="w-10 h-10 rounded-xl" />
+                <SkeletonBlock className="w-10 h-10 rounded-lg" />
                 <SkeletonBlock className="h-6 w-44" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -341,6 +342,7 @@ export default function ProfilePage() {
 
   const [showCVModal, setShowCVModal] = useState(false);
   const [showCVPreview, setShowCVPreview] = useState(false);
+  const [cvDeleteOpen, setCvDeleteOpen] = useState(false);
   const [cvAnalysisExpanded, setCvAnalysisExpanded] = useState(true);
   const [cvEditing, setCvEditing] = useState(false);
   const [cvEditData, setCvEditData] = useState({});
@@ -460,7 +462,7 @@ export default function ProfilePage() {
 
   const handleCVDelete = () => {
     if (!cvData?.cv?._id) return;
-    if (!window.confirm("Supprimer votre CV ? Cette action est irréversible.")) return;
+    setCvDeleteOpen(false);
     toast.loading("Suppression du CV...", { id: "cv-delete" });
     deleteCV.mutate(cvData.cv._id, {
       onSuccess: () => {
@@ -503,24 +505,24 @@ export default function ProfilePage() {
 
   if (isError) {
     return (
-      <div className="min-h-screen bg-surface-50 dark:bg-surface-950 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-red-500 font-medium">
             {error?.response?.data?.error || "Erreur lors du chargement du profil"}
           </p>
-          <button
+          <Button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-colors text-sm font-medium"
+            className="text-sm font-medium"
           >
             Réessayer
-          </button>
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-surface-50 dark:bg-surface-950 pb-24">
+    <div className="min-h-screen bg-background pb-24">
       <div className="max-w-3xl mx-auto px-4 py-8">
         {/* Header */}
         <motion.div
@@ -528,10 +530,10 @@ export default function ProfilePage() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <h1 className="text-3xl font-bold text-surface-900 dark:text-white">
+          <h1 className="text-3xl font-bold text-foreground">
             Mon Profil
           </h1>
-          <p className="text-surface-500 dark:text-surface-400 mt-1">
+          <p className="text-muted-foreground mt-1">
             Gérez vos informations personnelles et professionnelles
           </p>
         </motion.div>
@@ -542,14 +544,14 @@ export default function ProfilePage() {
             variants={sectionVariants}
             initial="hidden"
             animate="visible"
-            className="bg-white dark:bg-surface-800 rounded-2xl p-6 shadow-sm border border-surface-200 dark:border-surface-700 flex flex-col sm:flex-row items-center gap-6"
+            className="bg-card rounded-xl p-6 shadow-sm border border-border flex flex-col sm:flex-row items-center gap-6"
           >
             <div className="relative group">
-              <div className="w-24 h-24 rounded-full bg-surface-200 dark:bg-surface-700 flex items-center justify-center overflow-hidden">
+              <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center overflow-hidden">
                 {mergedUser?.avatar ? (
                   <img src={mergedUser.avatar} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
-                  <User className="w-10 h-10 text-surface-400" />
+                  <User className="w-10 h-10 text-muted-foreground" />
                 )}
               </div>
               <button
@@ -560,24 +562,24 @@ export default function ProfilePage() {
               </button>
             </div>
             <div className="text-center sm:text-left">
-              <h3 className="font-semibold text-surface-900 dark:text-white">
+              <h3 className="font-semibold text-foreground">
                 {mergedUser?.firstName} {mergedUser?.lastName}
               </h3>
-              <p className="text-sm text-surface-500 dark:text-surface-400">
+              <p className="text-sm text-muted-foreground">
                 {mergedUser?.email}
               </p>
               <div className="flex items-center gap-2 mt-2 justify-center sm:justify-start">
                 {hasCV && (
                   <Link
                     to="/profile/cv"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-secondary-600 dark:text-secondary-400 bg-secondary-500/10 dark:bg-secondary-500/20 rounded-full hover:bg-secondary-500/20 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-accent bg-accent/10 rounded-full hover:bg-accent/20 transition-colors"
                   >
                     <FileText className="w-3.5 h-3.5" />
                     CV ajouté
                   </Link>
                 )}
                 {mergedUser?.onboardingCompleted && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-500/10 dark:bg-primary-500/20 rounded-full">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary bg-primary/10 rounded-full">
                     <Target className="w-3.5 h-3.5" />
                     Profil configuré
                   </span>
@@ -591,50 +593,53 @@ export default function ProfilePage() {
             {hasCV ? (
               <div className="space-y-4">
                 {/* CV Info + Actions Bar */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl bg-secondary-50 dark:bg-secondary-500/10 border border-secondary-200 dark:border-secondary-500/20">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-lg bg-accent/10 border border-accent/30">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-secondary-500/10 flex items-center justify-center">
-                      <FileText className="w-5 h-5 text-secondary-500" />
+                    <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+                      <FileText className="w-5 h-5 text-accent" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-surface-900 dark:text-white">{cvData?.cv?.originalName || "CV.pdf"}</p>
-                      <p className="text-xs text-surface-500 dark:text-surface-400">
+                      <p className="text-sm font-medium text-foreground">{cvData?.cv?.originalName || "CV.pdf"}</p>
+                      <p className="text-xs text-muted-foreground">
                         {cvData?.cv?.fileSize ? `${(cvData.cv.fileSize / 1024).toFixed(0)} KB` : ""}
                         {cvData?.cv?.version ? ` · Version ${cvData.cv.version}` : ""}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
                       onClick={() => setShowCVPreview(true)}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 bg-primary-500/10 dark:bg-primary-500/20 rounded-xl hover:bg-primary-500/20 transition-colors"
+                      className="bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary"
                     >
                       <Eye className="w-4 h-4" />
                       Visualiser
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
+                      variant="ghost"
                       onClick={handleCVAnalyze}
                       disabled={analyzeCV.isPending}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 dark:bg-amber-500/20 rounded-xl hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+                      className="bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-400"
                     >
                       {analyzeCV.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                       Analyser
-                    </button>
-                    <label className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-surface-600 dark:text-surface-400 bg-surface-100 dark:bg-surface-700 rounded-xl hover:bg-surface-200 dark:hover:bg-surface-600 transition-colors cursor-pointer">
+                    </Button>
+                    <label className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-foreground bg-muted rounded-lg hover:bg-muted/80 transition-colors cursor-pointer">
                       <Upload className="w-4 h-4" />
                       Remplacer
                       <input type="file" accept=".pdf" onChange={handleCVUpload} className="hidden" />
                     </label>
-                    <button
+                    <Button
                       type="button"
-                      onClick={handleCVDelete}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-500 hover:text-red-600 bg-red-50 dark:bg-red-500/10 rounded-xl hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
+                      variant="ghost"
+                      onClick={() => setCvDeleteOpen(true)}
+                      className="bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 dark:bg-red-500/10 dark:hover:bg-red-500/20"
                     >
                       <Trash2 className="w-4 h-4" />
                       Supprimer
-                    </button>
+                    </Button>
                   </div>
                 </div>
 
@@ -642,46 +647,47 @@ export default function ProfilePage() {
                 {cvData?.cv?.parsedData && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-surface-900 dark:text-white flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-primary-500" />
+                      <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-primary" />
                         Données extraites
                       </h4>
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
                         onClick={() => setCvEditing(!cvEditing)}
-                        className="text-xs font-medium text-primary-500 hover:text-primary-600 transition-colors"
+                        className="h-auto p-0 text-xs font-medium text-primary hover:bg-transparent hover:text-primary/80"
                       >
                         {cvEditing ? "Annuler" : "Modifier"}
-                      </button>
+                      </Button>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {/* Skills */}
-                      <div className="p-3 rounded-xl bg-surface-50 dark:bg-surface-700/50 border border-surface-200 dark:border-surface-600">
-                        <p className="text-xs font-medium text-surface-500 dark:text-surface-400 mb-1.5">Compétences</p>
+                      <div className="p-3 rounded-lg bg-muted border border-border">
+                        <p className="text-xs font-medium text-muted-foreground mb-1.5">Compétences</p>
                         {cvEditing ? (
-                          <textarea
+                          <Textarea
                             value={(cvEditData.skills || []).join(", ")}
                             onChange={(e) => setCvEditData({ ...cvEditData, skills: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
-                            className="w-full text-sm bg-white dark:bg-surface-800 border border-surface-300 dark:border-surface-600 rounded-lg p-2 text-surface-900 dark:text-white resize-none"
+                            className="bg-card text-sm resize-none"
                             rows={3}
                           />
                         ) : (
                           <div className="flex flex-wrap gap-1">
                             {(cvData.cv.parsedData.skills || []).length > 0 ? (
                               cvData.cv.parsedData.skills.map((s, i) => (
-                                <span key={i} className="px-2 py-0.5 text-xs bg-primary-500/10 text-primary-600 dark:text-primary-400 rounded-full">{s}</span>
+                                <Badge key={i} variant="secondary" className="rounded-full bg-primary/10 text-primary">{s}</Badge>
                               ))
                             ) : (
-                              <span className="text-xs text-surface-400">Aucune compétence détectée</span>
+                              <span className="text-xs text-muted-foreground">Aucune compétence détectée</span>
                             )}
                           </div>
                         )}
                       </div>
                       {/* Experience */}
-                      <div className="p-3 rounded-xl bg-surface-50 dark:bg-surface-700/50 border border-surface-200 dark:border-surface-600">
-                        <p className="text-xs font-medium text-surface-500 dark:text-surface-400 mb-1.5">Expérience</p>
+                      <div className="p-3 rounded-lg bg-muted border border-border">
+                        <p className="text-xs font-medium text-muted-foreground mb-1.5">Expérience</p>
                         {cvEditing ? (
-                          <textarea
+                          <Textarea
                             value={(cvEditData.experience || []).map(e => `${e.title || ""} @ ${e.company || ""} (${e.period || ""})`).join("\n")}
                             onChange={(e) => {
                               const lines = e.target.value.split("\n").filter(Boolean);
@@ -696,30 +702,30 @@ export default function ProfilePage() {
                                 }),
                               });
                             }}
-                            className="w-full text-sm bg-white dark:bg-surface-800 border border-surface-300 dark:border-surface-600 rounded-lg p-2 text-surface-900 dark:text-white resize-none"
+                            className="bg-card text-sm resize-none"
                             rows={3}
                           />
                         ) : (
                           <div className="space-y-1">
                             {(cvData.cv.parsedData.experience || []).length > 0 ? (
                               cvData.cv.parsedData.experience.map((e, i) => (
-                                <p key={i} className="text-xs text-surface-700 dark:text-surface-300">
+                                <p key={i} className="text-xs text-foreground">
                                   <span className="font-medium">{e.title}</span>
                                   {e.company ? ` @ ${e.company}` : ""}
-                                  {e.period ? <span className="text-surface-400"> ({e.period})</span> : ""}
+                                  {e.period ? <span className="text-muted-foreground"> ({e.period})</span> : ""}
                                 </p>
                               ))
                             ) : (
-                              <span className="text-xs text-surface-400">Aucune expérience détectée</span>
+                              <span className="text-xs text-muted-foreground">Aucune expérience détectée</span>
                             )}
                           </div>
                         )}
                       </div>
                       {/* Education */}
-                      <div className="p-3 rounded-xl bg-surface-50 dark:bg-surface-700/50 border border-surface-200 dark:border-surface-600">
-                        <p className="text-xs font-medium text-surface-500 dark:text-surface-400 mb-1.5">Formation</p>
+                      <div className="p-3 rounded-lg bg-muted border border-border">
+                        <p className="text-xs font-medium text-muted-foreground mb-1.5">Formation</p>
                         {cvEditing ? (
-                          <textarea
+                          <Textarea
                             value={(cvEditData.education || []).map(e => `${e.degree || ""} - ${e.institution || ""} (${e.year || ""})`).join("\n")}
                             onChange={(e) => {
                               const lines = e.target.value.split("\n").filter(Boolean);
@@ -731,61 +737,61 @@ export default function ProfilePage() {
                                 }),
                               });
                             }}
-                            className="w-full text-sm bg-white dark:bg-surface-800 border border-surface-300 dark:border-surface-600 rounded-lg p-2 text-surface-900 dark:text-white resize-none"
+                            className="bg-card text-sm resize-none"
                             rows={3}
                           />
                         ) : (
                           <div className="space-y-1">
                             {(cvData.cv.parsedData.education || []).length > 0 ? (
                               cvData.cv.parsedData.education.map((e, i) => (
-                                <p key={i} className="text-xs text-surface-700 dark:text-surface-300">
+                                <p key={i} className="text-xs text-foreground">
                                   <span className="font-medium">{e.degree}</span>
                                   {e.institution ? ` — ${e.institution}` : ""}
-                                  {e.year ? <span className="text-surface-400"> ({e.year})</span> : ""}
+                                  {e.year ? <span className="text-muted-foreground"> ({e.year})</span> : ""}
                                 </p>
                               ))
                             ) : (
-                              <span className="text-xs text-surface-400">Aucune formation détectée</span>
+                              <span className="text-xs text-muted-foreground">Aucune formation détectée</span>
                             )}
                           </div>
                         )}
                       </div>
                       {/* Languages + Contact */}
-                      <div className="p-3 rounded-xl bg-surface-50 dark:bg-surface-700/50 border border-surface-200 dark:border-surface-600">
-                        <p className="text-xs font-medium text-surface-500 dark:text-surface-400 mb-1.5">Langues & Contact</p>
+                      <div className="p-3 rounded-lg bg-muted border border-border">
+                        <p className="text-xs font-medium text-muted-foreground mb-1.5">Langues & Contact</p>
                         {cvEditing ? (
                           <div className="space-y-2">
-                            <input
+                            <Input
                               value={(cvEditData.languages || []).join(", ")}
                               onChange={(e) => setCvEditData({ ...cvEditData, languages: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
                               placeholder="Langues (séparées par virgule)"
-                              className="w-full text-sm bg-white dark:bg-surface-800 border border-surface-300 dark:border-surface-600 rounded-lg p-2 text-surface-900 dark:text-white"
+                              className="bg-card text-sm"
                             />
-                            <input
+                            <Input
                               value={cvEditData.email || ""}
                               onChange={(e) => setCvEditData({ ...cvEditData, email: e.target.value })}
                               placeholder="Email"
-                              className="w-full text-sm bg-white dark:bg-surface-800 border border-surface-300 dark:border-surface-600 rounded-lg p-2 text-surface-900 dark:text-white"
+                              className="bg-card text-sm"
                             />
-                            <input
+                            <Input
                               value={cvEditData.phone || ""}
                               onChange={(e) => setCvEditData({ ...cvEditData, phone: e.target.value })}
                               placeholder="Téléphone"
-                              className="w-full text-sm bg-white dark:bg-surface-800 border border-surface-300 dark:border-surface-600 rounded-lg p-2 text-surface-900 dark:text-white"
+                              className="bg-card text-sm"
                             />
                           </div>
                         ) : (
                           <div className="space-y-1">
                             <div className="flex flex-wrap gap-1">
                               {(cvData.cv.parsedData.languages || []).map((l, i) => (
-                                <span key={i} className="px-2 py-0.5 text-xs bg-secondary-500/10 text-secondary-600 dark:text-secondary-400 rounded-full">{l}</span>
+                                <Badge key={i} variant="secondary" className="rounded-full bg-accent/10 text-accent">{l}</Badge>
                               ))}
                             </div>
                             {cvData.cv.parsedData.email && (
-                              <p className="text-xs text-surface-500 dark:text-surface-400">{cvData.cv.parsedData.email}</p>
+                              <p className="text-xs text-muted-foreground">{cvData.cv.parsedData.email}</p>
                             )}
                             {cvData.cv.parsedData.phone && (
-                              <p className="text-xs text-surface-500 dark:text-surface-400">{cvData.cv.parsedData.phone}</p>
+                              <p className="text-xs text-muted-foreground">{cvData.cv.parsedData.phone}</p>
                             )}
                           </div>
                         )}
@@ -794,21 +800,23 @@ export default function ProfilePage() {
 
                     {cvEditing && (
                       <div className="flex justify-end gap-2">
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
                           onClick={() => { setCvEditing(false); setCvEditData(cvData?.cv?.parsedData || {}); }}
-                          className="px-4 py-2 text-sm font-medium text-surface-600 dark:text-surface-400 bg-surface-100 dark:bg-surface-700 rounded-xl hover:bg-surface-200 dark:hover:bg-surface-600 transition-colors"
+                          className="bg-muted text-foreground hover:bg-muted/80 hover:text-foreground"
                         >
                           Annuler
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
+                          variant="default"
                           onClick={handleCVEditSave}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary-500 rounded-xl hover:bg-primary-600 transition-colors"
+                          className="gap-1.5"
                         >
                           <Save className="w-4 h-4" />
                           Enregistrer
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -817,12 +825,13 @@ export default function ProfilePage() {
                 {/* AI Analysis */}
                 {analysis && (
                   <div className="space-y-3">
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
                       onClick={() => setCvAnalysisExpanded(!cvAnalysisExpanded)}
-                      className="flex items-center justify-between w-full text-left"
+                      className="flex w-full items-center justify-between gap-2 h-auto p-0 text-left hover:bg-transparent"
                     >
-                      <h4 className="text-sm font-semibold text-surface-900 dark:text-white flex items-center gap-2">
+                      <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-amber-500" />
                         Analyse Expert RH
                         <span className={`px-2 py-0.5 text-xs font-bold rounded-lg ${
@@ -833,8 +842,8 @@ export default function ProfilePage() {
                           {analysis.score}/100
                         </span>
                       </h4>
-                      {cvAnalysisExpanded ? <ChevronUp className="w-4 h-4 text-surface-400" /> : <ChevronDown className="w-4 h-4 text-surface-400" />}
-                    </button>
+                      {cvAnalysisExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                    </Button>
 
                     <AnimatePresence>
                       {cvAnalysisExpanded && (
@@ -846,7 +855,7 @@ export default function ProfilePage() {
                         >
                           {/* Score Bar */}
                           <div className="mb-3">
-                            <div className="w-full h-2 rounded-full bg-surface-200 dark:bg-surface-700 overflow-hidden">
+                            <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
                               <motion.div
                                 initial={{ width: 0 }}
                                 animate={{ width: `${analysis.score}%` }}
@@ -861,7 +870,7 @@ export default function ProfilePage() {
 
                           {/* Strengths */}
                           {analysis.strengths?.length > 0 && (
-                            <div className="p-3 rounded-xl bg-green-50 dark:bg-green-500/5 border border-green-200 dark:border-green-500/20">
+                            <div className="p-3 rounded-lg bg-green-50 dark:bg-green-500/5 border border-green-200 dark:border-green-500/20">
                               <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1.5 flex items-center gap-1.5">
                                 <CheckCircle className="w-3.5 h-3.5" />
                                 Points forts
@@ -879,7 +888,7 @@ export default function ProfilePage() {
 
                           {/* Improvements */}
                           {analysis.improvements?.length > 0 && (
-                            <div className="p-3 rounded-xl bg-red-50 dark:bg-red-500/5 border border-red-200 dark:border-red-500/20 mt-2">
+                            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-500/5 border border-red-200 dark:border-red-500/20 mt-2">
                               <p className="text-xs font-semibold text-red-700 dark:text-red-400 mb-1.5 flex items-center gap-1.5">
                                 <AlertTriangle className="w-3.5 h-3.5" />
                                 Points à améliorer
@@ -897,7 +906,7 @@ export default function ProfilePage() {
 
                           {/* Suggestions */}
                           {analysis.suggestions?.length > 0 && (
-                            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 mt-2">
+                            <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 mt-2">
                               <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1.5 flex items-center gap-1.5">
                                 <Lightbulb className="w-3.5 h-3.5" />
                                 Suggestions d'expert
@@ -920,19 +929,19 @@ export default function ProfilePage() {
               </div>
             ) : (
               <div>
-                <label className="flex items-center justify-center gap-3 p-6 border-2 border-dashed border-surface-300 dark:border-surface-600 rounded-xl cursor-pointer hover:border-primary-400 transition-colors">
-                  <Upload className="w-6 h-6 text-surface-400" />
+                <label className="flex items-center justify-center gap-3 p-6 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary/40 transition-colors">
+                  <Upload className="w-6 h-6 text-muted-foreground" />
                   <div>
-                    <p className="text-sm font-medium text-surface-700 dark:text-surface-300">
+                    <p className="text-sm font-medium text-foreground">
                       {uploadCV.isPending ? "Upload en cours..." : "Uploadez votre CV (PDF)"}
                     </p>
-                    <p className="text-xs text-surface-400 mt-0.5">Analyse automatique par notre expert RH IA</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Analyse automatique par notre expert RH IA</p>
                   </div>
                   <input type="file" accept=".pdf" onChange={handleCVUpload} className="hidden" disabled={uploadCV.isPending} />
                 </label>
                 <Link
                   to="/profile/cv"
-                  className="mt-3 flex items-center gap-1.5 text-sm text-primary-500 hover:text-primary-600 font-medium transition-colors"
+                  className="mt-3 flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 font-medium transition-colors"
                 >
                   <ExternalLink className="w-4 h-4" />
                   Aller à la page CV avancée
@@ -941,61 +950,44 @@ export default function ProfilePage() {
             )}
           </Section>
 
-          {/* CV Preview Modal */}
-          <AnimatePresence>
-            {showCVPreview && cvData?.cv && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-                onClick={() => setShowCVPreview(false)}
-              >
-                <motion.div
-                  initial={{ scale: 0.95, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.95, opacity: 0 }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="relative w-full max-w-3xl max-h-[90vh] bg-white dark:bg-surface-800 rounded-2xl shadow-xl overflow-hidden flex flex-col"
-                >
-                  <div className="flex items-center justify-between px-5 py-3 border-b border-surface-200 dark:border-surface-700">
-                    <h3 className="font-semibold text-surface-900 dark:text-white">{cvData.cv.originalName || "CV"}</h3>
-                    <button onClick={() => setShowCVPreview(false)} className="p-1.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700 transition-colors">
-                      <X className="w-5 h-5 text-surface-500" />
-                    </button>
-                  </div>
-                  <div className="flex-1 overflow-auto p-5">
-                    {cvData.cv.fileData ? (
-                      <iframe
-                        src={cvData.cv.fileData.startsWith('data:') ? cvData.cv.fileData : `data:application/pdf;base64,${cvData.cv.fileData}`}
-                        className="w-full h-[70vh] rounded-lg border border-surface-200 dark:border-surface-600"
-                        title="CV Preview"
-                      />
-                    ) : (
-                      <div className="space-y-4">
-                        <h4 className="text-lg font-bold text-surface-900 dark:text-white">Texte extrait du CV</h4>
-                        <pre className="whitespace-pre-wrap text-sm text-surface-700 dark:text-surface-300 bg-surface-50 dark:bg-surface-700/50 p-4 rounded-xl border border-surface-200 dark:border-surface-600 max-h-[60vh] overflow-auto font-mono">
-                          {cvData.cv.extractedText || "Aucun texte extrait"}
-                        </pre>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* CV Preview Dialog */}
+          {showCVPreview && cvData?.cv && (
+            <Dialog open={showCVPreview} onOpenChange={setShowCVPreview}>
+              <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col gap-0 overflow-hidden rounded-xl bg-popover p-0">
+                <DialogHeader className="border-b border-border px-5 py-3">
+                  <DialogTitle className="font-semibold">{cvData.cv.originalName || "CV"}</DialogTitle>
+                </DialogHeader>
+                <div className="flex-1 overflow-auto p-5">
+                  {cvData.cv.fileData ? (
+                    <iframe
+                      src={cvData.cv.fileData.startsWith('data:') ? cvData.cv.fileData : `data:application/pdf;base64,${cvData.cv.fileData}`}
+                      className="w-full h-[70vh] rounded-lg border border-border"
+                      title="CV Preview"
+                    />
+                  ) : (
+                    <div className="space-y-4">
+                      <h4 className="text-lg font-bold text-foreground">Texte extrait du CV</h4>
+                      <pre className="whitespace-pre-wrap text-sm text-muted-foreground bg-muted p-4 rounded-lg border border-border max-h-[60vh] overflow-auto font-mono">
+                        {cvData.cv.extractedText || "Aucun texte extrait"}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
 
           {/* Personal Info */}
           <Section title="Informations personnelles" icon={User}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input
+              <FormInput
                 label="Prénom"
                 placeholder="Jean"
                 {...register("firstName", {
                   required: "Le prénom est requis",
                 })}
               />
-              <Input
+              <FormInput
                 label="Nom"
                 placeholder="Dupont"
                 {...register("lastName", {
@@ -1004,39 +996,44 @@ export default function ProfilePage() {
               />
             </div>
             <div className="mt-4">
-              <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">
+              <Label className="block text-sm font-medium text-foreground mb-1.5">
                 Email
-              </label>
+              </Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
-                <input
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
                   readOnly
                   value={watch("email") || ""}
-                  className="w-full pl-10 px-4 py-2.5 rounded-xl border border-surface-300 dark:border-surface-600 bg-surface-100 dark:bg-surface-800 text-surface-500 dark:text-surface-400 cursor-not-allowed text-sm"
+                  className="w-full pl-10 bg-muted cursor-not-allowed text-muted-foreground text-sm"
                 />
               </div>
-              <p className="text-xs text-surface-400 mt-1.5 flex items-center gap-1">
+              <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
                 <Lock className="w-3 h-3" />
                 L'email ne peut pas être modifié directement.
-                <button type="button" onClick={() => toast("Contactez le support pour changer votre email.", { icon: "📧" })} className="text-primary-500 hover:text-primary-600 font-medium ml-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => toast("Contactez le support pour changer votre email.", { icon: "📧" })}
+                  className="h-auto p-0 text-primary hover:bg-transparent hover:text-primary/80 font-medium ml-1"
+                >
                   Demander un changement
-                </button>
+                </Button>
               </p>
             </div>
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input
+              <FormInput
                 label="Téléphone"
                 placeholder="+212 6 00 00 00 00"
                 {...register("phone")}
               />
-              <Select
+              <FormSelect
                 label="Ville de résidence"
                 options={cities}
                 {...register("city")}
               />
             </div>
             <div className="mt-4">
-              <Input
+              <FormInput
                 label="Titre professionnel"
                 placeholder="Développeur Full Stack, Chef de projet..."
                 {...register("title")}
@@ -1046,24 +1043,24 @@ export default function ProfilePage() {
 
           {/* Présentation - first impression for recruiters */}
           <Section title="Ma Présentation" icon={MessageSquareQuote} badge="Première impression">
-            <p className="text-sm text-surface-500 dark:text-surface-400 mb-3">
+            <p className="text-sm text-muted-foreground mb-3">
               Ce paragraphe sera affiché aux recruteurs comme première impression. Écrivez-le en 2-4 phrases pour vous décrire, vos atouts et votre ambition professionnelle.
             </p>
-            <textarea
+            <Textarea
               rows={4}
               maxLength={500}
               placeholder="Ex: Développeur Full Stack passionné par les technologies web modernes, je recherche un poste stimulant où je pourrai contribuer à des projets innovants tout en développant mes compétences en architecture logicielle..."
               {...register("presentation")}
-              className="w-full px-4 py-3 rounded-xl border border-surface-300 dark:border-surface-600 bg-surface-50 dark:bg-surface-900 text-surface-900 dark:text-white placeholder-surface-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 transition-all text-sm resize-none leading-relaxed"
+              className="resize-none leading-relaxed [field-sizing:fixed]"
             />
-            <p className="text-xs text-surface-400 mt-1.5">
+            <p className="text-xs text-muted-foreground mt-1.5">
               {(watch("presentation") || "").length}/500 caractères
             </p>
           </Section>
 
           {/* Domains - from onboarding */}
           <Section title="Domaines d'intérêt" icon={BriefcaseBusiness} badge="Depuis l'onboarding">
-            <p className="text-sm text-surface-500 dark:text-surface-400 mb-3">
+            <p className="text-sm text-muted-foreground mb-3">
               Les domaines sélectionnés lors de l'onboarding. Vous pouvez les modifier.
             </p>
             <ChipSelect
@@ -1076,12 +1073,12 @@ export default function ProfilePage() {
               }}
               columns={3}
             />
-            <p className="text-xs text-surface-400 mt-2">{domains.length} domaine(s) sélectionné(s)</p>
+            <p className="text-xs text-muted-foreground mt-2">{domains.length} domaine(s) sélectionné(s)</p>
           </Section>
 
           {/* Search Keywords - from onboarding */}
           <Section title="Mots-clés de recherche" icon={Target} badge="Depuis l'onboarding">
-            <p className="text-sm text-surface-500 dark:text-surface-400 mb-3">
+            <p className="text-sm text-muted-foreground mb-3">
               Compétences et technologies recherchées.
             </p>
             <TagInput
@@ -1108,34 +1105,34 @@ export default function ProfilePage() {
 
           {/* Preferred Locations - from onboarding */}
           <Section title="Localisations préférées" icon={MapPin} badge="Depuis l'onboarding">
-            <p className="text-sm text-surface-500 dark:text-surface-400 mb-3">
+            <p className="text-sm text-muted-foreground mb-3">
               Villes où vous souhaitez travailler.
             </p>
             <div className="flex flex-wrap gap-2">
               {cities.map((c) => (
-                <button
+                <Button
                   key={c}
                   type="button"
+                  variant={preferredLocations.includes(c) ? "default" : "outline"}
                   onClick={() => {
                     setValue("preferredLocations", preferredLocations.includes(c)
                       ? preferredLocations.filter((x) => x !== c)
                       : [...preferredLocations, c]);
                   }}
-                  className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all border ${
-                    preferredLocations.includes(c)
-                      ? "bg-secondary-500 text-white border-secondary-500"
-                      : "bg-white dark:bg-surface-700 text-surface-700 dark:text-surface-300 border-surface-200 dark:border-surface-600 hover:border-secondary-300"
-                  }`}
+                  className={preferredLocations.includes(c)
+                    ? "bg-accent text-white border-accent hover:bg-accent/90"
+                    : "bg-card text-foreground border-border hover:bg-transparent hover:border-accent/30"
+                  }
                 >
                   {c === "Remote" ? "🌍 " : ""}{c}
-                </button>
+                </Button>
               ))}
             </div>
           </Section>
 
           {/* Skills */}
           <Section title="Compétences" icon={Globe}>
-            <p className="text-sm text-surface-500 dark:text-surface-400 mb-3">
+            <p className="text-sm text-muted-foreground mb-3">
               Ajoutez vos compétences techniques. Elles seront utilisées pour le matching avec les offres.
             </p>
             <TagInput
@@ -1158,30 +1155,30 @@ export default function ProfilePage() {
                   onRemove={() => removeEdu(index)}
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Input
+                    <FormInput
                       label="Institution"
                       placeholder="Université..."
                       {...register(`education.${index}.institution`)}
                     />
-                    <Input
+                    <FormInput
                       label="Diplôme"
                       placeholder="Master, Licence..."
                       {...register(`education.${index}.degree`)}
                     />
                   </div>
                   <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <Input
+                    <FormInput
                       label="Domaine"
                       placeholder="Génie Logiciel"
                       {...register(`education.${index}.field`)}
                     />
-                    <Input
+                    <FormInput
                       label="Année de début"
                       placeholder="2019"
                       type="date"
                       {...register(`education.${index}.startDate`)}
                     />
-                    <Input
+                    <FormInput
                       label="Année de fin"
                       placeholder="2021"
                       type="date"
@@ -1189,14 +1186,14 @@ export default function ProfilePage() {
                     />
                   </div>
                   <div className="mt-4">
-                    <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">
+                    <Label className="block text-sm font-medium text-foreground mb-1.5">
                       Description
-                    </label>
-                    <textarea
+                    </Label>
+                    <Textarea
                       rows={2}
                       placeholder="Décrivez votre parcours..."
                       {...register(`education.${index}.description`)}
-                      className="w-full px-4 py-2.5 rounded-xl border border-surface-300 dark:border-surface-600 bg-surface-50 dark:bg-surface-900 text-surface-900 dark:text-white placeholder-surface-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 transition-all text-sm resize-none"
+                      className="resize-none [field-sizing:fixed]"
                     />
                   </div>
                 </Section>
@@ -1216,7 +1213,7 @@ export default function ProfilePage() {
               }
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.99 }}
-              className="w-full py-3 border-2 border-dashed border-surface-300 dark:border-surface-600 rounded-2xl text-sm font-medium text-surface-500 dark:text-surface-400 hover:border-primary-400 hover:text-primary-500 transition-colors flex items-center justify-center gap-2"
+              className="w-full py-3 border-2 border-dashed border-border rounded-xl text-sm font-medium text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
             >
               <Plus className="w-4 h-4" />
               Ajouter une formation
@@ -1235,38 +1232,38 @@ export default function ProfilePage() {
                   onRemove={() => removeExp(index)}
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Input
+                    <FormInput
                       label="Entreprise"
                       placeholder="TechMaroc"
                       {...register(`experience.${index}.company`)}
                     />
-                    <Input
+                    <FormInput
                       label="Poste"
                       placeholder="Développeur Full Stack"
                       {...register(`experience.${index}.position`)}
                     />
                   </div>
                   <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Input
+                    <FormInput
                       label="Date de début"
                       type="date"
                       {...register(`experience.${index}.startDate`)}
                     />
-                    <Input
+                    <FormInput
                       label="Date de fin"
                       type="date"
                       {...register(`experience.${index}.endDate`)}
                     />
                   </div>
                   <div className="mt-4">
-                    <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">
+                    <Label className="block text-sm font-medium text-foreground mb-1.5">
                       Description
-                    </label>
-                    <textarea
+                    </Label>
+                    <Textarea
                       rows={3}
                       placeholder="Décrivez vos missions..."
                       {...register(`experience.${index}.description`)}
-                      className="w-full px-4 py-2.5 rounded-xl border border-surface-300 dark:border-surface-600 bg-surface-50 dark:bg-surface-900 text-surface-900 dark:text-white placeholder-surface-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 transition-all text-sm resize-none"
+                      className="resize-none [field-sizing:fixed]"
                     />
                   </div>
                 </Section>
@@ -1287,7 +1284,7 @@ export default function ProfilePage() {
               }
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.99 }}
-              className="w-full py-3 border-2 border-dashed border-surface-300 dark:border-surface-600 rounded-2xl text-sm font-medium text-surface-500 dark:text-surface-400 hover:border-primary-400 hover:text-primary-500 transition-colors flex items-center justify-center gap-2"
+              className="w-full py-3 border-2 border-dashed border-border rounded-xl text-sm font-medium text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
             >
               <Plus className="w-4 h-4" />
               Ajouter une expérience
@@ -1299,15 +1296,15 @@ export default function ProfilePage() {
             <div className="space-y-3">
               {languages.map((lang, index) => (
                 <div key={index} className="flex items-center gap-3">
-                  <input
+                  <Input
                     {...register(`languages.${index}.language`)}
-                    className="flex-1 px-4 py-2.5 rounded-xl border border-surface-300 dark:border-surface-600 bg-surface-50 dark:bg-surface-900 text-surface-900 dark:text-white placeholder-surface-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 transition-all text-sm"
+                    className="flex-1 text-sm"
                     placeholder="Langue"
                   />
                   <div className="relative w-44">
                     <select
                       {...register(`languages.${index}.level`)}
-                      className="w-full px-4 py-2.5 rounded-xl border border-surface-300 dark:border-surface-600 bg-surface-50 dark:bg-surface-900 text-surface-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 transition-all text-sm appearance-none"
+                      className="w-full h-10 px-4 pr-10 rounded-lg border border-border bg-background text-foreground text-sm appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/20"
                     >
                       {languageLevels.map((l) => (
                         <option key={l} value={l}>
@@ -1315,54 +1312,57 @@ export default function ProfilePage() {
                         </option>
                       ))}
                     </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400 pointer-events-none" />
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                   </div>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={() =>
                       setValue(
                         "languages",
                         languages.filter((_, i) => i !== index)
                       )
                     }
-                    className="p-2 rounded-lg text-surface-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors shrink-0"
+                    className="text-muted-foreground hover:text-red-500 hover:bg-red-50 shrink-0"
                   >
                     <Trash2 className="w-4 h-4" />
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={() =>
                 setValue("languages", [...languages, { language: "", level: "Intermédiaire" }])
               }
-              className="mt-4 px-4 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 bg-primary-500/10 dark:bg-primary-500/20 rounded-xl hover:bg-primary-500/20 transition-colors flex items-center gap-2"
+              className="mt-4 bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary"
             >
               <Plus className="w-4 h-4" />
               Ajouter une langue
-            </button>
+            </Button>
           </Section>
 
           {/* Social Links */}
           <Section title="Liens sociaux" icon={LinkIcon}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input
+              <FormInput
                 label="LinkedIn"
                 placeholder="https://linkedin.com/in/..."
                 {...register("socialLinks.linkedin")}
               />
-              <Input
+              <FormInput
                 label="GitHub"
                 placeholder="https://github.com/..."
                 {...register("socialLinks.github")}
               />
-              <Input
+              <FormInput
                 label="Portfolio"
                 placeholder="https://..."
                 {...register("socialLinks.portfolio")}
               />
-              <Input
+              <FormInput
                 label="Site web"
                 placeholder="https://..."
                 {...register("socialLinks.website")}
@@ -1371,13 +1371,12 @@ export default function ProfilePage() {
           </Section>
 
           {/* Save Button */}
-          <div className="sticky bottom-0 py-4 bg-surface-50/80 dark:bg-surface-950/80 backdrop-blur-xl -mx-4 px-4">
-            <motion.button
+          <div className="sticky bottom-0 py-4 bg-background/80 backdrop-blur-xl -mx-4 px-4">
+            <Button
               type="submit"
               disabled={updateProfile.isPending}
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full sm:w-auto px-8 py-3 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-xl shadow-lg shadow-primary-500/25 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              size="lg"
+              className="w-full sm:w-auto font-semibold shadow-[var(--shadow-md)]"
             >
               {updateProfile.isPending ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -1385,10 +1384,20 @@ export default function ProfilePage() {
                 <Save className="w-5 h-5" />
               )}
               {updateProfile.isPending ? "Enregistrement..." : "Enregistrer les modifications"}
-            </motion.button>
+            </Button>
           </div>
         </form>
       </div>
+
+      <ConfirmDialog
+        open={cvDeleteOpen}
+        onOpenChange={setCvDeleteOpen}
+        title="Supprimer votre CV ?"
+        description="Cette action est irréversible. Votre CV et ses données extraites seront définitivement supprimés."
+        confirmText="Supprimer"
+        onConfirm={handleCVDelete}
+        icon={Trash2}
+      />
     </div>
   );
 }

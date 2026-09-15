@@ -5,7 +5,6 @@ import {
   Search,
   MapPin,
   Bookmark,
-  ChevronDown,
   Users,
   ExternalLink,
   StickyNote,
@@ -15,24 +14,28 @@ import {
   AlertTriangle,
   RefreshCw,
 } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 import { useRecruiters, useScrapeRecruiters } from '@/api/hooks'
+import { Button } from '@/components/ui/button'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 
 const sectors = ['Tous', 'IT', 'Finance', 'Automobile', 'Agriculture', 'BTP', 'Marketing', 'RH']
 const locations = ['Toutes', 'Casablanca', 'Rabat', 'Marrakech', 'Tanger', 'Fès']
 const connectionDegrees = ['Tous', '1st', '2nd', '3rd+']
 
 const connectionColors = {
-  '1st': 'bg-secondary-100 text-secondary-700 dark:bg-secondary-500/15 dark:text-secondary-400',
-  '2nd': 'bg-accent-100 text-accent-700 dark:bg-accent-500/15 dark:text-accent-400',
-  '3rd+': 'bg-surface-200 text-surface-600 dark:bg-surface-600 dark:text-surface-400',
+  '1st': 'bg-accent/10 text-accent',
+  '2nd': 'bg-warning/10 text-warning',
+  '3rd+': 'bg-muted text-muted-foreground',
 }
 
 const avatarColors = [
-  'bg-primary-500',
-  'bg-secondary-500',
-  'bg-accent-500',
+  'bg-primary',
+  'bg-accent',
+  'bg-accent',
   'bg-purple-500',
   'bg-pink-500',
   'bg-cyan-500',
@@ -50,20 +53,18 @@ function getAvatarColor(name) {
 
 function FilterDropdown({ value, options, onChange }) {
   return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full appearance-none rounded-xl border border-surface-200 bg-white py-2.5 pl-3 pr-10 text-sm font-medium text-surface-700 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-surface-600 dark:bg-surface-800 dark:text-surface-300 dark:focus:border-primary-400"
-      >
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="w-full">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
         {options.map((opt) => (
-          <option key={opt} value={opt}>
+          <SelectItem key={opt} value={opt}>
             {opt}
-          </option>
+          </SelectItem>
         ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" />
-    </div>
+      </SelectContent>
+    </Select>
   )
 }
 
@@ -79,7 +80,7 @@ function RecruiterCard({ recruiter, index, navigate }) {
       exit={{ opacity: 0, y: -10, transition: { duration: 0.2 } }}
       transition={{ duration: 0.4, delay: index * 0.05, ease: 'easeOut' }}
       whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
-      className="group rounded-2xl border border-surface-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md dark:border-surface-700 dark:bg-surface-800"
+      className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-shadow hover:shadow-[var(--shadow-md)]"
     >
       <div className="flex items-start gap-4">
         <button
@@ -94,85 +95,80 @@ function RecruiterCard({ recruiter, index, navigate }) {
             onClick={() => navigate(`/recruiters/${recruiter.id}`)}
             className="text-left"
           >
-            <h3 className="text-lg font-bold text-surface-900 group-hover:text-primary-600 dark:text-surface-50 dark:group-hover:text-primary-400">
+            <h3 className="text-lg font-bold text-foreground group-hover:text-primary">
               {recruiter.firstName} {recruiter.lastName}
             </h3>
           </button>
-          <p className="mt-0.5 text-sm font-medium text-surface-500 dark:text-surface-400">
+          <p className="mt-0.5 text-sm font-medium text-muted-foreground">
             {recruiter.title}
           </p>
-          <p className="text-sm text-surface-600 dark:text-surface-300">
+          <p className="text-sm text-muted-foreground">
             {recruiter.company}
           </p>
 
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-surface-500 dark:text-surface-400">
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
             <span className="flex items-center gap-1">
               <MapPin className="h-3.5 w-3.5" />
               {recruiter.location}
             </span>
             {recruiter.connectionDegree && (
-              <span
-                className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${connectionColors[recruiter.connectionDegree] || 'bg-surface-200 text-surface-600'}`}
-              >
+              <Badge variant="secondary" className={`rounded-full ${connectionColors[recruiter.connectionDegree] || 'bg-muted text-muted-foreground'}`}>
                 {recruiter.connectionDegree}
-              </span>
+              </Badge>
             )}
           </div>
         </div>
       </div>
 
-      {/* Tags */}
       {recruiter.tags && recruiter.tags.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-1.5">
           {recruiter.tags.map((tag) => (
-            <span
-              key={tag}
-              className="inline-block rounded-full bg-surface-100 px-2.5 py-1 text-xs font-medium text-surface-600 dark:bg-surface-700 dark:text-surface-400"
-            >
+            <Badge key={tag} variant="secondary" className="rounded-full bg-muted text-muted-foreground">
               {tag}
-            </span>
+            </Badge>
           ))}
         </div>
       )}
 
-      {/* Actions */}
-      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-surface-100 pt-4 dark:border-surface-700">
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
         {recruiter.linkedinUrl && (
           <a
             href={recruiter.linkedinUrl}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-surface-200 bg-white px-3 py-2 text-sm font-medium text-surface-600 transition-colors hover:border-primary-200 hover:text-primary-600 dark:border-surface-600 dark:bg-surface-700 dark:text-surface-400 dark:hover:border-primary-500/30 dark:hover:text-primary-400"
           >
-            <ExternalLink className="h-3.5 w-3.5" />
-            Voir LinkedIn
+            <Button variant="outline" size="sm">
+              <ExternalLink className="h-3.5 w-3.5" />
+              Voir LinkedIn
+            </Button>
           </a>
         )}
 
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={(e) => {
             e.stopPropagation()
           }}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-surface-200 bg-white px-3 py-2 text-sm font-medium text-surface-600 transition-colors hover:border-accent-200 hover:text-accent-600 dark:border-surface-600 dark:bg-surface-700 dark:text-surface-400 dark:hover:border-accent-500/30 dark:hover:text-accent-400"
         >
           <Bookmark className="h-3.5 w-3.5" />
           Favoris
-        </button>
+        </Button>
 
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={(e) => {
             e.stopPropagation()
             setShowNotes(!showNotes)
           }}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-surface-200 bg-white px-3 py-2 text-sm font-medium text-surface-600 transition-colors hover:border-surface-300 hover:text-surface-700 dark:border-surface-600 dark:bg-surface-700 dark:text-surface-400 dark:hover:border-surface-500 dark:hover:text-surface-200"
         >
           <StickyNote className="h-3.5 w-3.5" />
           Notes
-        </button>
+        </Button>
       </div>
 
-      {/* Notes Expandable */}
       <AnimatePresence>
         {showNotes && (
           <motion.div
@@ -182,8 +178,8 @@ function RecruiterCard({ recruiter, index, navigate }) {
             transition={{ duration: 0.25, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
-            <div className="mt-3 rounded-xl bg-surface-50 p-4 dark:bg-surface-700/50">
-              <p className="text-sm leading-relaxed text-surface-600 dark:text-surface-400">
+            <div className="mt-3 rounded-xl bg-muted p-4">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 {recruiter.notes || 'Aucune note pour ce recruteur.'}
               </p>
             </div>
@@ -196,16 +192,16 @@ function RecruiterCard({ recruiter, index, navigate }) {
 
 function RecruiterCardSkeleton() {
   return (
-    <div className="rounded-2xl border border-surface-200 bg-white p-5 shadow-sm dark:border-surface-700 dark:bg-surface-800">
+    <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
       <div className="flex items-start gap-4">
-        <div className="h-14 w-14 shrink-0 animate-pulse rounded-full bg-surface-200 dark:bg-surface-700" />
+        <div className="h-14 w-14 shrink-0 animate-pulse rounded-full bg-muted" />
         <div className="flex-1 space-y-2">
-          <div className="h-5 w-40 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
-          <div className="h-4 w-32 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
-          <div className="h-4 w-28 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
+          <div className="h-5 w-40 animate-pulse rounded bg-muted" />
+          <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+          <div className="h-4 w-28 animate-pulse rounded bg-muted" />
           <div className="flex gap-2 mt-2">
-            <div className="h-4 w-20 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
-            <div className="h-5 w-8 animate-pulse rounded-full bg-surface-200 dark:bg-surface-700" />
+            <div className="h-4 w-20 animate-pulse rounded bg-muted" />
+            <div className="h-5 w-8 animate-pulse rounded-full bg-muted" />
           </div>
         </div>
       </div>
@@ -263,13 +259,13 @@ export default function RecruitersPage() {
   if (error) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-danger-300 bg-danger-50 py-12 dark:border-danger-500/30 dark:bg-danger-500/5">
-          <AlertTriangle className="mb-3 h-10 w-10 text-danger-400" />
-          <h3 className="text-lg font-semibold text-danger-700 dark:text-danger-400">Erreur de chargement</h3>
-          <p className="mt-1 text-sm text-danger-500">{error?.message || 'Une erreur est survenue.'}</p>
-          <button onClick={() => refetch()} className="mt-4 rounded-xl bg-danger-500 px-4 py-2 text-sm font-semibold text-white hover:bg-danger-600">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-destructive/30 bg-destructive/10 py-12">
+          <AlertTriangle className="mb-3 h-10 w-10 text-destructive" />
+          <h3 className="text-lg font-semibold text-destructive">Erreur de chargement</h3>
+          <p className="mt-1 text-sm text-destructive">{error?.message || 'Une erreur est survenue.'}</p>
+          <Button variant="destructive" onClick={() => refetch()} className="mt-4">
             Réessayer
-          </button>
+          </Button>
         </div>
       </div>
     )
@@ -282,26 +278,23 @@ export default function RecruitersPage() {
       animate="show"
       className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8"
     >
-      {/* Header */}
       <motion.div
         variants={item}
         className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
-          <h1 className="text-3xl font-bold text-surface-900 dark:text-surface-50">
+          <h1 className="text-3xl font-bold text-foreground">
             Explorateur de Recruteurs
           </h1>
-          <p className="mt-1 text-surface-500 dark:text-surface-400">
+          <p className="mt-1 text-muted-foreground">
             Gérez et explorez votre réseau de recruteurs
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
+          <Button
+            variant="success"
             onClick={handleScrape}
             disabled={scrapeRecruitersMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-xl bg-secondary-500 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-secondary-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-secondary-600 dark:hover:bg-secondary-500"
           >
             {scrapeRecruitersMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -309,33 +302,27 @@ export default function RecruitersPage() {
               <RefreshCw className="h-4 w-4" />
             )}
             {scrapeRecruitersMutation.isPending ? 'Scrapping...' : 'Scraper les recruteurs'}
-          </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            className="inline-flex items-center gap-2 rounded-xl bg-primary-500 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-500"
-          >
+          </Button>
+          <Button>
             <Plus className="h-4 w-4" />
             Ajouter un recruteur
-          </motion.button>
+          </Button>
         </div>
       </motion.div>
 
-      {/* Search Bar */}
       <motion.div variants={item}>
         <div className="relative">
-          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-surface-400" />
-          <input
+          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+          <Input
             type="text"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1) }}
             placeholder="Rechercher par nom, entreprise, secteur..."
-            className="w-full rounded-2xl border border-surface-200 bg-white py-4 pl-12 pr-4 text-surface-700 shadow-sm transition-shadow placeholder:text-surface-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:shadow-md dark:border-surface-600 dark:bg-surface-800 dark:text-surface-200 dark:placeholder:text-surface-500 dark:focus:border-primary-400"
+            className="h-12 rounded-xl border-border bg-card pl-12 pr-4 shadow-sm focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:shadow-[var(--shadow-md)]"
           />
         </div>
       </motion.div>
 
-      {/* Filters */}
       <motion.div variants={item} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <FilterDropdown
           value={sector}
@@ -354,17 +341,15 @@ export default function RecruitersPage() {
         />
       </motion.div>
 
-      {/* Results Count */}
       <motion.div variants={item}>
-        <p className="text-sm font-medium text-surface-500 dark:text-surface-400">
-          <span className="font-bold text-surface-900 dark:text-surface-100">
+        <p className="text-sm font-medium text-muted-foreground">
+          <span className="font-bold text-foreground">
             {isLoading ? '...' : total}
           </span>{' '}
           {total === 1 ? 'recruteur trouvé' : 'recruteurs trouvés'}
         </p>
       </motion.div>
 
-      {/* Recruiters Grid */}
       {isLoading ? (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -392,17 +377,18 @@ export default function RecruitersPage() {
       ) : (
         <motion.div
           variants={item}
-          className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-surface-300 bg-surface-50 py-16 dark:border-surface-600 dark:bg-surface-800/50"
+          className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted py-16"
         >
-          <Users className="mb-4 h-12 w-12 text-surface-300 dark:text-surface-600" />
-          <h3 className="text-lg font-semibold text-surface-700 dark:text-surface-300">
+          <Users className="mb-4 h-12 w-12 text-muted-foreground" />
+          <h3 className="text-lg font-semibold text-foreground">
             Aucun recruteur trouvé
           </h3>
-          <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
+          <p className="mt-1 text-sm text-muted-foreground">
             Essayez de modifier vos filtres ou votre recherche
           </p>
           {(search || sector !== 'Tous' || location !== 'Toutes' || connectionDegree !== 'Tous') && (
-            <button
+            <Button
+              variant="secondary"
               onClick={() => {
                 setSearch('')
                 setSector('Tous')
@@ -410,11 +396,11 @@ export default function RecruitersPage() {
                 setConnectionDegree('Tous')
                 setPage(1)
               }}
-              className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-surface-200 px-4 py-2 text-sm font-medium text-surface-700 transition-colors hover:bg-surface-300 dark:bg-surface-600 dark:text-surface-300 dark:hover:bg-surface-500"
+              className="mt-4"
             >
               <X className="h-3.5 w-3.5" />
               Réinitialiser les filtres
-            </button>
+            </Button>
           )}
         </motion.div>
       )}

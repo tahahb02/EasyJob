@@ -16,7 +16,7 @@ import {
   Building2,
   BriefcaseBusiness,
 } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import { useAuth } from '@/context/AuthContext'
 import { useUploadCV } from '@/api/hooks'
 import api from '@/api/axios'

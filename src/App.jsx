@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { Toaster } from 'react-hot-toast'
+import { Toaster } from '@/components/ui/sonner'
 import { AuthProvider } from '@/context/AuthContext'
 import { ThemeProvider } from '@/context/ThemeContext'
 import { SocketProvider } from '@/context/SocketContext'
@@ -46,6 +46,7 @@ import RecruiterJobDetailPage from '@/pages/recruiter/RecruiterJobDetailPage'
 import RecruiterCandidatesPage from '@/pages/recruiter/RecruiterCandidatesPage'
 import RecruiterApplicationsPage from '@/pages/recruiter/RecruiterApplicationsPage'
 import RecruiterProfilePage from '@/pages/recruiter/RecruiterProfilePage'
+import NotFoundPage from '@/pages/NotFoundPage'
 
 export default function App() {
   return (
@@ -53,18 +54,7 @@ export default function App() {
       <AuthProvider>
         <SocketProvider>
         <BrowserRouter>
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              duration: 3000,
-              style: {
-                background: 'var(--toast-bg, #1e293b)',
-                color: 'var(--toast-color, #f1f5f9)',
-                borderRadius: '12px',
-                padding: '12px 16px',
-              },
-            }}
-          />
+          <Toaster />
           <Routes>
             {/* Routes publiques */}
             <Route path="/" element={<LandingPage />} />
@@ -113,6 +103,8 @@ export default function App() {
               </Route>
               </Route>
             </Route>
+
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </BrowserRouter>
         </SocketProvider>

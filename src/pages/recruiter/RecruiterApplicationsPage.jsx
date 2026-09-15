@@ -5,7 +5,7 @@ import {
   Download, Mail, Phone, MapPin, Briefcase, GraduationCap, Languages, User,
 } from 'lucide-react'
 import { useRecruiterApplications, useUpdateRecruiterApplicationStatus } from '@/api/hooks'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.05 } } }
 const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }

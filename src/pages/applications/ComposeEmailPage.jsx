@@ -16,13 +16,11 @@ import {
   User,
   FileText,
   Link as LinkIcon,
-  MessageSquare,
   StickyNote,
   Building2,
   Loader2,
-  ChevronDown,
 } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 import {
   useJob,
@@ -30,6 +28,17 @@ import {
   useCreateApplication,
   useSendApplication,
 } from '@/api/hooks'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 const schema = z.object({
   recipient: z.string().email('Email invalide'),
@@ -64,7 +73,7 @@ function replaceVariables(text, vars) {
 
 function SkeletonBlock({ className }) {
   return (
-    <div className={`animate-pulse rounded-xl bg-surface-200 dark:bg-surface-700 ${className}`} />
+    <div className={`animate-pulse rounded-xl bg-muted ${className}`} />
   )
 }
 
@@ -76,14 +85,14 @@ function ComposeSkeleton() {
         <SkeletonBlock className="h-9 w-80" />
         <SkeletonBlock className="h-5 w-64" />
       </div>
-      <div className="flex items-center gap-4 rounded-2xl border border-primary-200 bg-primary-50 p-5 dark:border-primary-500/30 dark:bg-primary-500/10">
+      <div className="flex items-center gap-4 rounded-xl border border-primary/20 bg-primary/10 p-5">
         <SkeletonBlock className="h-12 w-12 rounded-xl shrink-0" />
         <div className="space-y-2 flex-1">
           <SkeletonBlock className="h-6 w-56" />
           <SkeletonBlock className="h-4 w-72" />
         </div>
       </div>
-      <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm dark:border-surface-700 dark:bg-surface-800 space-y-4">
+      <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
         <SkeletonBlock className="h-6 w-48" />
         <SkeletonBlock className="h-11 w-full" />
         <SkeletonBlock className="h-11 w-full" />
@@ -282,20 +291,20 @@ ${userVars.userName || ''}`
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col items-center"
         >
-          <Mail className="mb-4 h-16 w-16 text-surface-300 dark:text-surface-600" />
-          <h1 className="text-2xl font-bold text-surface-900 dark:text-surface-50">
+          <Mail className="mb-4 h-16 w-16 text-muted-foreground" />
+          <h1 className="text-2xl font-bold text-foreground">
             Offre non trouvée
           </h1>
-          <p className="mt-2 text-surface-500 dark:text-surface-400">
+          <p className="mt-2 text-muted-foreground">
             {jobError?.response?.data?.message || "L'offre d'emploi associée n'existe pas ou a été supprimée."}
           </p>
-          <button
+          <Button
             onClick={() => navigate('/jobs')}
-            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-600"
+            className="mt-6"
           >
             <ArrowLeft className="h-4 w-4" />
             Retour aux offres
-          </button>
+          </Button>
         </motion.div>
       </div>
     )
@@ -312,21 +321,23 @@ ${userVars.userName || ''}`
     >
       {/* Back Button */}
       <motion.div variants={item}>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-surface-600 transition-colors hover:bg-surface-100 hover:text-surface-900 dark:text-surface-400 dark:hover:bg-surface-700 dark:hover:text-surface-100"
+          className="text-muted-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
           Retour
-        </button>
+        </Button>
       </motion.div>
 
       {/* Header */}
       <motion.div variants={item}>
-        <h1 className="text-3xl font-bold text-surface-900 dark:text-surface-50">
+        <h1 className="text-3xl font-bold text-foreground">
           Rédiger votre candidature
         </h1>
-        <p className="mt-1 text-surface-500 dark:text-surface-400">
+        <p className="mt-1 text-muted-foreground">
           Personnalisez et envoyez votre candidature par email
         </p>
       </motion.div>
@@ -334,16 +345,16 @@ ${userVars.userName || ''}`
       {/* Job Info Card */}
       <motion.div
         variants={item}
-        className="flex items-center gap-4 rounded-2xl border border-primary-200 bg-primary-50 p-5 shadow-sm dark:border-primary-500/30 dark:bg-primary-500/10"
+        className="flex items-center gap-4 rounded-xl border border-primary/20 bg-primary/10 p-5 shadow-sm"
       >
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-500 text-white dark:bg-primary-600">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary text-white">
           <Building2 className="h-6 w-6" />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="text-lg font-bold text-surface-900 dark:text-surface-50">
+          <h3 className="text-lg font-bold text-foreground">
             {job.title}
           </h3>
-          <p className="text-sm font-medium text-surface-500 dark:text-surface-400">
+          <p className="text-sm font-medium text-muted-foreground">
             {job.company} &middot; {job.location} &middot; {job.contractType}
           </p>
         </div>
@@ -353,71 +364,71 @@ ${userVars.userName || ''}`
         {/* Email Fields */}
         <motion.div
           variants={item}
-          className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm dark:border-surface-700 dark:bg-surface-800"
+          className="rounded-xl border border-border bg-card p-6 shadow-sm"
         >
-          <h2 className="mb-5 flex items-center gap-2 text-lg font-bold text-surface-900 dark:text-surface-50">
-            <Mail className="h-5 w-5 text-primary-500" />
+          <h2 className="mb-5 flex items-center gap-2 text-lg font-bold text-foreground">
+            <Mail className="h-5 w-5 text-primary" />
             Composition de l'email
           </h2>
 
           <div className="space-y-4">
             {/* Recipient */}
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
+              <Label className="mb-1.5">
                 Destinataire
-              </label>
+              </Label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" />
-                <input
+                <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
                   type="email"
-                  {...register('recipient')}
-                  className="w-full rounded-xl border border-surface-200 bg-surface-50 py-2.5 pl-10 pr-4 text-sm text-surface-700 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-surface-600 dark:bg-surface-700 dark:text-surface-200"
+                  className="bg-muted pl-10"
                   placeholder="recrutement@entreprise.ma"
+                  {...register('recipient')}
                 />
               </div>
               {errors.recipient && (
-                <p className="mt-1 text-xs text-danger-500">{errors.recipient.message}</p>
+                <p className="mt-1 text-xs text-destructive">{errors.recipient.message}</p>
               )}
             </div>
 
             {/* Subject */}
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
+              <Label className="mb-1.5">
                 Objet
-              </label>
+              </Label>
               <div className="relative">
-                <FileText className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" />
-                <input
+                <FileText className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
                   type="text"
+                  className="bg-muted pl-10"
                   {...register('subject')}
-                  className="w-full rounded-xl border border-surface-200 bg-surface-50 py-2.5 pl-10 pr-4 text-sm text-surface-700 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-surface-600 dark:bg-surface-700 dark:text-surface-200"
                 />
               </div>
               {errors.subject && (
-                <p className="mt-1 text-xs text-danger-500">{errors.subject.message}</p>
+                <p className="mt-1 text-xs text-destructive">{errors.subject.message}</p>
               )}
             </div>
 
             {/* Template Selector */}
             {templateOptions.length > 0 && (
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
+                <Label className="mb-1.5">
                   Template
-                </label>
+                </Label>
                 <div className="relative">
-                  <select
-                    value={selectedTemplate || ''}
-                    onChange={(e) => handleTemplateChange(e.target.value)}
-                    className="w-full appearance-none rounded-xl border border-surface-200 bg-surface-50 py-2.5 pl-10 pr-10 text-sm font-medium text-surface-700 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-surface-600 dark:bg-surface-700 dark:text-surface-200"
-                  >
-                    {templateOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                  <FileText className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" />
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" />
+                  <FileText className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Select value={selectedTemplate || ''} onValueChange={handleTemplateChange}>
+                    <SelectTrigger className="w-full bg-muted pl-10">
+                      <SelectValue placeholder="Choisir un template" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {templateOptions.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             )}
@@ -425,16 +436,16 @@ ${userVars.userName || ''}`
             {/* Email Body */}
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <label className="text-sm font-medium text-surface-700 dark:text-surface-300">
+                <Label className="text-sm font-medium">
                   Corps de l'email
-                </label>
+                </Label>
                 <motion.button
                   type="button"
                   onClick={handleGenerateAI}
                   disabled={isGenerating}
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-primary-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-primary px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
                   {isGenerating && generatingField === 'body' ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -444,13 +455,13 @@ ${userVars.userName || ''}`
                   {isGenerating ? 'Génération...' : 'Générer avec AI'}
                 </motion.button>
               </div>
-              <textarea
-                {...register('body')}
+              <Textarea
                 rows={16}
-                className="w-full rounded-xl border border-surface-200 bg-surface-50 p-4 text-sm leading-relaxed text-surface-700 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-surface-600 dark:bg-surface-700 dark:text-surface-200"
+                className="bg-muted"
+                {...register('body')}
               />
               {errors.body && (
-                <p className="mt-1 text-xs text-danger-500">{errors.body.message}</p>
+                <p className="mt-1 text-xs text-destructive">{errors.body.message}</p>
               )}
             </div>
           </div>
@@ -459,25 +470,25 @@ ${userVars.userName || ''}`
         {/* Options */}
         <motion.div
           variants={item}
-          className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm dark:border-surface-700 dark:bg-surface-800"
+          className="rounded-xl border border-border bg-card p-6 shadow-sm"
         >
-          <h2 className="mb-5 flex items-center gap-2 text-lg font-bold text-surface-900 dark:text-surface-50">
-            <Paperclip className="h-5 w-5 text-secondary-500" />
+          <h2 className="mb-5 flex items-center gap-2 text-lg font-bold text-foreground">
+            <Paperclip className="h-5 w-5 text-accent" />
             Options
           </h2>
 
           <div className="space-y-5">
             {/* Attach CV */}
-            <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-surface-200 p-4 transition-colors hover:bg-surface-50 dark:border-surface-600 dark:hover:bg-surface-700/50">
+            <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-border p-4 transition-colors hover:bg-muted">
               <div className="flex items-center gap-3">
-                <div className={`rounded-lg p-2 ${watchedAttachCv ? 'bg-secondary-50 dark:bg-secondary-500/10' : 'bg-surface-100 dark:bg-surface-700'}`}>
-                  <Paperclip className={`h-4 w-4 ${watchedAttachCv ? 'text-secondary-500' : 'text-surface-400'}`} />
+                <div className={`rounded-lg p-2 ${watchedAttachCv ? 'bg-accent/10' : 'bg-muted'}`}>
+                  <Paperclip className={`h-4 w-4 ${watchedAttachCv ? 'text-accent' : 'text-muted-foreground'}`} />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-surface-700 dark:text-surface-300">
+                  <p className="text-sm font-medium text-foreground">
                     Joindre le CV
                   </p>
-                  <p className="text-xs text-surface-400 dark:text-surface-500">
+                  <p className="text-xs text-muted-foreground">
                     Inclure votre CV actuel en pièce jointe
                   </p>
                 </div>
@@ -488,53 +499,53 @@ ${userVars.userName || ''}`
                   {...register('attachCv')}
                   className="peer sr-only"
                 />
-                <div className="h-6 w-11 rounded-full bg-surface-300 transition-colors peer-checked:bg-secondary-500 dark:bg-surface-600" />
-                <div className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
+                <div className="h-6 w-11 rounded-full bg-border transition-colors peer-checked:bg-accent" />
+                <div className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-background shadow-sm transition-transform peer-checked:translate-x-5" />
               </div>
             </label>
 
             {/* Portfolio URL */}
             <div>
-              <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-surface-700 dark:text-surface-300">
-                <LinkIcon className="h-4 w-4 text-surface-400" />
+              <Label className="mb-1.5 gap-2">
+                <LinkIcon className="h-4 w-4 text-muted-foreground" />
                 URL Portfolio (optionnel)
-              </label>
-              <input
+              </Label>
+              <Input
                 type="url"
-                {...register('portfolioUrl')}
-                className="w-full rounded-xl border border-surface-200 bg-surface-50 px-4 py-2.5 text-sm text-surface-700 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-surface-600 dark:bg-surface-700 dark:text-surface-200"
+                className="bg-muted"
                 placeholder="https://mon-portfolio.com"
+                {...register('portfolioUrl')}
               />
               {errors.portfolioUrl && (
-                <p className="mt-1 text-xs text-danger-500">{errors.portfolioUrl.message}</p>
+                <p className="mt-1 text-xs text-destructive">{errors.portfolioUrl.message}</p>
               )}
             </div>
 
             {/* Cover Letter */}
             <div>
-              <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-surface-700 dark:text-surface-300">
-                <FileText className="h-4 w-4 text-surface-400" />
+              <Label className="mb-1.5 gap-2">
+                <FileText className="h-4 w-4 text-muted-foreground" />
                 Lettre de motivation (optionnel)
-              </label>
-              <textarea
-                {...register('coverLetter')}
+              </Label>
+              <Textarea
                 rows={4}
-                className="w-full rounded-xl border border-surface-200 bg-surface-50 p-4 text-sm text-surface-700 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-surface-600 dark:bg-surface-700 dark:text-surface-200"
+                className="bg-muted"
                 placeholder="Ajoutez une lettre de motivation personnalisée..."
+                {...register('coverLetter')}
               />
             </div>
 
             {/* Notes */}
             <div>
-              <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-surface-700 dark:text-surface-300">
-                <StickyNote className="h-4 w-4 text-surface-400" />
+              <Label className="mb-1.5 gap-2">
+                <StickyNote className="h-4 w-4 text-muted-foreground" />
                 Notes internes (optionnel)
-              </label>
-              <textarea
-                {...register('notes')}
+              </Label>
+              <Textarea
                 rows={3}
-                className="w-full rounded-xl border border-surface-200 bg-surface-50 p-4 text-sm text-surface-700 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-surface-600 dark:bg-surface-700 dark:text-surface-200"
+                className="bg-muted"
                 placeholder="Notes personnelles (non incluses dans l'email)..."
+                {...register('notes')}
               />
             </div>
           </div>
@@ -542,49 +553,49 @@ ${userVars.userName || ''}`
 
         {/* Preview Section */}
         <motion.div variants={item}>
-          <button
+          <Button
             type="button"
+            variant="outline"
             onClick={() => setShowPreview(!showPreview)}
-            className="inline-flex items-center gap-2 rounded-xl border border-surface-200 px-4 py-2.5 text-sm font-medium text-surface-600 transition-colors hover:bg-surface-50 dark:border-surface-600 dark:text-surface-400 dark:hover:bg-surface-700"
           >
             {showPreview ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             {showPreview ? 'Masquer l\'aperçu' : 'Voir l\'aperçu'}
-          </button>
+          </Button>
 
           {showPreview && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="mt-4 overflow-hidden rounded-2xl border border-surface-200 bg-white shadow-sm dark:border-surface-700 dark:bg-surface-800"
+              className="mt-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm"
             >
-              <div className="border-b border-surface-200 bg-surface-50 px-6 py-4 dark:border-surface-700 dark:bg-surface-700/50">
-                <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-300">
+              <div className="border-b border-border bg-muted px-6 py-4">
+                <h3 className="text-sm font-semibold text-foreground">
                   Aperçu de l'email
                 </h3>
               </div>
               <div className="p-6">
                 <div className="space-y-3 text-sm">
                   <div className="flex items-center gap-2">
-                    <span className="w-20 shrink-0 font-medium text-surface-500 dark:text-surface-400">À :</span>
-                    <span className="text-surface-700 dark:text-surface-300">{watchedRecipient}</span>
+                    <span className="w-20 shrink-0 font-medium text-muted-foreground">À :</span>
+                    <span className="text-foreground">{watchedRecipient}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="w-20 shrink-0 font-medium text-surface-500 dark:text-surface-400">Objet :</span>
-                    <span className="font-semibold text-surface-800 dark:text-surface-200">{watchedSubject}</span>
+                    <span className="w-20 shrink-0 font-medium text-muted-foreground">Objet :</span>
+                    <span className="font-semibold text-foreground">{watchedSubject}</span>
                   </div>
                   {watchedAttachCv && (
                     <div className="flex items-center gap-2">
-                      <span className="w-20 shrink-0 font-medium text-surface-500 dark:text-surface-400">PJ :</span>
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-100 px-2.5 py-1 text-xs font-medium text-surface-600 dark:bg-surface-700 dark:text-surface-400">
+                      <span className="w-20 shrink-0 font-medium text-muted-foreground">PJ :</span>
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
                         <Paperclip className="h-3 w-3" />
                         CV.pdf
                       </span>
                     </div>
                   )}
                 </div>
-                <div className="mt-5 border-t border-surface-100 pt-5 dark:border-surface-700">
-                  <div className="whitespace-pre-wrap text-sm leading-relaxed text-surface-600 dark:text-surface-400">
+                <div className="mt-5 border-t border-border pt-5">
+                  <div className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
                     {watchedBody}
                   </div>
                 </div>
@@ -596,7 +607,7 @@ ${userVars.userName || ''}`
         {/* Actions */}
         <motion.div
           variants={item}
-          className="flex flex-col items-center gap-3 border-t border-surface-200 pt-6 dark:border-surface-700 sm:flex-row sm:justify-end"
+          className="flex flex-col items-center gap-3 border-t border-border pt-6 sm:flex-row sm:justify-end"
         >
           <motion.button
             type="button"
@@ -604,7 +615,7 @@ ${userVars.userName || ''}`
             disabled={isMutating}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-surface-200 bg-white px-6 py-3 text-sm font-semibold text-surface-700 shadow-sm transition-colors hover:bg-surface-50 dark:border-surface-600 dark:bg-surface-700 dark:text-surface-300 dark:hover:bg-surface-600 sm:w-auto disabled:opacity-50"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-6 py-3 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-muted sm:w-auto disabled:opacity-50"
           >
             {createApplication.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -619,7 +630,7 @@ ${userVars.userName || ''}`
             disabled={isMutating}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-500 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-600 disabled:opacity-50 dark:bg-primary-600 dark:hover:bg-primary-500 sm:w-auto"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary/90 sm:w-auto disabled:opacity-50"
           >
             {isMutating ? (
               <Loader2 className="h-4 w-4 animate-spin" />

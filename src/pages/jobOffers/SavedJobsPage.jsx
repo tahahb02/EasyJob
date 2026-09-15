@@ -11,6 +11,8 @@ import {
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 
 import { useSavedJobs, useToggleSaveJob } from '@/api/hooks'
 
@@ -24,10 +26,10 @@ const sourceLabels = {
 
 const sourceColors = {
   linkedin: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
-  indeed: 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400',
+  indeed: 'bg-accent/10 text-accent',
   welcometothejungle: 'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400',
-  rekrute: 'bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400',
-  manpower: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400',
+  rekrute: 'bg-warning/10 text-warning',
+  manpower: 'bg-destructive/10 text-destructive',
 }
 
 function RelevanceCircle({ score }) {
@@ -36,7 +38,11 @@ function RelevanceCircle({ score }) {
   const offset = circumference - ((score || 0) / 100) * circumference
 
   const color =
-    score >= 90 ? '#10B981' : score >= 75 ? '#F59E0B' : '#EF4444'
+    score >= 90
+      ? 'hsl(var(--accent))'
+      : score >= 75
+        ? 'hsl(var(--warning))'
+        : 'hsl(var(--destructive))'
 
   return (
     <div className="relative flex h-10 w-10 items-center justify-center">
@@ -48,7 +54,7 @@ function RelevanceCircle({ score }) {
           fill="none"
           stroke="currentColor"
           strokeWidth="3"
-          className="text-surface-200 dark:text-surface-700"
+          className="text-border"
         />
         <circle
           cx="20"
@@ -62,7 +68,7 @@ function RelevanceCircle({ score }) {
           strokeLinecap="round"
         />
       </svg>
-      <span className="text-xs font-bold text-surface-700 dark:text-surface-300">
+      <span className="text-xs font-bold text-foreground">
         {score ?? 0}
       </span>
     </div>
@@ -71,17 +77,17 @@ function RelevanceCircle({ score }) {
 
 function JobCardSkeleton() {
   return (
-    <div className="rounded-2xl border border-surface-200 bg-white p-5 shadow-sm dark:border-surface-700 dark:bg-surface-800">
+    <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 space-y-3">
           <div className="flex gap-2">
-            <div className="h-5 w-16 animate-pulse rounded-full bg-surface-200 dark:bg-surface-700" />
-            <div className="h-5 w-12 animate-pulse rounded-full bg-surface-200 dark:bg-surface-700" />
+            <div className="h-5 w-16 animate-pulse rounded-full bg-muted" />
+            <div className="h-5 w-12 animate-pulse rounded-full bg-muted" />
           </div>
-          <div className="h-6 w-48 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
-          <div className="h-4 w-32 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
+          <div className="h-6 w-48 animate-pulse rounded bg-muted" />
+          <div className="h-4 w-32 animate-pulse rounded bg-muted" />
         </div>
-        <div className="h-10 w-10 animate-pulse rounded-full bg-surface-200 dark:bg-surface-700" />
+        <div className="h-10 w-10 animate-pulse rounded-full bg-muted" />
       </div>
     </div>
   )
@@ -114,13 +120,13 @@ export default function SavedJobsPage() {
   if (error) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-danger-300 bg-danger-50 py-12 dark:border-danger-500/30 dark:bg-danger-500/5">
-          <AlertTriangle className="mb-3 h-10 w-10 text-danger-400" />
-          <h3 className="text-lg font-semibold text-danger-700 dark:text-danger-400">Erreur de chargement</h3>
-          <p className="mt-1 text-sm text-danger-500">{error?.message || 'Une erreur est survenue.'}</p>
-          <button onClick={() => refetch()} className="mt-4 rounded-xl bg-danger-500 px-4 py-2 text-sm font-semibold text-white hover:bg-danger-600">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-destructive/30 bg-destructive/10 py-12">
+          <AlertTriangle className="mb-3 h-10 w-10 text-destructive" />
+          <h3 className="text-lg font-semibold text-destructive">Erreur de chargement</h3>
+          <p className="mt-1 text-sm text-destructive">{error?.message || 'Une erreur est survenue.'}</p>
+          <Button onClick={() => refetch()} variant="destructive" className="mt-4">
             Réessayer
-          </button>
+          </Button>
         </div>
       </div>
     )
@@ -135,18 +141,18 @@ export default function SavedJobsPage() {
     >
       {/* Header */}
       <motion.div variants={item}>
-        <h1 className="text-3xl font-bold text-surface-900 dark:text-surface-50">
+        <h1 className="text-3xl font-bold text-foreground">
           Offres sauvegardées
         </h1>
-        <p className="mt-1 text-surface-500 dark:text-surface-400">
+        <p className="mt-1 text-muted-foreground">
           Retrouvez les offres que vous avez enregistrées
         </p>
       </motion.div>
 
       {/* Results Count */}
       <motion.div variants={item}>
-        <p className="text-sm font-medium text-surface-500 dark:text-surface-400">
-          <span className="font-bold text-surface-900 dark:text-surface-100">
+        <p className="text-sm font-medium text-muted-foreground">
+          <span className="font-bold text-foreground">
             {isLoading ? '...' : offers.length}
           </span>{' '}
           {offers.length === 1 ? 'offre sauvegardée' : 'offres sauvegardées'}
@@ -176,44 +182,45 @@ export default function SavedJobsPage() {
               transition={{ duration: 0.4, delay: index * 0.05, ease: 'easeOut' }}
               whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
               onClick={() => navigate(`/jobs/${job.id}`)}
-              className="group cursor-pointer rounded-2xl border border-surface-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md dark:border-surface-700 dark:bg-surface-800"
+              className="group cursor-pointer rounded-xl border border-border bg-card p-5 shadow-sm transition-shadow hover:shadow-[var(--shadow-md)]"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <span
-                      className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${sourceColors[job.source] || 'bg-surface-100 text-surface-600'}`}
+                    <Badge
+                      variant="secondary"
+                      className={sourceColors[job.source] || 'bg-muted text-muted-foreground'}
                     >
                       {sourceLabels[job.source] || job.source}
-                    </span>
-                    <span className="inline-block rounded-full bg-surface-100 px-2.5 py-0.5 text-xs font-medium text-surface-600 dark:bg-surface-700 dark:text-surface-400">
+                    </Badge>
+                    <Badge variant="secondary">
                       {job.contractType}
-                    </span>
+                    </Badge>
                   </div>
 
-                  <h3 className="text-lg font-bold text-surface-900 group-hover:text-primary-600 dark:text-surface-50 dark:group-hover:text-primary-400">
+                  <h3 className="text-lg font-bold text-foreground group-hover:text-primary">
                     {job.title}
                   </h3>
 
-                  <p className="mt-1 text-sm font-medium text-surface-500 dark:text-surface-400">
+                  <p className="mt-1 text-sm font-medium text-muted-foreground">
                     {job.company}
                   </p>
 
-                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-surface-500 dark:text-surface-400">
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <MapPin className="h-3.5 w-3.5" />
                       {job.location}
                       {job.isRemote && (
-                        <span className="ml-1 text-xs text-secondary-500">(Remote)</span>
+                        <span className="ml-1 text-xs text-accent">(Remote)</span>
                       )}
                     </span>
                     {job.salary && (
-                      <span className="font-medium text-surface-700 dark:text-surface-300">
+                      <span className="font-medium text-foreground">
                         {job.salary.min?.toLocaleString('fr-MA')} - {job.salary.max?.toLocaleString('fr-MA')} MAD/mois
                       </span>
                     )}
                     {job.postedAt && (
-                      <span className="text-xs text-surface-400 dark:text-surface-500">
+                      <span className="text-xs text-muted-foreground">
                         {formatDistanceToNow(new Date(job.postedAt), {
                           addSuffix: true,
                           locale: fr,
@@ -225,33 +232,35 @@ export default function SavedJobsPage() {
 
                 <div className="flex shrink-0 flex-col items-center gap-1">
                   <RelevanceCircle score={job.relevanceScore} />
-                  <span className="text-[10px] font-medium text-surface-400 dark:text-surface-500">
+                  <span className="text-[10px] font-medium text-muted-foreground">
                     pertinence
                   </span>
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center gap-3 border-t border-surface-100 pt-4 dark:border-surface-700">
+              <div className="mt-4 flex items-center gap-3 border-t border-border pt-4">
                 {job.sourceUrl && (
-                  <a
-                    href={job.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-surface-200 bg-white px-3 py-2 text-sm font-medium text-surface-600 transition-colors hover:border-primary-200 hover:text-primary-600 dark:border-surface-600 dark:bg-surface-700 dark:text-surface-400 dark:hover:border-primary-500/30 dark:hover:text-primary-400"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Voir sur {sourceLabels[job.source] || job.source}
-                  </a>
+                  <Button asChild variant="outline" size="sm">
+                    <a
+                      href={job.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Voir sur {sourceLabels[job.source] || job.source}
+                    </a>
+                  </Button>
                 )}
 
-                <button
+                <Button
+                  variant="destructive"
+                  size="sm"
                   onClick={(e) => {
                     e.stopPropagation()
                     handleUnsave(job.id)
                   }}
                   disabled={toggleSave.isPending}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-danger-200 bg-danger-50 px-3 py-2 text-sm font-medium text-danger-600 transition-colors hover:bg-danger-100 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-400 dark:hover:bg-danger-500/20"
                 >
                   {toggleSave.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -259,16 +268,17 @@ export default function SavedJobsPage() {
                     <BookmarkX className="h-4 w-4" />
                   )}
                   Retirer
-                </button>
+                </Button>
 
-                <Link
-                  to={`/applications/compose/${job.id}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-500"
-                >
-                  <Briefcase className="h-4 w-4" />
-                  Postuler
-                </Link>
+                <Button asChild size="sm">
+                  <Link
+                    to={`/applications/compose/${job.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Briefcase className="h-4 w-4" />
+                    Postuler
+                  </Link>
+                </Button>
               </div>
             </motion.div>
           ))}
@@ -276,23 +286,22 @@ export default function SavedJobsPage() {
       ) : (
         <motion.div
           variants={item}
-          className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-surface-300 bg-surface-50 py-20 dark:border-surface-600 dark:bg-surface-800/50"
+          className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/50 py-20"
         >
-          <div className="rounded-full bg-surface-100 p-5 dark:bg-surface-700">
-            <Bookmark className="h-10 w-10 text-surface-400 dark:text-surface-500" />
+          <div className="rounded-full bg-muted p-5">
+            <Bookmark className="h-10 w-10 text-muted-foreground" />
           </div>
-          <h3 className="mt-5 text-lg font-semibold text-surface-700 dark:text-surface-300">
+          <h3 className="mt-5 text-lg font-semibold text-foreground">
             Aucune offre sauvegardée
           </h3>
-          <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
+          <p className="mt-1 text-sm text-muted-foreground">
             Parcourez les offres et sauvegardez celles qui vous intéressent
           </p>
-          <Link
-            to="/jobs"
-            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-600"
-          >
-            Voir les offres
-          </Link>
+          <Button asChild className="mt-6">
+            <Link to="/jobs">
+              Voir les offres
+            </Link>
+          </Button>
         </motion.div>
       )}
     </motion.div>

@@ -9,7 +9,7 @@ import {
   Briefcase,
   Link as LinkIcon,
 } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import { useRecruiterProfile, useUpdateRecruiterProfile, useRecruiterDashboard } from '@/api/hooks'
 
 const INDUSTRIES = [

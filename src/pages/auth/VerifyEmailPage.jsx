@@ -2,9 +2,10 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Mail, ArrowLeft, Loader2, CheckCircle, RefreshCw, ExternalLink, Eye } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAuth } from '@/context/AuthContext'
-import toast from 'react-hot-toast'
 import AuthLayout from '@/layouts/AuthLayout'
+import { Button } from '@/components/ui/button'
 
 export default function VerifyEmailPage() {
   const [code, setCode] = useState(['', '', '', '', '', ''])
@@ -85,55 +86,69 @@ export default function VerifyEmailPage() {
     }
   }
 
+  const otpClass =
+    "size-11 rounded-md border border-input text-center text-lg font-semibold text-foreground transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-ring/50"
+
   if (success) {
     return (
-      <AuthLayout>
-        <div className="text-center py-4">
-          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-16 h-16 bg-secondary-100 dark:bg-secondary-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-8 h-8 text-secondary-500" />
+      <AuthLayout mode="centered">
+        <div className="space-y-4 py-2 text-center">
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+            className="mx-auto flex size-14 items-center justify-center rounded-full bg-accent/10"
+          >
+            <CheckCircle className="size-7 text-accent" />
           </motion.div>
-          <h1 className="text-2xl font-bold text-surface-800 dark:text-white mb-2">Email vérifié !</h1>
-          <p className="text-surface-500">Redirection vers le tableau de bord...</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Email vérifié !</h1>
+          <p className="text-sm text-muted-foreground">
+            Redirection vers le tableau de bord...
+          </p>
         </div>
       </AuthLayout>
     )
   }
 
   return (
-    <AuthLayout>
-      <div className="text-center mb-6">
-        <Link to="/login" className="inline-flex items-center gap-1 text-sm text-surface-500 hover:text-primary-500 mb-4">
-          <ArrowLeft className="w-4 h-4" /> Retour à la connexion
+    <AuthLayout mode="centered">
+      <div className="mb-6 text-center">
+        <Link
+          to="/login"
+          className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary"
+        >
+          <ArrowLeft className="size-4" />
+          Retour à la connexion
         </Link>
-        <div className="w-14 h-14 bg-primary-100 dark:bg-primary-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <Mail className="w-7 h-7 text-primary-500" />
+        <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl bg-primary/10">
+          <Mail className="size-6 text-primary" />
         </div>
-        <h1 className="text-2xl font-bold text-surface-800 dark:text-white">Vérifiez votre email</h1>
-        <p className="text-surface-500 mt-1">
-          Un code à 6 chiffres a été envoyé à<br />
-          <span className="font-medium text-surface-700 dark:text-surface-300">{user?.email}</span>
+        <h1 className="text-2xl font-semibold tracking-tight">Vérifiez votre email</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Un code à 6 chiffres a été envoyé à
+          <br />
+          <span className="font-medium text-foreground">{user?.email}</span>
         </p>
       </div>
 
-      {/* Dev mode: show preview URL */}
       {previewUrl && (
-        <div className="mb-6 rounded-xl border-2 border-dashed border-primary-200 bg-primary-50 dark:bg-primary-900/20 dark:border-primary-800 p-4">
+        <div className="mb-6 rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 p-4">
           <div className="flex items-start gap-3">
-            <Eye className="w-5 h-5 text-primary-500 mt-0.5 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-primary-700 dark:text-primary-300">
+            <Eye className="mt-0.5 size-5 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-primary">
                 Mode développement — Email de test
               </p>
-              <p className="text-xs text-primary-600/80 dark:text-primary-400/80 mt-1">
+              <p className="mt-1 text-xs text-primary/80">
                 Les emails sont envoyés via Ethereal. Cliquez ci-dessous pour voir l'email contenant votre code :
               </p>
               <a
                 href={previewUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-white dark:bg-surface-800 border border-primary-200 dark:border-primary-700 px-3 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors break-all"
+                className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-muted break-all"
               >
-                <ExternalLink className="w-4 h-4 shrink-0" />
+                <ExternalLink className="size-4 shrink-0" />
                 <span className="truncate">{previewUrl}</span>
               </a>
             </div>
@@ -154,30 +169,29 @@ export default function VerifyEmailPage() {
               onChange={(e) => handleChange(i, e.target.value)}
               onKeyDown={(e) => handleKeyDown(i, e)}
               onPaste={handlePaste}
-              className="w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 text-surface-800 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition"
+              className={otpClass}
             />
           ))}
         </div>
 
-        <button
+        <Button
           type="submit"
           disabled={loading || code.join('').length !== 6}
-          className="w-full py-3 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-xl transition duration-200 flex items-center justify-center gap-2 disabled:opacity-50"
+          className="h-11 w-full"
         >
-          {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-          {loading ? 'Vérification...' : 'Vérifier'}
-        </button>
+          {loading ? <Loader2 className="size-4 animate-spin" /> : 'Vérifier'}
+        </Button>
       </form>
 
-      <div className="text-center mt-6">
-        <p className="text-sm text-surface-500">
+      <div className="mt-6 text-center">
+        <p className="text-sm text-muted-foreground">
           Vous n'avez pas reçu le code ?{' '}
           <button
             onClick={handleResend}
             disabled={resending}
-            className="text-primary-500 hover:text-primary-600 font-semibold inline-flex items-center gap-1"
+            className="inline-flex items-center gap-1 font-semibold text-primary hover:text-primary/80"
           >
-            {resending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            {resending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
             Renvoyer
           </button>
         </p>

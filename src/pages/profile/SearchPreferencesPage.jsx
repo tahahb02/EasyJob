@@ -7,7 +7,6 @@ import {
   Briefcase,
   Tag,
   X,
-  ChevronDown,
   Building2,
   Globe,
   Zap,
@@ -18,7 +17,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import {
   useSearchProfiles,
   useCreateSearchProfile,
@@ -26,6 +25,10 @@ import {
   useDeleteSearchProfile,
   useToggleSearchProfile,
 } from "@/api/hooks";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const sectionVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -88,8 +91,8 @@ function Chip({ label, selected, onClick, onRemove, removable }) {
       whileTap={{ scale: 0.97 }}
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all border ${
         selected
-          ? "bg-primary-500 text-white border-primary-500 shadow-sm shadow-primary-500/20"
-          : "bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-300 border-surface-200 dark:border-surface-700 hover:border-primary-400 dark:hover:border-primary-500"
+          ? "bg-primary text-primary-foreground border-primary shadow-sm"
+          : "bg-muted text-muted-foreground border-border hover:border-primary/40"
       }`}
     >
       {label}
@@ -124,28 +127,29 @@ function TagInput({ tags, onAdd, onRemove, placeholder }) {
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
         {tags.map((tag) => (
-          <span
+          <Badge
             key={tag}
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-primary-500/10 dark:bg-primary-500/20 text-primary-600 dark:text-primary-400"
+            variant="secondary"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-primary/10 text-primary border-transparent"
           >
             {tag}
             <button
               type="button"
               onClick={() => onRemove(tag)}
-              className="hover:text-red-500 transition-colors"
+              className="text-destructive transition-colors"
             >
               <X className="w-3 h-3" />
             </button>
-          </span>
+          </Badge>
         ))}
       </div>
-      <input
+      <Input
         type="text"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className="w-full px-4 py-2.5 rounded-xl border border-surface-300 dark:border-surface-600 bg-surface-50 dark:bg-surface-900 text-surface-900 dark:text-white placeholder-surface-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 transition-all text-sm"
+        className="h-auto bg-muted px-4 py-2.5 text-foreground"
       />
     </div>
   );
@@ -159,12 +163,12 @@ function Toggle({ enabled, onChange, label }) {
       className="flex items-center gap-3"
     >
       {enabled ? (
-        <ToggleRight className="w-8 h-8 text-primary-500 shrink-0" />
+        <ToggleRight className="size-8 text-primary shrink-0" />
       ) : (
-        <ToggleLeft className="w-8 h-8 text-surface-400 shrink-0" />
+        <ToggleLeft className="size-8 text-muted-foreground shrink-0" />
       )}
       {label && (
-        <span className="text-sm font-medium text-surface-700 dark:text-surface-300">
+        <span className="text-sm font-medium text-foreground">
           {label}
         </span>
       )}
@@ -316,11 +320,11 @@ export default function SearchPreferencesPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-surface-50 dark:bg-surface-950 pb-24">
+      <div className="min-h-screen bg-muted dark:bg-background pb-24">
         <div className="max-w-3xl mx-auto px-4 py-8">
           <div className="space-y-6">
             {[1, 2].map((i) => (
-              <div key={i} className="h-64 animate-pulse rounded-2xl bg-surface-200 dark:bg-surface-700" />
+              <div key={i} className="h-64 animate-pulse rounded-xl bg-muted" />
             ))}
           </div>
         </div>
@@ -329,17 +333,17 @@ export default function SearchPreferencesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-50 dark:bg-surface-950 pb-24">
+    <div className="min-h-screen bg-muted dark:bg-background pb-24">
       <div className="max-w-3xl mx-auto px-4 py-8">
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <h1 className="text-3xl font-bold text-surface-900 dark:text-white">
+          <h1 className="text-3xl font-bold text-foreground">
             Préférences de recherche
           </h1>
-          <p className="text-surface-500 dark:text-surface-400 mt-1">
+          <p className="text-muted-foreground mt-1">
             Configurez vos profils de recherche d'emploi
           </p>
         </motion.div>
@@ -348,8 +352,9 @@ export default function SearchPreferencesPage() {
           <motion.div variants={sectionVariants} initial="hidden" animate="visible" className="mb-6">
             <div className="flex items-center gap-2 overflow-x-auto pb-2">
               {profiles.map((p) => (
-                <button
+                <Button
                   key={p._id}
+                  variant={selectedId === p._id ? "default" : "secondary"}
                   onClick={() => {
                     setSelectedId(p._id);
                     setForm({
@@ -366,24 +371,25 @@ export default function SearchPreferencesPage() {
                     });
                     setIsDirty(false);
                   }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
+                  className={`flex items-center gap-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-all ${
                     selectedId === p._id
-                      ? "bg-primary-500 text-white shadow-md"
-                      : "bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:text-surface-900 dark:hover:text-white"
+                      ? "shadow-[var(--shadow-md)]"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {p.name}
                   {p.isActive && (
                     <span className="w-2 h-2 rounded-full bg-green-400" />
                   )}
-                </button>
+                </Button>
               ))}
-              <button
+              <Button
+                variant="secondary"
                 onClick={handleNew}
-                className="flex items-center gap-1 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:text-surface-900 dark:hover:text-white transition-all"
+                className="flex items-center gap-1 px-4 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground transition-all"
               >
                 <Plus className="w-4 h-4" /> Nouveau
-              </button>
+              </Button>
             </div>
           </motion.div>
         )}
@@ -393,33 +399,33 @@ export default function SearchPreferencesPage() {
             variants={sectionVariants}
             initial="hidden"
             animate="visible"
-            className="bg-white dark:bg-surface-800 rounded-2xl p-6 shadow-sm border border-surface-200 dark:border-surface-700"
+            className="bg-card rounded-xl p-6 shadow-sm border border-border"
           >
             <div className="flex items-center gap-3 mb-5">
-              <div className="w-10 h-10 rounded-xl bg-primary-500/10 dark:bg-primary-500/20 flex items-center justify-center">
-                <Search className="w-5 h-5 text-primary-500" />
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Search className="w-5 h-5 text-primary" />
               </div>
-              <h2 className="text-lg font-semibold text-surface-900 dark:text-white">
+              <h2 className="text-lg font-semibold text-foreground">
                 Profil de recherche
               </h2>
             </div>
 
             <div className="space-y-1.5 mb-6">
-              <label className="block text-sm font-medium text-surface-700 dark:text-surface-300">
+              <Label className="text-foreground">
                 Nom du profil
-              </label>
-              <input
+              </Label>
+              <Input
                 type="text"
                 value={form.name}
                 onChange={(e) => updateField("name", e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-surface-300 dark:border-surface-600 bg-surface-50 dark:bg-surface-900 text-surface-900 dark:text-white placeholder-surface-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 transition-all text-sm"
+                className="h-auto bg-muted px-4 py-2.5 text-foreground"
               />
             </div>
 
             <div className="space-y-2 mb-6">
               <div className="flex items-center gap-2 mb-2">
-                <Building2 className="w-4 h-4 text-surface-400" />
-                <label className="text-sm font-medium text-surface-700 dark:text-surface-300">
+                <Building2 className="w-4 h-4 text-muted-foreground" />
+                <label className="text-sm font-medium text-foreground">
                   Secteurs ciblés
                 </label>
               </div>
@@ -437,8 +443,8 @@ export default function SearchPreferencesPage() {
 
             <div className="space-y-2 mb-6">
               <div className="flex items-center gap-2 mb-2">
-                <Tag className="w-4 h-4 text-surface-400" />
-                <label className="text-sm font-medium text-surface-700 dark:text-surface-300">
+                <Tag className="w-4 h-4 text-muted-foreground" />
+                <label className="text-sm font-medium text-foreground">
                   Mots-clés
                 </label>
               </div>
@@ -452,8 +458,8 @@ export default function SearchPreferencesPage() {
 
             <div className="space-y-2 mb-6">
               <div className="flex items-center gap-2 mb-2">
-                <X className="w-4 h-4 text-surface-400" />
-                <label className="text-sm font-medium text-surface-700 dark:text-surface-300">
+                <X className="w-4 h-4 text-muted-foreground" />
+                <label className="text-sm font-medium text-foreground">
                   Mots-clés exclus
                 </label>
               </div>
@@ -467,8 +473,8 @@ export default function SearchPreferencesPage() {
 
             <div className="space-y-2 mb-6">
               <div className="flex items-center gap-2 mb-2">
-                <MapPin className="w-4 h-4 text-surface-400" />
-                <label className="text-sm font-medium text-surface-700 dark:text-surface-300">
+                <MapPin className="w-4 h-4 text-muted-foreground" />
+                <label className="text-sm font-medium text-foreground">
                   Localisations
                 </label>
               </div>
@@ -486,8 +492,8 @@ export default function SearchPreferencesPage() {
 
             <div className="space-y-2 mb-6">
               <div className="flex items-center gap-2 mb-2">
-                <Briefcase className="w-4 h-4 text-surface-400" />
-                <label className="text-sm font-medium text-surface-700 dark:text-surface-300">
+                <Briefcase className="w-4 h-4 text-muted-foreground" />
+                <label className="text-sm font-medium text-foreground">
                   Types de contrat
                 </label>
               </div>
@@ -500,17 +506,17 @@ export default function SearchPreferencesPage() {
                     <div
                       className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
                         form.contractTypes.includes(ct.id)
-                          ? "bg-primary-500 border-primary-500"
-                          : "border-surface-300 dark:border-surface-600 group-hover:border-primary-400"
+                          ? "bg-primary border-primary"
+                          : "border-border group-hover:border-primary/40"
                       }`}
                     >
                       {form.contractTypes.includes(ct.id) && (
-                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <svg className="w-3 h-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                       )}
                     </div>
-                    <span className="text-sm font-medium text-surface-700 dark:text-surface-300">
+                    <span className="text-sm font-medium text-foreground">
                       {ct.label}
                     </span>
                     <input
@@ -525,58 +531,58 @@ export default function SearchPreferencesPage() {
             </div>
 
             <div className="space-y-2 mb-6">
-              <label className="text-sm font-medium text-surface-700 dark:text-surface-300">
+              <Label className="text-foreground">
                 Fourchette de salaire (MAD)
-              </label>
+              </Label>
               <div className="grid grid-cols-2 gap-4">
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-surface-400">Min</span>
-                  <input
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">Min</span>
+                  <Input
                     type="number"
                     value={form.salaryMin}
                     onChange={(e) => updateField("salaryMin", e.target.value)}
                     placeholder="5000"
-                    className="w-full pl-12 pr-4 py-2.5 rounded-xl border border-surface-300 dark:border-surface-600 bg-surface-50 dark:bg-surface-900 text-surface-900 dark:text-white placeholder-surface-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 transition-all text-sm"
+                    className="h-auto pl-12 pr-4 py-2.5 bg-muted text-foreground"
                   />
                 </div>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-surface-400">Max</span>
-                  <input
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">Max</span>
+                  <Input
                     type="number"
                     value={form.salaryMax}
                     onChange={(e) => updateField("salaryMax", e.target.value)}
                     placeholder="25000"
-                    className="w-full pl-12 pr-4 py-2.5 rounded-xl border border-surface-300 dark:border-surface-600 bg-surface-50 dark:bg-surface-900 text-surface-900 dark:text-white placeholder-surface-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 transition-all text-sm"
+                    className="h-auto pl-12 pr-4 py-2.5 bg-muted text-foreground"
                   />
                 </div>
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-surface-700 dark:text-surface-300">
+              <Label className="text-foreground">
                 Fréquence de scrapping
-              </label>
+              </Label>
               <div className="grid grid-cols-3 gap-3">
                 {frequencies.map((freq) => (
                   <button
                     key={freq.id}
                     type="button"
                     onClick={() => updateField("frequency", freq.id)}
-                    className={`p-3 rounded-xl border text-center transition-all ${
+                    className={`p-3 rounded-lg border text-center transition-all ${
                       form.frequency === freq.id
-                        ? "bg-primary-500/10 dark:bg-primary-500/20 border-primary-500 shadow-sm"
-                        : "bg-surface-50 dark:bg-surface-900 border-surface-200 dark:border-surface-700 hover:border-primary-400"
+                        ? "bg-primary/10 border-primary shadow-sm"
+                        : "bg-muted border-border hover:border-primary/40"
                     }`}
                   >
                     <freq.icon
-                      className={`w-5 h-5 mx-auto mb-1 ${
-                        form.frequency === freq.id ? "text-primary-500" : "text-surface-400"
+                      className={`size-5 mx-auto mb-1 ${
+                        form.frequency === freq.id ? "text-primary" : "text-muted-foreground"
                       }`}
                     />
                     <span className={`text-sm font-medium ${
                       form.frequency === freq.id
-                        ? "text-primary-600 dark:text-primary-400"
-                        : "text-surface-600 dark:text-surface-300"
+                        ? "text-primary"
+                        : "text-foreground"
                     }`}>
                       {freq.label}
                     </span>
@@ -590,13 +596,13 @@ export default function SearchPreferencesPage() {
             variants={sectionVariants}
             initial="hidden"
             animate="visible"
-            className="bg-white dark:bg-surface-800 rounded-2xl p-6 shadow-sm border border-surface-200 dark:border-surface-700"
+            className="bg-card rounded-xl p-6 shadow-sm border border-border"
           >
             <div className="flex items-center gap-3 mb-5">
-              <div className="w-10 h-10 rounded-xl bg-secondary-500/10 dark:bg-secondary-500/20 flex items-center justify-center">
-                <Globe className="w-5 h-5 text-secondary-500" />
+              <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+                <Globe className="w-5 h-5 text-accent" />
               </div>
-              <h2 className="text-lg font-semibold text-surface-900 dark:text-white">
+              <h2 className="text-lg font-semibold text-foreground">
                 Sources
               </h2>
             </div>
@@ -605,12 +611,12 @@ export default function SearchPreferencesPage() {
               {platforms.map((platform) => (
                 <div
                   key={platform.id}
-                  className="p-4 rounded-xl bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-700"
+                  className="p-4 rounded-lg bg-muted border border-border"
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
                       <div className={`w-3 h-3 rounded-full ${platform.color}`} />
-                      <span className="font-medium text-surface-900 dark:text-white text-sm">
+                      <span className="font-medium text-foreground text-sm">
                         {platform.name}
                       </span>
                     </div>
@@ -644,42 +650,42 @@ export default function SearchPreferencesPage() {
             </div>
           </motion.div>
 
-          <div className="sticky bottom-0 py-4 bg-surface-50/80 dark:bg-surface-950/80 backdrop-blur-xl -mx-4 px-4 flex items-center justify-between">
+          <div className="sticky bottom-0 py-4 bg-muted/80 dark:bg-background/80 backdrop-blur-xl -mx-4 px-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
               {selectedId && (
                 <>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
                     onClick={handleToggle}
-                    className="px-4 py-2 text-sm font-medium text-surface-600 dark:text-surface-400 hover:text-surface-900 dark:hover:text-white transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
                   >
                     {profiles.find((p) => p._id === selectedId)?.isActive ? "Désactiver" : "Activer"}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="ghost"
                     onClick={handleDelete}
                     disabled={deleteMutation.isPending}
-                    className="px-4 py-2 text-sm font-medium text-danger-500 hover:text-danger-600 transition-colors disabled:opacity-50"
+                    className="px-4 py-2 text-sm font-medium text-destructive transition-colors disabled:opacity-50 hover:bg-transparent"
                   >
                     <Trash2 className="w-4 h-4" />
-                  </button>
+                  </Button>
                 </>
               )}
             </div>
-            <motion.button
+            <Button
               type="submit"
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.98 }}
               disabled={isSaving || !isDirty}
-              className="px-8 py-3 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-xl shadow-lg shadow-primary-500/25 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-8 py-3 font-semibold rounded-lg shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSaving ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <Loader2 className="size-5 animate-spin" />
               ) : (
-                <Save className="w-5 h-5" />
+                <Save className="size-5" />
               )}
               {selectedId ? "Enregistrer les modifications" : "Créer le profil"}
-            </motion.button>
+            </Button>
           </div>
         </form>
       </div>

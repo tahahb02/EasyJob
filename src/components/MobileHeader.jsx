@@ -1,31 +1,41 @@
-import { Menu, Bell, Search } from 'lucide-react'
-import { useSidebar } from '@/context/SidebarContext'
+import { Menu, Bell } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '@/context/AuthContext'
+import { useSidebar } from '@/context/SidebarContext'
+import { useUnreadNotificationCount } from '@/api/hooks'
+import Logo from '@/components/Logo'
 
 export default function MobileHeader() {
   const { toggleMobile } = useSidebar()
-  const { user } = useAuth()
+  const { data: unreadCount } = useUnreadNotificationCount()
+  const hasUnread = unreadCount > 0
 
   return (
-    <header className="lg:hidden sticky top-0 z-30 bg-white/80 dark:bg-surface-900/80 backdrop-blur-xl border-b border-surface-200 dark:border-surface-800 px-4 py-3 flex items-center justify-between">
-      <button onClick={toggleMobile} className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition">
-        <Menu className="w-5 h-5 text-surface-600 dark:text-surface-400" />
+    <header className="lg:hidden sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-sm">
+      <button
+        onClick={toggleMobile}
+        className="flex size-9 items-center justify-center rounded-full transition-colors hover:bg-muted"
+        aria-label="Ouvrir le menu"
+      >
+        <Menu className="size-5 text-foreground" />
       </button>
 
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center">
-          <span className="text-white font-bold text-sm">E</span>
-        </div>
-        <span className="font-bold text-surface-800 dark:text-white">EasyJob</span>
-      </div>
+      <Link to="/" aria-label="Accueil">
+        <Logo className="h-5 w-auto" />
+      </Link>
 
-      <div className="flex items-center gap-2">
-        <Link to="/notifications" className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition relative">
-          <Bell className="w-5 h-5 text-surface-600 dark:text-surface-400" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-danger-500 rounded-full"></span>
-        </Link>
-      </div>
+      <Link
+        to="/notifications"
+        className="relative flex size-9 items-center justify-center rounded-full transition-colors hover:bg-muted"
+        aria-label="Notifications"
+      >
+        <Bell className="size-4" />
+        {hasUnread && (
+          <span className="absolute right-1.5 top-1.5 flex size-2 items-center rounded-full bg-destructive">
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-destructive opacity-75" />
+            <span className="relative inline-flex size-2 rounded-full bg-destructive" />
+          </span>
+        )}
+      </Link>
     </header>
   )
 }

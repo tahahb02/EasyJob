@@ -13,19 +13,21 @@ import {
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
 } from '@/api/hooks';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 const filters = ['Toutes', 'Non lues', 'Offres', 'Candidatures', 'Rappels'];
 
 const typeConfig = {
   nouvelle_offre: {
     icon: Briefcase,
-    color: 'text-primary-500',
-    bg: 'bg-primary-500/10'
+    color: 'text-primary',
+    bg: 'bg-primary/10'
   },
   candidature: {
     icon: CheckCircle,
-    color: 'text-secondary-500',
-    bg: 'bg-secondary-500/10'
+    color: 'text-accent',
+    bg: 'bg-accent/10'
   },
   email: {
     icon: Mail,
@@ -71,12 +73,12 @@ function NotificationSkeleton() {
   return (
     <div className="space-y-0">
       {[1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="flex items-start gap-4 p-4 sm:p-5 border-b border-surface-100 dark:border-surface-700 last:border-0">
-          <div className="h-10 w-10 animate-pulse rounded-xl bg-surface-200 dark:bg-surface-700" />
+        <div key={i} className="flex items-start gap-4 p-4 sm:p-5 border-b border-border last:border-0">
+          <div className="h-10 w-10 animate-pulse rounded-lg bg-muted" />
           <div className="flex-1 space-y-2">
-            <div className="h-4 w-48 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
-            <div className="h-3 w-64 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
-            <div className="h-3 w-20 animate-pulse rounded bg-surface-200 dark:bg-surface-700" />
+            <div className="h-4 w-48 animate-pulse rounded bg-muted" />
+            <div className="h-3 w-64 animate-pulse rounded bg-muted" />
+            <div className="h-3 w-20 animate-pulse rounded bg-muted" />
           </div>
         </div>
       ))}
@@ -139,13 +141,13 @@ export default function NotificationsPage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-danger-300 bg-danger-50 py-12 dark:border-danger-500/30 dark:bg-danger-500/5">
-          <AlertTriangle className="mb-3 h-10 w-10 text-danger-400" />
-          <h3 className="text-lg font-semibold text-danger-700 dark:text-danger-400">Erreur de chargement</h3>
-          <p className="mt-1 text-sm text-danger-500">{error?.message || 'Une erreur est survenue.'}</p>
-          <button onClick={() => refetch()} className="mt-4 rounded-xl bg-danger-500 px-4 py-2 text-sm font-semibold text-white hover:bg-danger-600">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-destructive/30 bg-destructive/10 py-12">
+          <AlertTriangle className="mb-3 h-10 w-10 text-destructive" />
+          <h3 className="text-lg font-semibold text-destructive">Erreur de chargement</h3>
+          <p className="mt-1 text-sm text-destructive">{error?.message || 'Une erreur est survenue.'}</p>
+          <Button onClick={() => refetch()} variant="destructive" className="mt-4 px-4 py-2 text-sm font-semibold">
             Réessayer
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -160,18 +162,22 @@ export default function NotificationsPage() {
     >
       <motion.div variants={fadeIn} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-surface-900 dark:text-white">Notifications</h1>
+          <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
           {unreadCount > 0 && (
-            <span className="px-2.5 py-0.5 bg-primary-500 text-white text-xs font-medium rounded-full">
+            <Badge
+              variant="default"
+              className="px-2.5 py-0.5 text-xs font-medium rounded-full"
+            >
               {unreadCount}
-            </span>
+            </Badge>
           )}
         </div>
         {unreadCount > 0 && (
-          <button
+          <Button
+            variant="ghost"
             onClick={markAllAsRead}
             disabled={markAllRead.isPending}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-500 hover:bg-primary-500/10 rounded-xl transition-colors disabled:opacity-60"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-60"
           >
             {markAllRead.isPending ? (
               <Loader2 size={16} className="animate-spin" />
@@ -179,27 +185,28 @@ export default function NotificationsPage() {
               <CheckCheck size={16} />
             )}
             Tout marquer comme lu
-          </button>
+          </Button>
         )}
       </motion.div>
 
       <motion.div variants={fadeIn} className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
         {filters.map(filter => (
-          <button
+          <Button
             key={filter}
+            variant={activeFilter === filter ? "default" : "ghost"}
             onClick={() => { setActiveFilter(filter); setPage(1) }}
-            className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
+            className={`px-4 py-2 text-sm font-medium whitespace-nowrap transition-all ${
               activeFilter === filter
-                ? 'bg-primary-500 text-white shadow-md'
-                : 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:text-surface-900 dark:hover:text-white'
+                ? 'bg-primary text-white shadow-[var(--shadow-md)]'
+                : 'bg-muted text-muted-foreground hover:text-foreground'
             }`}
           >
             {filter}
-          </button>
+          </Button>
         ))}
       </motion.div>
 
-      <div className="bg-white dark:bg-surface-800 rounded-2xl border border-surface-200 dark:border-surface-700 shadow-sm overflow-hidden">
+      <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
         {isLoading ? (
           <NotificationSkeleton />
         ) : (
@@ -213,11 +220,11 @@ export default function NotificationsPage() {
                 exit="hidden"
                 className="flex flex-col items-center justify-center py-16 px-6 text-center"
               >
-                <div className="p-4 bg-surface-100 dark:bg-surface-700 rounded-2xl mb-4">
-                  <Inbox size={32} className="text-surface-400 dark:text-surface-500" />
+                <div className="p-4 bg-muted rounded-xl mb-4">
+                  <Inbox size={32} className="text-muted-foreground" />
                 </div>
-                <h3 className="text-lg font-semibold text-surface-900 dark:text-white">Aucune notification</h3>
-                <p className="text-sm text-surface-500 dark:text-surface-400 mt-1">
+                <h3 className="text-lg font-semibold text-foreground">Aucune notification</h3>
+                <p className="text-sm text-muted-foreground mt-1">
                   Vous n'avez rien dans cette catégorie pour le moment.
                 </p>
               </motion.div>
@@ -240,31 +247,31 @@ export default function NotificationsPage() {
                     exit="exit"
                     transition={{ delay: index * 0.03 }}
                     onClick={() => markAsRead(notification.id)}
-                    className={`flex items-start gap-4 p-4 sm:p-5 border-b border-surface-100 dark:border-surface-700 last:border-0 cursor-pointer transition-all duration-500 hover:bg-surface-50 dark:hover:bg-surface-700/50 ${
+                    className={`flex items-start gap-4 p-4 sm:p-5 border-b border-border last:border-0 cursor-pointer transition-all duration-500 hover:bg-muted ${
                       highlightedId === (notification._id || notification.id)
-                        ? 'bg-primary-500/[0.08] ring-2 ring-primary-500/40 shadow-lg shadow-primary-500/10'
-                        : !notification.read ? 'bg-primary-500/[0.03]' : ''
+                        ? 'bg-primary/[0.08] ring-2 ring-ring/40 shadow-lg shadow-primary/10'
+                        : !notification.read ? 'bg-primary/[0.03]' : ''
                     }`}
                   >
-                    <div className={`flex-shrink-0 p-2.5 rounded-xl ${config.bg}`}>
+                    <div className={`flex-shrink-0 p-2.5 rounded-lg ${config.bg}`}>
                       <Icon size={20} className={config.color} />
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className={`text-sm text-surface-900 dark:text-white truncate ${
+                        <p className={`text-sm text-foreground truncate ${
                           !notification.read ? 'font-semibold' : 'font-medium'
                         }`}>
                           {notification.title}
                         </p>
                         {!notification.read && (
-                          <span className="flex-shrink-0 w-2 h-2 bg-primary-500 rounded-full" />
+                          <span className="flex-shrink-0 w-2 h-2 bg-primary rounded-full" />
                         )}
                       </div>
-                      <p className="text-sm text-surface-500 dark:text-surface-400 mt-0.5 line-clamp-2">
+                      <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
                         {notification.message}
                       </p>
-                      <p className="text-xs text-surface-400 dark:text-surface-500 mt-1.5">
+                      <p className="text-xs text-muted-foreground mt-1.5">
                         {timeAgo}
                       </p>
                     </div>

@@ -6,7 +6,8 @@ import {
   Trash2, Eye, EyeOff, Calendar, DollarSign, Download, ChevronDown,
 } from 'lucide-react'
 import { useRecruiterJob, useDeleteRecruiterJob, useToggleRecruiterJob, useUpdateRecruiterApplicationStatus } from '@/api/hooks'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
+import ConfirmDialog from '@/components/ui/confirm-dialog'
 
 const statusConfig = {
   envoyee: { label: 'Envoyée', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
@@ -38,6 +39,7 @@ export default function RecruiterJobDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [openAppId, setOpenAppId] = useState(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const { data, isLoading } = useRecruiterJob(id)
   const deleteJob = useDeleteRecruiterJob()
   const toggleJob = useToggleRecruiterJob()
@@ -53,9 +55,9 @@ export default function RecruiterJobDetailPage() {
   if (!job) return <p className="text-center text-surface-500 py-12">Offre non trouvée</p>
 
   const handleDelete = async () => {
-    if (!confirm('Supprimer cette offre ?')) return
     await deleteJob.mutateAsync(id)
     toast.success('Offre supprimée')
+    setDeleteOpen(false)
     navigate('/recruiter-space/jobs')
   }
 
@@ -89,7 +91,7 @@ export default function RecruiterJobDetailPage() {
             <button onClick={() => toggleJob.mutateAsync(id)} className="p-2 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700 transition" title={job.isActive ? 'Désactiver' : 'Activer'}>
               {job.isActive ? <EyeOff className="w-5 h-5 text-surface-500" /> : <Eye className="w-5 h-5 text-green-500" />}
             </button>
-            <button onClick={handleDelete} className="p-2 rounded-lg hover:bg-danger-50 dark:hover:bg-danger-500/10 transition" title="Supprimer">
+            <button onClick={() => setDeleteOpen(true)} className="p-2 rounded-lg hover:bg-danger-50 dark:hover:bg-danger-500/10 transition" title="Supprimer">
               <Trash2 className="w-5 h-5 text-danger-500" />
             </button>
           </div>
@@ -232,6 +234,16 @@ export default function RecruiterJobDetailPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Supprimer cette offre ?"
+        description="Cette action est irréversible. L'offre et ses candidatures associées seront définitivement supprimées."
+        confirmText="Supprimer"
+        onConfirm={handleDelete}
+        icon={Trash2}
+      />
     </motion.div>
   )
 }

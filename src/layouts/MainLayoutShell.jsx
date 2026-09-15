@@ -1,20 +1,45 @@
-import { Outlet } from 'react-router-dom'
-import SidebarMain from '@/components/SidebarMain'
+import { Outlet, useLocation } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
+import { SidebarProvider, useSidebar } from '@/context/SidebarContext'
+import AppSidebar from '@/components/layout/AppSidebar'
+import AppHeader from '@/components/layout/AppHeader'
 import MobileHeader from '@/components/MobileHeader'
-import { SidebarProvider } from '@/context/SidebarContext'
+
+function Layout() {
+  const { collapsed } = useSidebar()
+  const location = useLocation()
+
+  return (
+    <div className="flex min-h-screen bg-background text-foreground">
+      <AppSidebar />
+      <div
+        className="flex flex-1 flex-col transition-[margin-left] duration-200 ease-in-out lg:ml-[var(--w)]"
+        style={{ '--w': collapsed ? '72px' : '260px' }}
+      >
+        <MobileHeader />
+        <AppHeader />
+        <main className="flex-1 p-4 md:p-6 lg:p-8">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <Outlet />
+            </motion.div>
+          </AnimatePresence>
+        </main>
+      </div>
+    </div>
+  )
+}
 
 export default function MainLayoutShell() {
   return (
     <SidebarProvider>
-      <div className="min-h-screen bg-surface-50 dark:bg-surface-900 flex">
-        <SidebarMain />
-        <div className="flex-1 flex flex-col min-h-screen lg:ml-64">
-          <MobileHeader />
-          <main className="flex-1 p-4 md:p-6 lg:p-8">
-            <Outlet />
-          </main>
-        </div>
-      </div>
+      <Layout />
     </SidebarProvider>
   )
 }

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { useRecruiterCandidates, useRecruiterSendEmail } from '@/api/hooks'
 import api from '@/api/axios'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.05 } } }
 const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }

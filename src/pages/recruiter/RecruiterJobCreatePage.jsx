@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Loader2, Plus, X } from 'lucide-react'
 import { useCreateRecruiterJob } from '@/api/hooks'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 const schema = z.object({
   title: z.string().min(3, 'Titre requis'),

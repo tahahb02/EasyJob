@@ -3,10 +3,15 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { User, Mail, Phone, Lock, Eye, EyeOff, Loader2, Briefcase, Building2 } from 'lucide-react'
+import { User, Mail, Phone, Lock, Eye, EyeOff, Loader2, Briefcase, Building2, ChevronDown } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAuth } from '@/context/AuthContext'
-import toast from 'react-hot-toast'
 import AuthLayout from '@/layouts/AuthLayout'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
+import { cn } from '@/lib/utils'
 
 const baseSchema = z.object({
   firstName: z.string().min(2, 'Minimum 2 caractères'),
@@ -32,6 +37,43 @@ const recruiterSchema = baseSchema.extend({
   linkedinUrl: z.string().url('URL invalide').optional().or(z.literal('')),
 })
 
+const strengthLabels = ['', 'Faible', 'Moyen', 'Bon', 'Excellent']
+const strengthColors = ['', 'text-destructive', 'text-warning', 'text-primary', 'text-accent']
+
+function getPasswordStrength(pw) {
+  if (!pw) return { value: 0, label: '' }
+  let score = 0
+  if (pw.length >= 8) score += 1
+  if (pw.length >= 12) score += 1
+  if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score += 1
+  if (/\d/.test(pw) && /[^A-Za-z0-9]/.test(pw)) score += 1
+  const value = Math.max(1, Math.min(4, Math.ceil(score / 2)))
+  return { value, label: strengthLabels[value] }
+}
+
+const selectClass =
+  "h-11 w-full appearance-none rounded-md border border-input bg-transparent px-3 pr-9 text-sm text-foreground transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
+
+function SelectField({ label, icon: Icon, children, error, ...selectProps }) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <div className="relative">
+        {Icon && (
+          <Icon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        )}
+        <select {...selectProps} className={cn(selectClass, Icon && 'pl-10')}>
+          {children}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      </div>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+    </div>
+  )
+}
+
+const inputWithIcon = "h-11 pl-10"
+
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -41,7 +83,7 @@ export default function RegisterPage() {
 
   const currentSchema = selectedRole === 'recruiter' ? recruiterSchema : baseSchema
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({
+  const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(currentSchema),
     defaultValues: {
       acceptTerms: false,
@@ -49,8 +91,12 @@ export default function RegisterPage() {
     },
   })
 
+  const password = watch('password') || ''
+  const acceptTerms = watch('acceptTerms')
+  const strength = getPasswordStrength(password)
+
   const onSubmit = async (data) => {
-    const { confirmPassword, acceptTerms, ...payload } = data
+    const { confirmPassword: _confirmPassword, acceptTerms: _terms, ...payload } = data
     payload.role = selectedRole
     const result = await registerUser(payload)
     if (result.success) {
@@ -61,214 +107,304 @@ export default function RegisterPage() {
     }
   }
 
-  const inputClass = "w-full pl-10 pr-4 py-3 rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 text-surface-800 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition"
-  const inputClassNoIcon = "w-full px-4 py-3 rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 text-surface-800 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition"
+  const roleOptions = [
+    { value: 'candidat', label: 'Candidat', icon: User },
+    { value: 'recruiter', label: 'Recruteur', icon: Building2 },
+  ]
 
   return (
     <AuthLayout>
-      <div className="text-center mb-6">
-        <h1 className="text-2xl font-bold text-surface-800 dark:text-white">Créer un compte</h1>
-        <p className="text-surface-500 mt-1">Rejoignez EasyJob dès maintenant</p>
+      <h1 className="text-3xl font-semibold tracking-tight">Créer un compte</h1>
+      <p className="mt-2 text-muted-foreground">
+        Rejoignez JobConnect AI et trouvez votre prochaine opportunité.
+      </p>
+
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        {roleOptions.map(({ value, label, icon: Icon }) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setSelectedRole(value)}
+            className={cn(
+              "flex h-12 items-center justify-center gap-2 rounded-md border text-sm font-medium transition-colors",
+              selectedRole === value
+                ? "border-primary bg-primary/5 text-primary shadow-[inset_0_0_0_1px_var(--primary)]"
+                : "border-border text-muted-foreground hover:bg-muted/60"
+            )}
+          >
+            <Icon className="size-4" />
+            {label}
+          </button>
+        ))}
       </div>
 
-      {/* Role Selection */}
-      <div className="flex gap-3 mb-6">
-        <button
-          type="button"
-          onClick={() => setSelectedRole('candidat')}
-          className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 font-medium transition-all ${
-            selectedRole === 'candidat'
-              ? 'border-primary-500 bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400'
-              : 'border-surface-200 dark:border-surface-700 text-surface-500 hover:border-surface-300'
-          }`}
-        >
-          <User className="w-5 h-5" />
-          Candidat
-        </button>
-        <button
-          type="button"
-          onClick={() => setSelectedRole('recruiter')}
-          className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 font-medium transition-all ${
-            selectedRole === 'recruiter'
-              ? 'border-primary-500 bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400'
-              : 'border-surface-200 dark:border-surface-700 text-surface-500 hover:border-surface-300'
-          }`}
-        >
-          <Building2 className="w-5 h-5" />
-          Recruteur
-        </button>
-      </div>
-
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-5">
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Prénom</label>
+          <div className="space-y-2">
+            <Label htmlFor="firstName">Prénom</Label>
             <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-              <input type="text" {...register('firstName')} className={inputClass} placeholder="Jean" />
+              <User className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="firstName"
+                type="text"
+                placeholder="Jean"
+                className={inputWithIcon}
+                aria-invalid={!!errors.firstName}
+                {...register('firstName')}
+              />
             </div>
-            {errors.firstName && <p className="text-danger-500 text-sm mt-1">{errors.firstName.message}</p>}
+            {errors.firstName && <p className="text-sm text-destructive">{errors.firstName.message}</p>}
           </div>
-          <div>
-            <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Nom</label>
+
+          <div className="space-y-2">
+            <Label htmlFor="lastName">Nom</Label>
             <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-              <input type="text" {...register('lastName')} className={inputClass} placeholder="Dupont" />
+              <User className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="lastName"
+                type="text"
+                placeholder="Dupont"
+                className={inputWithIcon}
+                aria-invalid={!!errors.lastName}
+                {...register('lastName')}
+              />
             </div>
-            {errors.lastName && <p className="text-danger-500 text-sm mt-1">{errors.lastName.message}</p>}
+            {errors.lastName && <p className="text-sm text-destructive">{errors.lastName.message}</p>}
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Email</label>
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
           <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-            <input type="email" {...register('email')} className={inputClass} placeholder="votre@email.com" />
+            <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="email"
+              type="email"
+              placeholder="votre@email.com"
+              className={inputWithIcon}
+              aria-invalid={!!errors.email}
+              {...register('email')}
+            />
           </div>
-          {errors.email && <p className="text-danger-500 text-sm mt-1">{errors.email.message}</p>}
+          {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Téléphone</label>
+        <div className="space-y-2">
+          <Label htmlFor="phone">Téléphone</Label>
           <div className="relative">
-            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-            <input type="tel" {...register('phone')} className={inputClass} placeholder="+212 6XX XX XX XX" />
+            <Phone className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="phone"
+              type="tel"
+              placeholder="+212 6XX XX XX XX"
+              className={inputWithIcon}
+              aria-invalid={!!errors.phone}
+              {...register('phone')}
+            />
           </div>
-          {errors.phone && <p className="text-danger-500 text-sm mt-1">{errors.phone.message}</p>}
+          {errors.phone && <p className="text-sm text-destructive">{errors.phone.message}</p>}
         </div>
 
-        {/* Recruiter-specific fields */}
         {selectedRole === 'recruiter' && (
           <>
-            <div className="border-t border-surface-200 dark:border-surface-700 pt-4 mt-4">
-              <p className="text-sm font-semibold text-surface-600 dark:text-surface-300 mb-3 flex items-center gap-2">
-                <Building2 className="w-4 h-4" />
+            <div className="border-t border-border pt-5">
+              <p className="flex items-center gap-2 text-sm font-semibold">
+                <Building2 className="size-4 text-primary" />
                 Informations de l'entreprise
               </p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Nom de la société *</label>
+            <div className="space-y-2">
+              <Label htmlFor="companyName">Nom de la société *</Label>
               <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-                <input type="text" {...register('companyName')} className={inputClass} placeholder="Mon Entreprise" />
+                <Building2 className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="companyName"
+                  type="text"
+                  placeholder="Mon Entreprise"
+                  className={inputWithIcon}
+                  aria-invalid={!!errors.companyName}
+                  {...register('companyName')}
+                />
               </div>
-              {errors.companyName && <p className="text-danger-500 text-sm mt-1">{errors.companyName.message}</p>}
+              {errors.companyName && <p className="text-sm text-destructive">{errors.companyName.message}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Secteur d'activité *</label>
-                <div className="relative">
-                  <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-                  <select {...register('industry')} className={inputClass}>
-                    <option value="">Choisir...</option>
-                    <option value="Informatique">Informatique</option>
-                    <option value="Industrie">Industrie</option>
-                    <option value="Génie Civil">Génie Civil</option>
-                    <option value="Finance">Finance</option>
-                    <option value="Marketing">Marketing</option>
-                    <option value="Santé">Santé</option>
-                    <option value="Éducation">Éducation</option>
-                    <option value="BTP">BTP</option>
-                    <option value="Télécommunications">Télécommunications</option>
-                    <option value="Énergie">Énergie</option>
-                    <option value="Agriculture">Agriculture</option>
-                    <option value="Autre">Autre</option>
-                  </select>
-                </div>
-                {errors.industry && <p className="text-danger-500 text-sm mt-1">{errors.industry.message}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Taille</label>
-                <select {...register('companySize')} className={inputClassNoIcon}>
-                  <option value="1-10">1-10</option>
-                  <option value="11-50">11-50</option>
-                  <option value="51-200">51-200</option>
-                  <option value="201-500">201-500</option>
-                  <option value="501-1000">501-1000</option>
-                  <option value="1000+">1000+</option>
-                </select>
-              </div>
+              <SelectField
+                label="Secteur d'activité *"
+                icon={Briefcase}
+                error={errors.industry?.message}
+                {...register('industry')}
+              >
+                <option value="">Choisir...</option>
+                <option value="Informatique">Informatique</option>
+                <option value="Industrie">Industrie</option>
+                <option value="Génie Civil">Génie Civil</option>
+                <option value="Finance">Finance</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Santé">Santé</option>
+                <option value="Éducation">Éducation</option>
+                <option value="BTP">BTP</option>
+                <option value="Télécommunications">Télécommunications</option>
+                <option value="Énergie">Énergie</option>
+                <option value="Agriculture">Agriculture</option>
+                <option value="Autre">Autre</option>
+              </SelectField>
+
+              <SelectField label="Taille" {...register('companySize')}>
+                <option value="1-10">1-10</option>
+                <option value="11-50">11-50</option>
+                <option value="51-200">51-200</option>
+                <option value="201-500">201-500</option>
+                <option value="501-1000">501-1000</option>
+                <option value="1000+">1000+</option>
+              </SelectField>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Localisation</label>
-                <input type="text" {...register('companyLocation')} className={inputClassNoIcon} placeholder="Casablanca" />
+              <div className="space-y-2">
+                <Label htmlFor="companyLocation">Localisation</Label>
+                <Input
+                  id="companyLocation"
+                  type="text"
+                  placeholder="Casablanca"
+                  className="h-11"
+                  {...register('companyLocation')}
+                />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Votre poste</label>
-                <input type="text" {...register('position')} className={inputClassNoIcon} placeholder="DRH" />
+              <div className="space-y-2">
+                <Label htmlFor="position">Votre poste</Label>
+                <Input
+                  id="position"
+                  type="text"
+                  placeholder="DRH"
+                  className="h-11"
+                  {...register('position')}
+                />
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">LinkedIn (optionnel)</label>
-              <input type="url" {...register('linkedinUrl')} className={inputClassNoIcon} placeholder="https://linkedin.com/in/..." />
-              {errors.linkedinUrl && <p className="text-danger-500 text-sm mt-1">{errors.linkedinUrl.message}</p>}
+            <div className="space-y-2">
+              <Label htmlFor="linkedinUrl">LinkedIn (optionnel)</Label>
+              <Input
+                id="linkedinUrl"
+                type="url"
+                placeholder="https://linkedin.com/in/..."
+                className="h-11"
+                aria-invalid={!!errors.linkedinUrl}
+                {...register('linkedinUrl')}
+              />
+              {errors.linkedinUrl && <p className="text-sm text-destructive">{errors.linkedinUrl.message}</p>}
             </div>
           </>
         )}
 
-        <div>
-          <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Mot de passe</label>
+        <div className="space-y-2">
+          <Label htmlFor="password">Mot de passe</Label>
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-            <input
+            <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="password"
               type={showPassword ? 'text' : 'password'}
+              placeholder="••••••••"
+              className="h-11 pl-10 pr-10"
+              aria-invalid={!!errors.password}
               {...register('password')}
-              className={inputClass}
-              placeholder="••••••••"
             />
-            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-600">
-              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+              aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+            >
+              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
           </div>
-          {errors.password && <p className="text-danger-500 text-sm mt-1">{errors.password.message}</p>}
+          {password && (
+            <div className="space-y-1.5">
+              <div className="flex gap-1.5">
+                {[1, 2, 3, 4].map((bar) => (
+                  <div
+                    key={bar}
+                    className={cn(
+                      "h-1 flex-1 rounded-full transition-colors",
+                      bar <= strength.value
+                        ? strength.value === 1
+                          ? "bg-destructive"
+                          : strength.value === 2
+                            ? "bg-warning"
+                            : strength.value === 3
+                              ? "bg-primary"
+                              : "bg-accent"
+                        : "bg-border"
+                    )}
+                  />
+                ))}
+              </div>
+              <p className={cn("text-xs", strengthColors[strength.value] || 'text-muted-foreground')}>
+                Sécurité : {strength.label}
+              </p>
+            </div>
+          )}
+          {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Confirmer le mot de passe</label>
+        <div className="space-y-2">
+          <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-            <input
+            <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="confirmPassword"
               type={showConfirmPassword ? 'text' : 'password'}
-              {...register('confirmPassword')}
-              className={inputClass}
               placeholder="••••••••"
+              className="h-11 pl-10 pr-10"
+              aria-invalid={!!errors.confirmPassword}
+              {...register('confirmPassword')}
             />
-            <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-600">
-              {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+              aria-label={showConfirmPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+            >
+              {showConfirmPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
           </div>
-          {errors.confirmPassword && <p className="text-danger-500 text-sm mt-1">{errors.confirmPassword.message}</p>}
+          {errors.confirmPassword && <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>}
         </div>
 
-        <div>
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input type="checkbox" {...register('acceptTerms')} className="w-4 h-4 mt-0.5 rounded border-surface-300 text-primary-500 focus:ring-primary-500" />
-            <span className="text-sm text-surface-600 dark:text-surface-400">
+        <div className="space-y-2">
+          <label className="flex items-start gap-2.5 text-sm text-muted-foreground">
+            <Checkbox
+              checked={acceptTerms}
+              onCheckedChange={(v) => setValue('acceptTerms', v === true, { shouldValidate: true })}
+              className="mt-0.5"
+            />
+            <span>
               J'accepte les{' '}
-              <Link to="/terms" className="text-primary-500 hover:text-primary-600 font-medium">conditions d'utilisation</Link>
+              <Link to="/terms" className="font-medium text-primary hover:text-primary/80">
+                conditions d'utilisation
+              </Link>
             </span>
           </label>
-          {errors.acceptTerms && <p className="text-danger-500 text-sm mt-1">{errors.acceptTerms.message}</p>}
+          {errors.acceptTerms && <p className="text-sm text-destructive">{errors.acceptTerms.message}</p>}
         </div>
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full py-3 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-xl transition duration-200 flex items-center justify-center gap-2 disabled:opacity-50"
-        >
-          {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-          {isSubmitting ? 'Création...' : selectedRole === 'recruiter' ? 'Créer un compte recruteur' : 'Créer mon compte'}
-        </button>
+        <Button type="submit" disabled={isSubmitting} className="h-11 w-full">
+          {isSubmitting ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : selectedRole === 'recruiter' ? (
+            'Créer un compte recruteur'
+          ) : (
+            'Créer mon compte'
+          )}
+        </Button>
       </form>
 
-      <p className="text-center mt-6 text-sm text-surface-500">
+      <p className="mt-8 text-center text-sm text-muted-foreground">
         Déjà un compte ?{' '}
-        <Link to="/login" className="text-primary-500 hover:text-primary-600 font-semibold">
+        <Link to="/login" className="font-semibold text-primary hover:text-primary/80">
           Se connecter
         </Link>
       </p>
