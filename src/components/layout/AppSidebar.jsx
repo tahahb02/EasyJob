@@ -181,38 +181,67 @@ function InnerSidebar({ collapsed, onToggle, onNav }) {
   return (
     <TooltipProvider delayDuration={0}>
       <div className="flex h-full flex-col bg-card">
-        <div className={cn('flex h-16 items-center border-b px-4', collapsed ? 'justify-center' : 'gap-3')}>
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Briefcase className="size-5" />
+        <div className={cn('flex items-center border-b border-border pt-4 pb-3', collapsed ? 'flex-col gap-3' : 'justify-between gap-2 px-4')}>
+          <div className={cn('flex items-center', collapsed ? 'flex-col gap-2' : 'gap-3')}>
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+              <Briefcase className="size-5" />
+            </div>
+            {!collapsed && (
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold leading-tight tracking-tight">
+                  JobConnect AI
+                </p>
+                <p className="mt-0.5 truncate text-[11px] leading-none text-muted-foreground">
+                  Assistant emploi
+                </p>
+              </div>
+            )}
           </div>
-          {!collapsed && <span className="text-lg font-semibold tracking-tight">JobConnect AI</span>}
+          {!collapsed ? (
+            <button
+              onClick={onToggle}
+              className="hidden size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground lg:flex"
+              title="Réduire le menu"
+            >
+              <PanelLeftClose className="size-4" />
+            </button>
+          ) : (
+            <button
+              onClick={onToggle}
+              className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+              title="Étendre le menu"
+            >
+              <PanelLeftOpen className="size-4" />
+            </button>
+          )}
         </div>
 
-        <ScrollArea className="flex-1 py-4">
+        <ScrollArea className="flex-1 py-3">
           <SidebarNav collapsed={collapsed} onNav={onNav} />
         </ScrollArea>
 
-        <div className="space-y-1 border-t p-2">
+        <div className="space-y-1 border-t border-border p-2">
           <button
             onClick={toggleTheme}
             className={cn(
               'flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground',
               collapsed && 'justify-center px-2',
             )}
+            title={collapsed ? (isDark ? 'Mode sombre' : 'Mode clair') : undefined}
           >
             {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
             {!collapsed && (isDark ? 'Mode sombre' : 'Mode clair')}
           </button>
 
-          <UserMenu collapsed={collapsed} />
-
           <button
             onClick={onToggle}
-            className="hidden lg:flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+            className="hidden w-full items-center gap-3 rounded-md px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground lg:flex"
           >
             {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
             {!collapsed && <span>Réduire</span>}
           </button>
+
+          <UserMenu collapsed={collapsed} />
         </div>
       </div>
     </TooltipProvider>
