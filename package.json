@@ -12,7 +12,8 @@
     "server": "node backend/start.js",
     "start": "node backend/start.js",
     "seed": "node backend/seed.js",
-    "build": "node build-api.js && vite build",
+    "build": "vite build",
+    "build:api": "node build-api.js",
     "lint": "oxlint",
     "preview": "vite preview"
   },
