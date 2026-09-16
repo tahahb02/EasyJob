@@ -122,7 +122,7 @@ async function getTransporter() {
       }
     }));
   } else {
-    throw new Error("EMAIL_USER / EMAIL_PASS non configur\xE9s pour l'envoi d'emails en production. Ajoutez-les dans les variables d'environnement (Vercel: Settings > Environment Variables) ou passez sur EMAIL_PROVIDER=resend.");
+    throw new Error("Aucun service d'envoi configur\xE9 en production. Ajoutez EMAIL_USER/EMAIL_PASS (SMTP) ou mieux : BREVO_API_KEY / RESEND_API_KEY (API HTTPS, recommand\xE9 sur Vercel).");
   }
   transporterPromise.then(async (transporter) => {
     try {
@@ -171,8 +171,59 @@ async function withRetry(fn, attempts = 3, baseDelay = 400) {
   }
   throw lastError;
 }
+function parseSender(value) {
+  const match = String(value || "").match(/^(.*)\s*<([^>]+)>$/);
+  if (!match) return { name: "", email: String(value || "").trim() };
+  return { name: match[1].trim(), email: match[2].trim() };
+}
 async function resendFromAddress() {
   return process.env.RESEND_FROM || "EasyJob <onboarding@resend.dev>";
+}
+async function sendViaBrevo({ to, subject, html, attachments }) {
+  const apiKey = process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY;
+  if (!apiKey) throw new Error("Brevo n\xE9cessite BREVO_API_KEY (ou EMAIL_PROVIDER=smtp)");
+  const parsed = parseSender(process.env.EMAIL_FROM || process.env.EMAIL_USER);
+  const sender = {
+    name: process.env.BREVO_SENDER_NAME || parsed.name || "EasyJob",
+    email: process.env.BREVO_SENDER_EMAIL || parsed.email || process.env.EMAIL_USER
+  };
+  if (!sender.email) {
+    throw new Error("Envoyeur Brevo manquant : d\xE9finissez BREVO_SENDER_EMAIL ou EMAIL_USER");
+  }
+  const payload = {
+    sender,
+    to: [{ email: to }],
+    subject,
+    htmlContent: html
+  };
+  if (attachments && attachments.length) {
+    payload.attachment = attachments.map((a) => ({
+      name: String(a.filename || "attachment"),
+      content: a.content ? Buffer.from(a.content).toString("base64") : void 0
+    })).filter((a) => a.content);
+  }
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "api-key": apiKey,
+      "Content-Type": "application/json",
+      Accept: "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = data.message || data.code || response.statusText;
+    throw new Error(`Brevo API ${response.status}: ${detail}`);
+  }
+  console.log("\u{1F4E7} Email envoy\xE9 via Brevo:", data.messageId);
+  return { messageId: data.messageId, previewUrl: null };
+}
+function resolveProvider() {
+  if (process.env.EMAIL_PROVIDER) return process.env.EMAIL_PROVIDER.toLowerCase();
+  if (process.env.RESEND_API_KEY) return "resend";
+  if (process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY) return "brevo";
+  return "smtp";
 }
 async function sendViaResend({ to, subject, html, attachments }) {
   const apiKey = process.env.RESEND_API_KEY;
@@ -211,10 +262,14 @@ var init_sendEmail = __esm({
     transporterPromise = null;
     wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     sendEmail = async ({ to, subject, html, attachments }) => {
-      const provider = (process.env.EMAIL_PROVIDER || "smtp").toLowerCase();
+      const provider = resolveProvider();
       try {
         if (provider === "resend") {
           const result = await withRetry(() => sendViaResend({ to, subject, html, attachments }));
+          return { success: true, messageId: result.messageId, previewUrl: result.previewUrl };
+        }
+        if (provider === "brevo") {
+          const result = await withRetry(() => sendViaBrevo({ to, subject, html, attachments }));
           return { success: true, messageId: result.messageId, previewUrl: result.previewUrl };
         }
         const info = await withRetry(async () => {
@@ -239,7 +294,8 @@ var init_sendEmail = __esm({
           console.warn("\u{1F916} Environnement non production : l'email n'a pas pu \xEAtre envoy\xE9, voici son contenu :");
           console.warn(html);
         }
-        return { success: false, error: error.message };
+        const hint = process.env.NODE_ENV === "production" && provider === "smtp" && !process.env.BREVO_API_KEY && !process.env.RESEND_API_KEY ? " \u2192 Gmail SMTP est bloqu\xE9 depuis Vercel. Ajoutez BREVO_API_KEY (recommand\xE9) ou RESEND_API_KEY dans Vercel \u2192 Settings \u2192 Environment Variables, puis red\xE9ployez." : "";
+        return { success: false, error: error.message + hint };
       }
     };
     sendVerificationEmail = async (email, firstName, code) => {
