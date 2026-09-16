@@ -43,7 +43,7 @@ export default function CtaFinalSection() {
               </h2>
               <p className="mx-auto mt-5 max-w-xl text-pretty text-base leading-relaxed text-primary-foreground/80 sm:text-lg">
                 Rejoignez des milliers de candidats qui décrochent plus vite
-                leurs entretiens grâce à JobConnect AI.
+                leurs entretiens grâce à EasyJob.
               </p>
               <div className="mt-9">
                 <Button

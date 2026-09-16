@@ -101,6 +101,9 @@ export default function RegisterPage() {
     const result = await registerUser(payload)
     if (result.success) {
       toast.success('Compte créé ! Vérifiez votre email.')
+      if (result.emailSent === false) {
+        toast.warning(`Impossible d'envoyer le code par email : ${result.emailError || 'SMTP non configuré'}`)
+      }
       navigate('/verify-email', { state: { previewUrl: result.previewUrl, email: data.email } })
     } else {
       toast.error(result.error)
@@ -116,7 +119,7 @@ export default function RegisterPage() {
     <AuthLayout>
       <h1 className="text-3xl font-semibold tracking-tight">Créer un compte</h1>
       <p className="mt-2 text-muted-foreground">
-        Rejoignez JobConnect AI et trouvez votre prochaine opportunité.
+        Rejoignez EasyJob et trouvez votre prochaine opportunité.
       </p>
 
       <div className="mt-6 grid grid-cols-2 gap-3">

@@ -1,4 +1,7 @@
 import nodemailer from 'nodemailer'
+import dotenv from 'dotenv'
+
+dotenv.config()
 
 let transporterPromise = null
 
@@ -87,7 +90,7 @@ async function getTransporter() {
         pass: process.env.EMAIL_PASS,
       },
     }))
-  } else {
+  } else if (process.env.NODE_ENV !== 'production') {
     const testAccount = await nodemailer.createTestAccount()
     console.log('📧 Ethereal test account:', testAccount.user)
     transporterPromise = Promise.resolve(nodemailer.createTransport({
@@ -99,6 +102,8 @@ async function getTransporter() {
         pass: testAccount.pass,
       },
     }))
+  } else {
+    throw new Error('EMAIL_USER / EMAIL_PASS non configurés pour l\'envoi d\'emails en production. Ajoutez-les dans les variables d\'environnement (Vercel: Settings > Environment Variables).')
   }
 
   transporterPromise.then(async (transporter) => {

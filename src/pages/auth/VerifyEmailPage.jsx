@@ -77,7 +77,11 @@ export default function VerifyEmailPage() {
     const result = await resendVerification(user.email)
     setResending(false)
     if (result.success) {
-      toast.success('Nouveau code envoyé !')
+      if (result.emailSent === false) {
+        toast.warning(`Échec de l'envoi : ${result.emailError || 'SMTP non configuré'}`)
+      } else {
+        toast.success('Nouveau code envoyé !')
+      }
       if (result.previewUrl) {
         setPreviewUrl(result.previewUrl)
       }

@@ -63,6 +63,9 @@ router.post('/register', async (req, res) => {
 
     const emailResult = await sendVerificationEmail(user.email, user.firstName, verificationCode)
     const emailSent = emailResult.success
+    if (!emailSent) {
+      console.error('❌ Email de vérification non envoyé:', emailResult.error)
+    }
 
     const accessToken = generateAccessToken(user._id)
     const refreshToken = generateRefreshToken(user._id)
@@ -75,6 +78,7 @@ router.post('/register', async (req, res) => {
       refreshToken,
       user,
       emailSent,
+      emailError: emailSent ? null : emailResult.error || null,
       previewUrl: emailResult.previewUrl || null,
     })
   } catch (error) {
@@ -123,7 +127,15 @@ router.post('/resend-verification', async (req, res) => {
     await user.save()
 
     const emailResult = await sendVerificationEmail(user.email, user.firstName, verificationCode)
-    res.json({ message: 'Code de vérification renvoyé', previewUrl: emailResult.previewUrl || null })
+    if (!emailResult.success) {
+      console.error('❌ Renvoi du code échoué:', emailResult.error)
+    }
+    res.json({
+      message: emailResult.success ? 'Code de vérification renvoyé' : "Échec de l'envoi du code",
+      emailSent: emailResult.success,
+      emailError: emailResult.success ? null : emailResult.error || null,
+      previewUrl: emailResult.previewUrl || null,
+    })
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors de l\'envoi' })
   }

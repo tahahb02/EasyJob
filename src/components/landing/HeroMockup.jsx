@@ -32,7 +32,7 @@ export default function HeroMockup() {
         <span className="size-2.5 rounded-full bg-accent/70" />
         <div className="ml-3 hidden flex-1 items-center gap-1.5 rounded-lg bg-background/70 px-3 py-1 text-[11px] text-muted-foreground sm:flex">
           <Zap className="size-3 text-primary" />
-          app.jobconnect.ai/dashboard
+          app.easyjob.ma/dashboard
         </div>
         <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-accent/10 px-2.5 py-1 text-[11px] font-semibold text-accent sm:ml-0">
           <span className="size-1.5 animate-pulse rounded-full bg-accent" />
@@ -46,7 +46,7 @@ export default function HeroMockup() {
             <span className="flex size-5 items-center justify-center rounded-md bg-primary">
               <Zap className="size-3 text-primary-foreground" />
             </span>
-            <span className="text-xs font-semibold">JobConnect</span>
+            <span className="text-xs font-semibold">EasyJob</span>
           </div>
           {navItems.map((item) => (
             <span

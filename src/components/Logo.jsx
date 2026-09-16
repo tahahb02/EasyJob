@@ -39,8 +39,7 @@ export default function Logo({
       </svg>
       {withText && (
         <span className={cn("font-display text-lg font-semibold tracking-tight text-foreground", textClassName)}>
-          JobConnect
-          <span className="text-primary"> AI</span>
+          EasyJob
         </span>
       )}
     </span>

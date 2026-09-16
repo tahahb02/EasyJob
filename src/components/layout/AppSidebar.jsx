@@ -189,7 +189,7 @@ function InnerSidebar({ collapsed, onToggle, onNav }) {
             {!collapsed && (
               <div className="min-w-0">
                 <p className="truncate text-base font-semibold leading-tight tracking-tight">
-                  JobConnect AI
+                  EasyJob
                 </p>
                 <p className="mt-0.5 truncate text-[11px] leading-none text-muted-foreground">
                   Assistant emploi

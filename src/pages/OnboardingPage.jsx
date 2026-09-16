@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Upload,
@@ -20,6 +20,7 @@ import { toast } from 'sonner'
 import { useAuth } from '@/context/AuthContext'
 import { useUploadCV } from '@/api/hooks'
 import api from '@/api/axios'
+import Logo from '@/components/Logo'
 
 const DOMAINS = [
   'Technologie / IT', 'Finance / Banque', 'Marketing / Communication',
@@ -162,6 +163,19 @@ export default function OnboardingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50 dark:from-surface-950 dark:via-surface-900 dark:to-surface-950">
       <div className="mx-auto max-w-2xl px-4 py-8">
+        {/* Header */}
+        <div className="mb-8 flex items-center justify-between">
+          <Link to="/" className="inline-flex items-center">
+            <Logo />
+          </Link>
+          <button
+            onClick={() => { updateProfile({ onboardingCompleted: true }); navigate(isRecruiter ? '/recruiter-space/dashboard' : '/jobs') }}
+            className="text-sm font-medium text-surface-500 hover:text-primary-500 transition-colors"
+          >
+            Passer cette étape →
+          </button>
+        </div>
+
         {/* Progress */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
@@ -510,11 +524,11 @@ export default function OnboardingPage() {
         </AnimatePresence>
 
         {/* Navigation buttons */}
-        <div className="flex items-center justify-between mt-6">
+        <div className="mt-6 flex items-center justify-between gap-3">
           {step > 0 ? (
             <button
               onClick={() => setStep(s => s - 1)}
-              className="inline-flex items-center gap-2 rounded-xl border border-surface-200 dark:border-surface-600 px-5 py-3 text-sm font-medium text-surface-700 dark:text-surface-300 hover:bg-surface-50 dark:hover:bg-surface-800 transition-colors"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-surface-200 bg-white px-5 py-3 text-sm font-medium text-surface-700 shadow-sm dark:border-surface-600 dark:bg-surface-800 dark:text-surface-300 hover:bg-surface-50 dark:hover:bg-surface-700 transition-colors sm:flex-none"
             >
               <ArrowLeft className="h-4 w-4" />
               Retour
@@ -527,7 +541,7 @@ export default function OnboardingPage() {
               whileTap={{ scale: 0.97 }}
               onClick={() => setStep(s => s + 1)}
               disabled={!canNext()}
-              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed sm:flex-none ${
                 isRecruiter
                   ? 'bg-emerald-500 hover:bg-emerald-600'
                   : 'bg-primary-500 hover:bg-primary-600'
@@ -542,7 +556,7 @@ export default function OnboardingPage() {
               whileTap={{ scale: 0.97 }}
               onClick={handleSubmit}
               disabled={submitting || !canNext()}
-              className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed sm:flex-none ${
                 isRecruiter
                   ? 'bg-emerald-500 hover:bg-emerald-600'
                   : 'bg-secondary-500 hover:bg-secondary-600'
@@ -553,18 +567,6 @@ export default function OnboardingPage() {
             </motion.button>
           )}
         </div>
-
-        {/* Skip */}
-        {step === 0 && (
-          <div className="text-center mt-4">
-            <button
-              onClick={() => { updateProfile({ onboardingCompleted: true }); navigate(isRecruiter ? '/recruiter-space/dashboard' : '/jobs') }}
-              className="text-sm text-surface-500 hover:text-primary-500 transition-colors"
-            >
-              Passer cette étape →
-            </button>
-          </div>
-        )}
       </div>
     </div>
   )

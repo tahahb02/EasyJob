@@ -131,7 +131,7 @@ export default function AuthLayout({ children, mode = "split" }) {
         </div>
 
         <p className="relative text-sm text-muted-foreground">
-          © {new Date().getFullYear()} JobConnect AI
+          © {new Date().getFullYear()} EasyJob
         </p>
       </div>
     </div>
