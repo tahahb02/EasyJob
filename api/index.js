@@ -85,18 +85,30 @@ function getFromAddress() {
   }
   return "EasyJob <noreply@easyjob.ma>";
 }
+function mailPort() {
+  return parseInt(process.env.EMAIL_PORT || "587", 10);
+}
+function buildSmtpTransport() {
+  const port = mailPort();
+  return nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || "smtp.gmail.com",
+    port,
+    secure: port === 465,
+    requireTLS: port === 587,
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    },
+    connectionTimeout: parseInt(process.env.SMTP_CONNECTION_TIMEOUT || "12000", 10),
+    greetingTimeout: parseInt(process.env.SMTP_GREETING_TIMEOUT || "8000", 10),
+    socketTimeout: parseInt(process.env.SMTP_SOCKET_TIMEOUT || "15000", 10),
+    pool: false
+  });
+}
 async function getTransporter() {
   if (transporterPromise) return transporterPromise;
   if (hasRealCreds()) {
-    transporterPromise = Promise.resolve(nodemailer.createTransport({
-      host: process.env.EMAIL_HOST || "smtp.gmail.com",
-      port: parseInt(process.env.EMAIL_PORT || "587", 10),
-      secure: false,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
-    }));
+    transporterPromise = Promise.resolve(buildSmtpTransport());
   } else if (process.env.NODE_ENV !== "production") {
     const testAccount = await nodemailer.createTestAccount();
     console.log("\u{1F4E7} Ethereal test account:", testAccount.user);
@@ -110,7 +122,7 @@ async function getTransporter() {
       }
     }));
   } else {
-    throw new Error("EMAIL_USER / EMAIL_PASS non configur\xE9s pour l'envoi d'emails en production. Ajoutez-les dans les variables d'environnement (Vercel: Settings > Environment Variables).");
+    throw new Error("EMAIL_USER / EMAIL_PASS non configur\xE9s pour l'envoi d'emails en production. Ajoutez-les dans les variables d'environnement (Vercel: Settings > Environment Variables) ou passez sur EMAIL_PROVIDER=resend.");
   }
   transporterPromise.then(async (transporter) => {
     try {
@@ -122,20 +134,98 @@ async function getTransporter() {
   });
   return transporterPromise;
 }
-var transporterPromise, sendEmail, sendVerificationEmail, sendPasswordResetEmail;
+function isTransientError(error) {
+  const message = String(error && error.message ? error.message : error).toLowerCase();
+  const code = String(error && error.code ? error.code : "");
+  const patterns = [
+    "ebusy",
+    "enotfound",
+    "eai_again",
+    "etimedout",
+    "econnreset",
+    "econnrefused",
+    "ehostunreach",
+    "enetunreach",
+    "epipe",
+    "esocket",
+    "greeting never received",
+    "connection timeout",
+    "socket timeout",
+    "connect timeout",
+    "getaddrinfo"
+  ];
+  return patterns.some((pattern) => code.includes(pattern) || message.includes(pattern));
+}
+async function withRetry(fn, attempts = 3, baseDelay = 400) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt >= attempts || !isTransientError(err)) break;
+      const delay2 = baseDelay * attempt;
+      console.warn(`\u26A0\uFE0F Erreur temporaire (${err.message}). Nouvelle tentative ${attempt}/${attempts} dans ${delay2}ms...`);
+      await wait(delay2);
+    }
+  }
+  throw lastError;
+}
+async function resendFromAddress() {
+  return process.env.RESEND_FROM || "EasyJob <onboarding@resend.dev>";
+}
+async function sendViaResend({ to, subject, html, attachments }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error("EMAIL_PROVIDER=resend n\xE9cessite RESEND_API_KEY");
+  const payload = {
+    from: await resendFromAddress(),
+    to: [to],
+    subject,
+    html
+  };
+  if (attachments && attachments.length) {
+    payload.attachments = attachments.map((a) => ({
+      filename: String(a.filename || "attachment"),
+      content: a.content ? Buffer.from(a.content).toString("base64") : void 0
+    })).filter((a) => a.content);
+  }
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message ? `Resend API ${response.status}: ${data.message}` : `Resend API ${response.status}`);
+  }
+  console.log("\u{1F4E7} Email envoy\xE9 via Resend:", data.id);
+  return { messageId: data.id, previewUrl: null };
+}
+var transporterPromise, wait, sendEmail, sendVerificationEmail, sendPasswordResetEmail;
 var init_sendEmail = __esm({
   "backend/utils/sendEmail.js"() {
     dotenv.config();
     transporterPromise = null;
+    wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     sendEmail = async ({ to, subject, html, attachments }) => {
+      const provider = (process.env.EMAIL_PROVIDER || "smtp").toLowerCase();
       try {
-        const transporter = await getTransporter();
-        const info = await transporter.sendMail({
-          from: getFromAddress(),
-          to,
-          subject,
-          html,
-          ...attachments && attachments.length ? { attachments } : {}
+        if (provider === "resend") {
+          const result = await withRetry(() => sendViaResend({ to, subject, html, attachments }));
+          return { success: true, messageId: result.messageId, previewUrl: result.previewUrl };
+        }
+        const info = await withRetry(async () => {
+          const transporter = await getTransporter();
+          return transporter.sendMail({
+            from: getFromAddress(),
+            to,
+            subject,
+            html,
+            ...attachments && attachments.length ? { attachments } : {}
+          });
         });
         const previewUrl = nodemailer.getTestMessageUrl(info);
         console.log("\u{1F4E7} Email envoy\xE9:", info.messageId);
@@ -144,7 +234,11 @@ var init_sendEmail = __esm({
         }
         return { success: true, messageId: info.messageId, previewUrl: previewUrl || null };
       } catch (error) {
-        console.error("\u274C Erreur envoi email:", error.message);
+        console.error("\u274C Erreur envoi email:", error);
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("\u{1F916} Environnement non production : l'email n'a pas pu \xEAtre envoy\xE9, voici son contenu :");
+          console.warn(html);
+        }
         return { success: false, error: error.message };
       }
     };
