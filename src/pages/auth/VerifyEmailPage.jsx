@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Mail, ArrowLeft, Loader2, CheckCircle, RefreshCw, ExternalLink, Eye } from 'lucide-react'
+import { Mail, ArrowLeft, Loader2, CheckCircle, RefreshCw, ExternalLink, Eye, KeyRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/context/AuthContext'
 import AuthLayout from '@/layouts/AuthLayout'
@@ -13,6 +13,7 @@ export default function VerifyEmailPage() {
   const [resending, setResending] = useState(false)
   const [success, setSuccess] = useState(false)
   const [previewUrl, setPreviewUrl] = useState(null)
+  const [fallbackCode, setFallbackCode] = useState(null)
   const inputRefs = useRef([])
   const { user, verifyEmail, resendVerification } = useAuth()
   const navigate = useNavigate()
@@ -25,6 +26,9 @@ export default function VerifyEmailPage() {
   useEffect(() => {
     if (location.state?.previewUrl) {
       setPreviewUrl(location.state.previewUrl)
+    }
+    if (location.state?.fallbackCode) {
+      setFallbackCode(location.state.fallbackCode)
     }
   }, [location.state])
 
@@ -85,6 +89,9 @@ export default function VerifyEmailPage() {
       if (result.previewUrl) {
         setPreviewUrl(result.previewUrl)
       }
+      if (result.fallbackCode) {
+        setFallbackCode(result.fallbackCode)
+      }
     } else {
       toast.error(result.error)
     }
@@ -134,6 +141,37 @@ export default function VerifyEmailPage() {
           <span className="font-medium text-foreground">{user?.email}</span>
         </p>
       </div>
+
+      {fallbackCode && (
+        <div className="mb-6 rounded-xl border-2 border-amber-400/60 bg-amber-50 p-4 dark:bg-amber-950/30">
+          <div className="flex items-start gap-3">
+            <KeyRound className="mt-0.5 size-5 shrink-0 text-amber-600" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+                Email non envoyé — votre code de vérification
+              </p>
+              <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-400/80">
+                Le service d'email n'est pas disponible pour le moment. Saisissez ce code pour activer votre compte :
+              </p>
+              <div className="mt-2 flex items-center gap-3">
+                <span className="rounded-lg border border-amber-400/60 bg-card px-3 py-1.5 text-2xl font-extrabold tracking-[0.3em] text-foreground">
+                  {fallbackCode}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(fallbackCode)
+                    toast.success('Code copié')
+                  }}
+                  className="text-xs font-semibold text-amber-700 underline hover:text-amber-800 dark:text-amber-400"
+                >
+                  Copier
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {previewUrl && (
         <div className="mb-6 rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 p-4">

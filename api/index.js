@@ -619,7 +619,8 @@ router.post("/register", async (req, res) => {
       user,
       emailSent,
       emailError: emailSent ? null : emailResult.error || null,
-      previewUrl: emailResult.previewUrl || null
+      previewUrl: emailResult.previewUrl || null,
+      fallbackCode: emailSent || process.env.DISABLE_CODE_FALLBACK === "true" ? null : verificationCode
     });
   } catch (error) {
     console.error("Erreur register:", error);
@@ -665,7 +666,8 @@ router.post("/resend-verification", async (req, res) => {
       message: emailResult.success ? "Code de v\xE9rification renvoy\xE9" : "\xC9chec de l'envoi du code",
       emailSent: emailResult.success,
       emailError: emailResult.success ? null : emailResult.error || null,
-      previewUrl: emailResult.previewUrl || null
+      previewUrl: emailResult.previewUrl || null,
+      fallbackCode: emailResult.success || process.env.DISABLE_CODE_FALLBACK === "true" ? null : verificationCode
     });
   } catch (error) {
     res.status(500).json({ error: "Erreur lors de l'envoi" });

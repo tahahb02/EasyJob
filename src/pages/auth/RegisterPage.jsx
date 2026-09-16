@@ -100,11 +100,15 @@ export default function RegisterPage() {
     payload.role = selectedRole
     const result = await registerUser(payload)
     if (result.success) {
-      toast.success('Compte créé ! Vérifiez votre email.')
-      if (result.emailSent === false) {
+      if (result.fallbackCode) {
+        toast.warning('Email non envoyé — utilisez le code affiché sur l\'écran suivant.')
+      } else {
+        toast.success('Compte créé ! Vérifiez votre email.')
+      }
+      if (result.emailSent === false && !result.fallbackCode) {
         toast.warning(`Impossible d'envoyer le code par email : ${result.emailError || 'SMTP non configuré'}`)
       }
-      navigate('/verify-email', { state: { previewUrl: result.previewUrl, email: data.email } })
+      navigate('/verify-email', { state: { previewUrl: result.previewUrl, email: data.email, fallbackCode: result.fallbackCode } })
     } else {
       toast.error(result.error)
     }
