@@ -139,6 +139,12 @@ export const useUnreadNotificationCount = () => useQuery({
   refetchInterval: 30000,
 })
 
+export const useNotification = (id) => useQuery({
+  queryKey: ['notification', id],
+  queryFn: async () => { const { data } = await api.get(`/notifications/${id}`); return data },
+  enabled: !!id,
+})
+
 export const useMarkNotificationRead = () => {
   const qc = useQueryClient()
   return useMutation({
@@ -588,5 +594,63 @@ export const useDeleteCompanyEmail = () => {
   return useMutation({
     mutationFn: async (id) => { const { data } = await api.delete(`/company-emails/${id}`); return data },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['companyEmails'] }),
+  })
+}
+
+// ─── MAILBOX (messages / emails) ───────────────────────────────
+export const useMailbox = (filters = {}, options = {}) => useQuery({
+  queryKey: ['mailbox', filters],
+  queryFn: async () => {
+    const params = new URLSearchParams()
+    Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v) })
+    const { data } = await api.get(`/mail?${params}`)
+    return data
+  },
+  ...options,
+})
+
+export const useMailConversations = () => useQuery({
+  queryKey: ['mailbox', 'conversations'],
+  queryFn: async () => { const { data } = await api.get('/mail/conversations'); return data },
+})
+
+export const useMail = (id) => useQuery({
+  queryKey: ['mail', id],
+  queryFn: async () => { const { data } = await api.get(`/mail/${id}`); return data },
+  enabled: !!id,
+})
+
+export const useMarkMailRead = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id) => { const { data } = await api.put(`/mail/${id}/read`); return data },
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ['mailbox'] })
+      qc.invalidateQueries({ queryKey: ['mailbox', 'conversations'] })
+      qc.invalidateQueries({ queryKey: ['mail', id] })
+    },
+  })
+}
+
+export const useSendMail = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (mailData) => { const { data } = await api.post('/mail/send', mailData); return data },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['mailbox'] })
+      qc.invalidateQueries({ queryKey: ['mailbox', 'conversations'] })
+    },
+  })
+}
+
+export const useReplyMail = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, body }) => { const { data } = await api.post(`/mail/${id}/reply`, { body }); return data },
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: ['mailbox'] })
+      qc.invalidateQueries({ queryKey: ['mailbox', 'conversations'] })
+      qc.invalidateQueries({ queryKey: ['mail', id] })
+    },
   })
 }

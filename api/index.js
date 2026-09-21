@@ -337,10 +337,10 @@ var dbMigration_exports = {};
 __export(dbMigration_exports, {
   fixJobOfferIndexes: () => fixJobOfferIndexes
 });
-import mongoose18 from "mongoose";
+import mongoose19 from "mongoose";
 async function fixJobOfferIndexes() {
   try {
-    const db = mongoose18.connection.db;
+    const db = mongoose19.connection.db;
     if (!db) return;
     const collection = db.collection("joboffers");
     const indexes = await collection.indexes();
@@ -349,7 +349,7 @@ async function fixJobOfferIndexes() {
       await collection.dropIndex(OLD_JOB_INDEX);
       console.log("\u{1F9F9} Ancien index unique supprim\xE9 (userId_1_source_1_sourceId_1)");
     }
-    await mongoose18.model("JobOffer").createIndexes();
+    await mongoose19.model("JobOffer").createIndexes();
   } catch (err) {
     console.error("Migration index JobOffer \xE9chou\xE9e:", err.message);
   }
@@ -365,8 +365,8 @@ var init_dbMigration = __esm({
 import dotenv2 from "dotenv";
 
 // backend/server.js
-import express17 from "express";
-import mongoose19 from "mongoose";
+import express18 from "express";
+import mongoose20 from "mongoose";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -1170,7 +1170,7 @@ async function notifyNewJobOffer(jobOffer) {
         title: "Nouvelle offre correspondant \xE0 votre profil",
         message: `${jobOffer.title} chez ${jobOffer.company} - ${jobOffer.location}${jobOffer.isRemote ? " (Remote)" : ""}`,
         data: { jobOfferId: jobOffer._id, matchCount, totalSkills: skills.length },
-        actionUrl: `/job-offers/${jobOffer._id}`
+        actionUrl: `/jobs/${jobOffer._id}`
       });
     }
   } catch (err) {
@@ -1247,7 +1247,7 @@ async function notifyScrapingComplete(userId, results) {
       title: "Scraping termin\xE9",
       message: `${results.count || 0} nouvelles offres d'emploi ont \xE9t\xE9 trouv\xE9es. Consultez les r\xE9sultats`,
       data: { count: results.count, source: results.source, results },
-      actionUrl: `/job-offers?source=${results.source || "scraped"}`
+      actionUrl: `/jobs?source=${results.source || "scraped"}`
     });
   } catch (err) {
     console.error("Erreur notifyScrapingComplete:", err.message);
@@ -1263,7 +1263,7 @@ async function notifyNewApplicationToRecruiter(application, jobOffer) {
       title: "Nouvelle candidature re\xE7ue",
       message: `Un candidat a postul\xE9 \xE0 votre offre ${jobOffer.title}`,
       data: { applicationId: application._id, jobOfferId: jobOffer._id },
-      actionUrl: `/recruiter/applications`
+      actionUrl: `/recruiter-space/applications`
     });
   } catch (err) {
     console.error("Erreur notifyNewApplicationToRecruiter:", err.message);
@@ -1277,24 +1277,34 @@ async function notifySuggestedCandidates(recruiterId, jobOffer, candidateCount) 
       title: "Candidats sugg\xE9r\xE9s pour votre offre",
       message: `${candidateCount} candidats correspondent \xE0 votre offre ${jobOffer.title}`,
       data: { jobOfferId: jobOffer._id, candidateCount },
-      actionUrl: `/recruiter/jobs/${jobOffer._id}/candidates`
+      actionUrl: `/recruiter-space/jobs/${jobOffer._id}`
     });
   } catch (err) {
     console.error("Erreur notifySuggestedCandidates:", err.message);
   }
 }
-async function notifyEmailFromCompany(userId, companyName, subject) {
+async function notifyEmailFromCompany(userId, companyName, subject, emailId = null) {
+  await notifyEmailReceived({
+    userId,
+    fromName: companyName,
+    companyName,
+    subject,
+    emailId
+  });
+}
+async function notifyEmailReceived({ userId, fromName, companyName = "", subject, emailId = null }) {
   try {
+    const sender = fromName || companyName || "Un utilisateur";
     await createNotification({
       userId,
       type: "email",
-      title: "Email re\xE7u d'une entreprise",
-      message: `${companyName} vous a envoy\xE9 un email : ${subject}`,
-      data: { companyName, subject },
-      actionUrl: "/applications"
+      title: "Email re\xE7u",
+      message: `${sender} vous a envoy\xE9 un email : ${subject || "Sans objet"}`,
+      data: { companyName, subject, emailId, fromName: sender },
+      actionUrl: `/messages?tab=emails${emailId ? `&email=${emailId}` : ""}`
     });
   } catch (err) {
-    console.error("Erreur notifyEmailFromCompany:", err.message);
+    console.error("Erreur notifyEmailReceived:", err.message);
   }
 }
 
@@ -2367,6 +2377,99 @@ var CV_default = mongoose10.models.CV || mongoose10.model("CV", cvSchema);
 
 // backend/routes/applications.js
 init_sendEmail();
+
+// backend/models/Email.js
+import mongoose11 from "mongoose";
+var emailSchema = new mongoose11.Schema({
+  userId: { type: mongoose11.Schema.Types.ObjectId, ref: "User", required: true },
+  direction: { type: String, enum: ["sent", "received"], required: true, index: true },
+  fromUser: { type: mongoose11.Schema.Types.ObjectId, ref: "User", default: null },
+  toUser: { type: mongoose11.Schema.Types.ObjectId, ref: "User", default: null },
+  fromName: { type: String, default: "" },
+  toName: { type: String, default: "" },
+  fromEmail: { type: String, default: "" },
+  toEmail: { type: String, default: "" },
+  subject: { type: String, default: "" },
+  body: { type: String, default: "" },
+  companyName: { type: String, default: "" },
+  campaignType: { type: String, default: "" },
+  applicationId: { type: mongoose11.Schema.Types.ObjectId, ref: "Application", default: null },
+  jobOfferId: { type: mongoose11.Schema.Types.ObjectId, ref: "JobOffer", default: null },
+  messageId: { type: String, default: "" },
+  isRead: { type: Boolean, default: false },
+  readAt: Date
+}, { timestamps: true });
+emailSchema.index({ userId: 1, createdAt: -1 });
+emailSchema.index({ userId: 1, direction: 1, createdAt: -1 });
+var Email_default = mongoose11.model("Email", emailSchema);
+
+// backend/services/MailService.js
+async function recordExchange({ senderUser, recipientUser, subject, body, fromName, toName, toEmail, companyName, campaignType = "", applicationId = null, jobOfferId = null, messageId = "" }) {
+  const fromUser = senderUser?._id || senderUser?.id || null;
+  const fromNameValue = fromName || (senderUser ? `${senderUser.firstName || ""} ${senderUser.lastName || ""}`.trim() : "");
+  const base = {
+    fromUser,
+    toUser: recipientUser?._id || recipientUser?.id || null,
+    fromName: fromNameValue,
+    toName: toName || (recipientUser ? `${recipientUser.firstName || ""} ${recipientUser.lastName || ""}`.trim() : ""),
+    toEmail: toEmail || recipientUser?.email || "",
+    subject: subject || "",
+    body: body || "",
+    companyName: companyName || "",
+    campaignType,
+    applicationId,
+    jobOfferId,
+    messageId: messageId || ""
+  };
+  const docs = [];
+  if (recipientUser) {
+    docs.push({
+      userId: recipientUser._id || recipientUser.id,
+      direction: "received",
+      fromEmail: senderUser?.email || "",
+      ...base
+    });
+  }
+  if (senderUser) {
+    docs.push({
+      userId: senderUser._id || senderUser.id,
+      direction: "sent",
+      fromEmail: senderUser.email || "",
+      ...base
+    });
+  }
+  if (docs.length === 0) return null;
+  return Email_default.create(docs);
+}
+async function recordCandidateEmail({ candidate, recruiterUser = null, application, jobOffer = null, to, subject, body, messageId = "" }) {
+  return recordExchange({
+    senderUser: candidate,
+    recipientUser: recruiterUser,
+    subject,
+    body,
+    toName: jobOffer?.recruiterName || (recruiterUser ? `${recruiterUser.firstName || ""} ${recruiterUser.lastName || ""}`.trim() : "Recruteur"),
+    toEmail: to,
+    companyName: jobOffer?.company || "",
+    campaignType: "candidature",
+    applicationId: application?._id || application?.id || null,
+    jobOfferId: jobOffer?._id || jobOffer?.id || null,
+    messageId
+  });
+}
+async function recordRecruiterEmail({ recruiterUser, candidateUser, subject, body, companyName = "", messageId = "" }) {
+  return recordExchange({
+    senderUser: recruiterUser,
+    recipientUser: candidateUser,
+    subject,
+    body,
+    toName: candidateUser ? `${candidateUser.firstName || ""} ${candidateUser.lastName || ""}`.trim() : "Candidat",
+    companyName,
+    campaignType: "recruteur",
+    messageId
+  });
+}
+
+// backend/routes/applications.js
 var router4 = express4.Router();
 router4.get("/", protect, async (req, res) => {
   try {
@@ -2501,6 +2604,27 @@ router4.post("/:id/send", protect, async (req, res) => {
     await app2.save();
     if (jobOffer) {
       notifyNewApplicationToRecruiter(app2, jobOffer);
+      const recruiterUser = await User_default.findById(jobOffer.postedBy || jobOffer.userId);
+      const recorded = await recordCandidateEmail({
+        candidate: user,
+        recruiterUser: recruiterUser && recruiterUser.role === "recruiter" ? recruiterUser : null,
+        application: app2,
+        jobOffer,
+        to,
+        subject,
+        body,
+        messageId: emailResult.messageId
+      });
+      if (recruiterUser && recruiterUser.role === "recruiter") {
+        const receivedCopy = Array.isArray(recorded) ? recorded.find((d) => d.userId?.toString() === recruiterUser._id.toString()) : null;
+        notifyEmailReceived({
+          userId: recruiterUser._id,
+          fromName: candidateName,
+          companyName: company,
+          subject,
+          emailId: receivedCopy?._id?.toString() || null
+        });
+      }
     }
     res.json({ application: app2, message: "Candidature envoy\xE9e avec succ\xE8s !", messageId: emailResult.messageId });
   } catch (error) {
@@ -2558,9 +2682,9 @@ var applications_default = router4;
 import express5 from "express";
 
 // backend/models/Recruiter.js
-import mongoose11 from "mongoose";
-var recruiterSchema = new mongoose11.Schema({
-  userId: { type: mongoose11.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose12 from "mongoose";
+var recruiterSchema = new mongoose12.Schema({
+  userId: { type: mongoose12.Schema.Types.ObjectId, ref: "User", required: true },
   firstName: { type: String, required: true },
   lastName: { type: String, required: true },
   title: String,
@@ -2578,7 +2702,7 @@ var recruiterSchema = new mongoose11.Schema({
   lastContactedAt: Date,
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
-var Recruiter_default = mongoose11.model("Recruiter", recruiterSchema);
+var Recruiter_default = mongoose12.model("Recruiter", recruiterSchema);
 
 // backend/routes/recruiters.js
 var router5 = express5.Router();
@@ -2767,9 +2891,13 @@ import express7 from "express";
 var router7 = express7.Router();
 router7.get("/", protect, async (req, res) => {
   try {
-    const { type, unreadOnly, page = 1, limit = 50 } = req.query;
+    const { type, types, unreadOnly, page = 1, limit = 50 } = req.query;
     const query = { userId: req.user._id };
     if (type) query.type = type;
+    if (types) {
+      const list = String(types).split(",").map((t) => t.trim()).filter(Boolean);
+      if (list.length > 0) query.type = { $in: list };
+    }
     if (unreadOnly === "true") query.isRead = false;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const [notifications, total, unreadCount] = await Promise.all([
@@ -2778,6 +2906,15 @@ router7.get("/", protect, async (req, res) => {
       Notification_default.countDocuments({ userId: req.user._id, isRead: false })
     ]);
     res.json({ notifications, total, unreadCount, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router7.get("/:id", protect, async (req, res) => {
+  try {
+    const notification = await Notification_default.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!notification) return res.status(404).json({ error: "Notification non trouv\xE9e" });
+    res.json({ notification });
   } catch (error) {
     res.status(500).json({ error: "Erreur serveur" });
   }
@@ -2836,9 +2973,9 @@ var notifications_default = router7;
 import express8 from "express";
 
 // backend/models/ScrapingLog.js
-import mongoose12 from "mongoose";
-var scrapingLogSchema = new mongoose12.Schema({
-  userId: { type: mongoose12.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose13 from "mongoose";
+var scrapingLogSchema = new mongoose13.Schema({
+  userId: { type: mongoose13.Schema.Types.ObjectId, ref: "User", required: true },
   status: { type: String, enum: ["running", "success", "partial", "failed"], default: "running" },
   sources: [{
     source: String,
@@ -2854,7 +2991,7 @@ var scrapingLogSchema = new mongoose12.Schema({
   startedAt: { type: Date, default: Date.now },
   completedAt: Date
 }, { timestamps: true, suppressReservedKeysWarning: true });
-var ScrapingLog_default = mongoose12.model("ScrapingLog", scrapingLogSchema);
+var ScrapingLog_default = mongoose13.model("ScrapingLog", scrapingLogSchema);
 
 // backend/routes/scraping.js
 var router8 = express8.Router();
@@ -2964,9 +3101,9 @@ var scraping_default = router8;
 import express9 from "express";
 
 // backend/models/EmailTemplate.js
-import mongoose13 from "mongoose";
-var emailTemplateSchema = new mongoose13.Schema({
-  userId: { type: mongoose13.Schema.Types.ObjectId, ref: "User" },
+import mongoose14 from "mongoose";
+var emailTemplateSchema = new mongoose14.Schema({
+  userId: { type: mongoose14.Schema.Types.ObjectId, ref: "User" },
   name: { type: String, required: true },
   subject: { type: String, required: true },
   body: { type: String, required: true },
@@ -2975,7 +3112,7 @@ var emailTemplateSchema = new mongoose13.Schema({
   category: { type: String, enum: ["Candidature", "Relance", "Remerciement", "Suivi", "Personnalis\xE9"], default: "Candidature" },
   usageCount: { type: Number, default: 0 }
 }, { timestamps: true });
-var EmailTemplate_default = mongoose13.model("EmailTemplate", emailTemplateSchema);
+var EmailTemplate_default = mongoose14.model("EmailTemplate", emailTemplateSchema);
 
 // backend/routes/emailTemplates.js
 var router9 = express9.Router();
@@ -3079,9 +3216,9 @@ var emailTemplates_default = router9;
 import express10 from "express";
 
 // backend/models/SearchProfile.js
-import mongoose14 from "mongoose";
-var searchProfileSchema = new mongoose14.Schema({
-  userId: { type: mongoose14.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose15 from "mongoose";
+var searchProfileSchema = new mongoose15.Schema({
+  userId: { type: mongoose15.Schema.Types.ObjectId, ref: "User", required: true },
   name: { type: String, required: true },
   sectors: [String],
   keywords: [String],
@@ -3100,7 +3237,7 @@ var searchProfileSchema = new mongoose14.Schema({
   isActive: { type: Boolean, default: true },
   frequency: { type: String, enum: ["quotidien", "hebdomadaire", "manuel"], default: "manuel" }
 }, { timestamps: true });
-var SearchProfile_default = mongoose14.model("SearchProfile", searchProfileSchema);
+var SearchProfile_default = mongoose15.model("SearchProfile", searchProfileSchema);
 
 // backend/routes/searchProfiles.js
 var router10 = express10.Router();
@@ -3258,7 +3395,7 @@ var analytics_default = router11;
 
 // backend/routes/cv.js
 import express12 from "express";
-import mongoose15 from "mongoose";
+import mongoose16 from "mongoose";
 var router12 = express12.Router();
 function analyzeCV(text, parsedData) {
   let score = 0;
@@ -3956,7 +4093,7 @@ router12.post("/match-jobs", protect, async (req, res) => {
     const { keywords } = req.body || {};
     const cv = await CV_default.findOne({ userId: req.user._id, isActive: true });
     if (!cv) return res.status(404).json({ error: "Aucun CV trouv\xE9" });
-    const JobOffer = mongoose15.model("JobOffer");
+    const JobOffer = mongoose16.model("JobOffer");
     const query = { userId: req.user._id, isActive: true };
     const allJobs = await JobOffer.find(query);
     const cvSkills = (cv.parsedData?.skills || []).map((s) => s.toLowerCase());
@@ -4079,10 +4216,10 @@ var cv_default = router12;
 
 // backend/routes/portfolio.js
 import express13 from "express";
-import mongoose16 from "mongoose";
+import mongoose17 from "mongoose";
 var router13 = express13.Router();
-var portfolioSchema = new mongoose16.Schema({
-  userId: { type: mongoose16.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
+var portfolioSchema = new mongoose17.Schema({
+  userId: { type: mongoose17.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
   url: { type: String, default: "" },
   description: { type: String, default: "" },
   projects: [{
@@ -4093,7 +4230,7 @@ var portfolioSchema = new mongoose16.Schema({
     technologies: [String]
   }]
 }, { timestamps: true });
-var Portfolio = mongoose16.models.Portfolio || mongoose16.model("Portfolio", portfolioSchema);
+var Portfolio = mongoose17.models.Portfolio || mongoose17.model("Portfolio", portfolioSchema);
 router13.get("/", protect, async (req, res) => {
   try {
     let portfolio = await Portfolio.findOne({ userId: req.user._id });
@@ -4121,7 +4258,7 @@ var portfolio_default = router13;
 
 // backend/routes/recruiterSpace.js
 import express14 from "express";
-import mongoose17 from "mongoose";
+import mongoose18 from "mongoose";
 init_sendEmail();
 var router14 = express14.Router();
 function generateCandidateSummary2(text, parsedData, userProfile) {
@@ -4574,7 +4711,7 @@ router14.get("/candidates", protect, authorize("recruiter"), async (req, res) =>
 router14.get("/candidates/:userId", protect, authorize("recruiter"), async (req, res) => {
   try {
     const { userId } = req.params;
-    if (!mongoose17.Types.ObjectId.isValid(userId)) {
+    if (!mongoose18.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ error: "ID invalide" });
     }
     const profile = await UserProfile_default.findOne({ userId }).populate("userId", "firstName lastName email avatar jobSearchStatus lastLogin");
@@ -4590,7 +4727,7 @@ router14.get("/candidates/:userId", protect, authorize("recruiter"), async (req,
 });
 router14.get("/candidates/:userId/cv/download", protect, authorize("recruiter"), async (req, res) => {
   try {
-    if (!mongoose17.Types.ObjectId.isValid(req.params.userId)) {
+    if (!mongoose18.Types.ObjectId.isValid(req.params.userId)) {
       return res.status(400).json({ error: "ID invalide" });
     }
     const cv = await CV_default.findOne({ userId: req.params.userId, isActive: true });
@@ -4609,7 +4746,7 @@ router14.get("/candidates/:userId/cv/download", protect, authorize("recruiter"),
 });
 router14.get("/candidates/:userId/cv/preview", protect, authorize("recruiter"), async (req, res) => {
   try {
-    if (!mongoose17.Types.ObjectId.isValid(req.params.userId)) {
+    if (!mongoose18.Types.ObjectId.isValid(req.params.userId)) {
       return res.status(400).json({ error: "ID invalide" });
     }
     const cv = await CV_default.findOne({ userId: req.params.userId, isActive: true }).select("fileData fileSize mimeType originalName");
@@ -4778,7 +4915,16 @@ router14.post("/candidates/:userId/email", protect, authorize("recruiter"), asyn
       html
     });
     if (result.success) {
-      notifyEmailFromCompany(req.params.userId, profile?.companyName || `${req.user.firstName} ${req.user.lastName}`, subject);
+      const recorded = await recordRecruiterEmail({
+        recruiterUser: req.user,
+        candidateUser: targetUser,
+        subject,
+        body: message,
+        companyName: profile?.companyName || "",
+        messageId: result.messageId
+      });
+      const receivedCopy = Array.isArray(recorded) ? recorded.find((d) => d.userId?.toString() === targetUser._id.toString()) : null;
+      notifyEmailFromCompany(req.params.userId, profile?.companyName || `${req.user.firstName} ${req.user.lastName}`, subject, receivedCopy?._id?.toString());
       res.json({ message: "Email envoy\xE9 avec succ\xE8s", messageId: result.messageId });
     } else {
       res.status(500).json({ error: "Erreur lors de l'envoi de l'email" });
@@ -4887,9 +5033,261 @@ router15.delete("/:id", protect, async (req, res) => {
 });
 var companyEmails_default = router15;
 
-// backend/routes/seed.js
+// backend/routes/mail.js
 import express16 from "express";
+init_sendEmail();
 var router16 = express16.Router();
+var MAIL_SUBJECT_PREFIX = "[EasyJob] ";
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+function emailBaseSubject(subject) {
+  return String(subject || "").replace(/^(Re|RE|Re:\s?)+:/g, "").replace(/^\s*Re:\s*/i, "").trim();
+}
+async function resolveRecipientUser(to) {
+  const email = normalizeEmail(to);
+  if (!email) return null;
+  try {
+    return await User_default.findOne({ email });
+  } catch {
+    return null;
+  }
+}
+router16.get("/", protect, async (req, res) => {
+  try {
+    const { type = "inbox", search, conversation, page = 1, limit = 30 } = req.query;
+    const query = { userId: req.user._id };
+    const orClauses = [];
+    if (conversation && conversation.trim()) {
+      const other = normalizeEmail(conversation);
+      orClauses.push({ fromEmail: other }, { toEmail: other });
+    } else {
+      query.direction = type === "sent" ? "sent" : "received";
+    }
+    if (search && search.trim()) {
+      const regex = new RegExp(search.trim(), "i");
+      orClauses.push({ subject: regex }, { body: regex }, { fromName: regex }, { toName: regex }, { companyName: regex });
+    }
+    if (orClauses.length > 0) {
+      query.$or = orClauses;
+    }
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [emails, total, unreadCount] = await Promise.all([
+      Email_default.find(query).populate("fromUser", "firstName lastName email avatar role").populate("toUser", "firstName lastName email avatar role").sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)),
+      Email_default.countDocuments(query),
+      Email_default.countDocuments({ userId: req.user._id, direction: "received", isRead: false })
+    ]);
+    res.json({ emails, total, unreadCount, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) });
+  } catch (error) {
+    console.error("Mailbox error:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des emails" });
+  }
+});
+router16.get("/conversations", protect, async (req, res) => {
+  try {
+    const emails = await Email_default.find({ userId: req.user._id }).populate("fromUser", "firstName lastName email avatar role").populate("toUser", "firstName lastName email avatar role").sort({ createdAt: -1 }).limit(500);
+    const groups = /* @__PURE__ */ new Map();
+    for (const email of emails) {
+      const received = email.direction === "received";
+      const participant = received ? email.fromUser || { email: email.fromEmail } : email.toUser || { email: email.toEmail };
+      const key = normalizeEmail(participant.email || (received ? email.fromEmail : email.toEmail)) || "inconnu";
+      let group = groups.get(key);
+      if (!group) {
+        const participantName = received ? email.fromName || (email.fromUser ? `${email.fromUser.firstName || ""} ${email.fromUser.lastName || ""}`.trim() : email.fromEmail) || "Inconnu" : email.toName || (email.toUser ? `${email.toUser.firstName || ""} ${email.toUser.lastName || ""}`.trim() : email.toEmail) || "Destinataire";
+        group = {
+          key,
+          participant: {
+            userId: participant._id || null,
+            email: participant.email || (received ? email.fromEmail : email.toEmail) || "",
+            name: participantName,
+            role: received ? email.fromUser?.role : email.toUser?.role
+          },
+          companyName: email.companyName || "",
+          lastMessage: "",
+          lastSender: "",
+          time: email.createdAt,
+          unreadCount: 0,
+          messageCount: 0
+        };
+        groups.set(key, group);
+      }
+      group.messageCount += 1;
+      if (received && !email.isRead) group.unreadCount += 1;
+    }
+    for (const email of emails) {
+      const received = email.direction === "received";
+      const participant = received ? email.fromUser || { email: email.fromEmail } : email.toUser || { email: email.toEmail };
+      const key = normalizeEmail(participant.email || (received ? email.fromEmail : email.toEmail)) || "inconnu";
+      const group = groups.get(key);
+      if (!group) continue;
+      if (!group.lastMessage) {
+        const senderName = received ? email.fromName || (email.fromUser ? `${email.fromUser.firstName || ""} ${email.fromUser.lastName || ""}`.trim() : "") || "Quelqu'un" : "Vous";
+        group.lastMessage = email.body || email.subject || "";
+        group.lastSender = senderName;
+        group.time = email.createdAt;
+        group.lastSubject = email.subject || "";
+        group.threadId = email._id;
+      }
+    }
+    const conversations = Array.from(groups.values()).sort((a, b) => new Date(b.time) - new Date(a.time));
+    res.json({ conversations, total: conversations.length });
+  } catch (error) {
+    console.error("Conversations error:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des conversations" });
+  }
+});
+router16.post("/send", protect, async (req, res) => {
+  try {
+    const { to, subject, body, companyName = "", applicationId = null, jobOfferId = null } = req.body;
+    if (!to || !subject || !body) {
+      return res.status(400).json({ error: "Destinataire, objet et contenu requis" });
+    }
+    const toEmail = String(to).trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail)) {
+      return res.status(400).json({ error: "Adresse email invalide" });
+    }
+    const recipientUser = await resolveRecipientUser(toEmail);
+    const senderName = `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim() || "Utilisateur EasyJob";
+    const recipientName = recipientUser ? `${recipientUser.firstName || ""} ${recipientUser.lastName || ""}`.trim() : req.body.toName || "";
+    const content = `
+      <p style="margin:0 0 8px 0; font-size:14px; color:#334155; line-height:1.6;">Bonjour <strong>${escapeHtml(recipientName || "")}</strong>,</p>
+      <div style="background:#eff6ff; border-left:4px solid #2563eb; border-radius:12px; padding:18px 20px; margin:0 0 6px 0; white-space:pre-wrap; color:#334155; font-size:14px; line-height:1.7;">${escapeHtml(body)}</div>
+      <p style="margin:14px 0 0 0; font-size:13px; color:#94a3b8; line-height:1.6;">Envoy\xE9 par <strong>${escapeHtml(senderName)}</strong> via EasyJob</p>
+    `;
+    const html = brandLayout({
+      title: subject,
+      content,
+      footerText: "Message envoy\xE9 via EasyJob \u2014 Votre carri\xE8re au Maroc"
+    });
+    const emailResult = await sendEmail({ to: toEmail, subject: `${MAIL_SUBJECT_PREFIX}${subject}`, html });
+    if (!emailResult.success) {
+      return res.status(500).json({ error: "Erreur lors de l'envoi de l'email", details: emailResult.error });
+    }
+    const recorded = await recordExchange({
+      senderUser: req.user,
+      recipientUser,
+      subject,
+      body,
+      fromName: senderName,
+      toName: recipientName,
+      toEmail,
+      companyName: companyName || "",
+      campaignType: "direct",
+      applicationId,
+      jobOfferId,
+      messageId: emailResult.messageId
+    });
+    const sentCopy = Array.isArray(recorded) ? recorded.find((d) => d.userId?.toString() === req.user._id.toString()) : null;
+    if (recipientUser) {
+      const receivedCopy = Array.isArray(recorded) ? recorded.find((d) => d.userId?.toString() === recipientUser._id.toString()) : null;
+      notifyEmailReceived({
+        userId: recipientUser._id,
+        fromName: senderName,
+        companyName,
+        subject,
+        emailId: receivedCopy?._id?.toString() || null
+      });
+    }
+    res.status(201).json({ email: sentCopy || recorded, message: "Email envoy\xE9 avec succ\xE8s !", messageId: emailResult.messageId });
+  } catch (error) {
+    console.error("Mail send error:", error);
+    res.status(500).json({ error: "Erreur lors de l'envoi" });
+  }
+});
+router16.post("/:id/reply", protect, async (req, res) => {
+  try {
+    const { body } = req.body;
+    if (!body || !String(body).trim()) {
+      return res.status(400).json({ error: "Le contenu de la r\xE9ponse est requis" });
+    }
+    const email = await Email_default.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!email) return res.status(404).json({ error: "Email non trouv\xE9" });
+    const received = email.direction === "received";
+    const toEmail = received ? email.fromEmail || email.fromUser?.email : email.toEmail || email.toUser?.email;
+    if (!toEmail) return res.status(400).json({ error: "Impossible de d\xE9terminer le destinataire" });
+    const recipientUser = await resolveRecipientUser(toEmail);
+    const subject = email.subject && /^\s*re:/i.test(email.subject) ? email.subject : `Re: ${emailBaseSubject(email.subject) || "\xC9change EasyJob"}`;
+    const senderName = `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim() || "Utilisateur EasyJob";
+    const recipientName = (received ? email.fromName : email.toName) || (recipientUser ? `${recipientUser.firstName || ""} ${recipientUser.lastName || ""}`.trim() : "");
+    const content = `
+      <p style="margin:0 0 8px 0; font-size:14px; color:#334155; line-height:1.6;">Bonjour <strong>${escapeHtml(recipientName || "")}</strong>,</p>
+      <div style="background:#eff6ff; border-left:4px solid #2563eb; border-radius:12px; padding:18px 20px; margin:0 0 16px 0; white-space:pre-wrap; color:#334155; font-size:14px; line-height:1.7;">${escapeHtml(body)}</div>
+      <div style="border-left:3px solid #e2e8f0; padding:10px 14px; font-size:12px; color:#94a3b8; line-height:1.6;">
+        <strong style="color:#64748b;">De : ${escapeHtml(email.fromName || "")}</strong><br />
+        <strong style="color:#64748b;">Objet : ${escapeHtml(email.subject || "")}</strong><br />
+        ${escapeHtml(email.body || "")}
+      </div>
+      <p style="margin:14px 0 0 0; font-size:13px; color:#94a3b8; line-height:1.6;">R\xE9ponse envoy\xE9e par <strong>${escapeHtml(senderName)}</strong> via EasyJob</p>
+    `;
+    const html = brandLayout({
+      title: subject,
+      content,
+      footerText: "Message envoy\xE9 via EasyJob \u2014 Votre carri\xE8re au Maroc"
+    });
+    const emailResult = await sendEmail({ to: toEmail, subject: `${MAIL_SUBJECT_PREFIX}${subject}`, html });
+    if (!emailResult.success) {
+      return res.status(500).json({ error: "Erreur lors de l'envoi de la r\xE9ponse", details: emailResult.error });
+    }
+    const recorded = await recordExchange({
+      senderUser: req.user,
+      recipientUser,
+      subject,
+      body,
+      fromName: senderName,
+      toName: recipientName,
+      toEmail,
+      companyName: email.companyName || "",
+      campaignType: email.campaignType || "direct",
+      applicationId: email.applicationId || null,
+      jobOfferId: email.jobOfferId || null,
+      messageId: emailResult.messageId
+    });
+    const sentCopy = Array.isArray(recorded) ? recorded.find((d) => d.userId?.toString() === req.user._id.toString()) : null;
+    if (recipientUser && recipientUser._id?.toString() !== req.user._id.toString()) {
+      const receivedCopy = Array.isArray(recorded) ? recorded.find((d) => d.userId?.toString() === recipientUser._id.toString()) : null;
+      notifyEmailReceived({
+        userId: recipientUser._id,
+        fromName: senderName,
+        companyName: email.companyName || "",
+        subject,
+        emailId: receivedCopy?._id?.toString() || null
+      });
+    }
+    res.status(201).json({ email: sentCopy || recorded, message: "R\xE9ponse envoy\xE9e avec succ\xE8s !", messageId: emailResult.messageId });
+  } catch (error) {
+    console.error("Mail reply error:", error);
+    res.status(500).json({ error: "Erreur lors de l'envoi de la r\xE9ponse" });
+  }
+});
+router16.get("/:id", protect, async (req, res) => {
+  try {
+    const email = await Email_default.findOne({ _id: req.params.id, userId: req.user._id }).populate("fromUser", "firstName lastName email avatar role").populate("toUser", "firstName lastName email avatar role");
+    if (!email) return res.status(404).json({ error: "Email non trouv\xE9" });
+    res.json({ email });
+  } catch (error) {
+    console.error("Mail get error:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router16.put("/:id/read", protect, async (req, res) => {
+  try {
+    const email = await Email_default.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user._id, direction: "received" },
+      { isRead: true, readAt: /* @__PURE__ */ new Date() },
+      { new: true }
+    );
+    if (!email) return res.status(404).json({ error: "Email non trouv\xE9" });
+    res.json({ email });
+  } catch (error) {
+    console.error("Mail read error:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+var mail_default = router16;
+
+// backend/routes/seed.js
+import express17 from "express";
+var router17 = express17.Router();
 var sampleJobs = [
   {
     title: "D\xE9veloppeur Full Stack React/Node.js",
@@ -5004,7 +5402,7 @@ var sampleJobs = [
     keywords: ["rh", "ressources humaines", "recrutement", "administration"]
   }
 ];
-router16.post("/recruiter-jobs", protect, async (req, res) => {
+router17.post("/recruiter-jobs", protect, async (req, res) => {
   try {
     let count = 0;
     for (const jobData of sampleJobs) {
@@ -5025,12 +5423,12 @@ router16.post("/recruiter-jobs", protect, async (req, res) => {
     res.status(500).json({ error: "Erreur lors du seed" });
   }
 });
-var seed_default = router16;
+var seed_default = router17;
 
 // backend/server.js
-mongoose19.set("toJSON", { virtuals: true, versionKey: false });
-mongoose19.set("toObject", { virtuals: true, versionKey: false });
-var app = express17();
+mongoose20.set("toJSON", { virtuals: true, versionKey: false });
+mongoose20.set("toObject", { virtuals: true, versionKey: false });
+var app = express18();
 app.use(helmet({ contentSecurityPolicy: false }));
 var allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:5173").split(",").map((o) => o.trim()).filter(Boolean);
 app.use(cors({
@@ -5043,8 +5441,8 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express17.json({ limit: "10mb" }));
-app.use(express17.urlencoded({ extended: true }));
+app.use(express18.json({ limit: "10mb" }));
+app.use(express18.urlencoded({ extended: true }));
 app.use(cookieParser());
 var limiter = rateLimit({ windowMs: 15 * 60 * 1e3, max: 200, message: { error: "Trop de requ\xEAtes" } });
 app.use("/api/", limiter);
@@ -5063,6 +5461,7 @@ app.use("/api/search-profiles", searchProfiles_default);
 app.use("/api/analytics", analytics_default);
 app.use("/api/recruiter-space", recruiterSpace_default);
 app.use("/api/company-emails", companyEmails_default);
+app.use("/api/mail", mail_default);
 app.use("/api/seed", seed_default);
 app.get("/api/health", (req, res) => res.json({ status: "ok", timestamp: /* @__PURE__ */ new Date() }));
 app.use("/api", (req, res) => {
@@ -5073,14 +5472,14 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || "Erreur serveur interne" });
 });
 async function connectDB() {
-  if (mongoose19.connection.readyState === 1) return;
+  if (mongoose20.connection.readyState === 1) return;
   const uri = process.env.MONGODB_URI;
   if (!uri) {
     console.error("\u274C MONGODB_URI non d\xE9fini");
     throw new Error("MONGODB_URI non d\xE9fini");
   }
   try {
-    await mongoose19.connect(uri);
+    await mongoose20.connect(uri);
     console.log("\u2705 MongoDB connect\xE9");
     const { fixJobOfferIndexes: fixJobOfferIndexes2 } = await Promise.resolve().then(() => (init_dbMigration(), dbMigration_exports));
     await fixJobOfferIndexes2();

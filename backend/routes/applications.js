@@ -7,8 +7,10 @@ import { protect } from '../middlewares/auth.js'
 import { sendEmail, escapeHtml, brandLayout } from '../utils/sendEmail.js'
 import {
   notifyApplicationStatusChange,
-  notifyNewApplicationToRecruiter
+  notifyNewApplicationToRecruiter,
+  notifyEmailReceived,
 } from '../services/NotificationService.js'
+import { recordCandidateEmail } from '../services/MailService.js'
 
 const router = express.Router()
 
@@ -170,6 +172,28 @@ router.post('/:id/send', protect, async (req, res) => {
 
     if (jobOffer) {
       notifyNewApplicationToRecruiter(app, jobOffer)
+      // Recruteur local (offre publiée sur la plateforme) -> copie "reçu"
+      const recruiterUser = await User.findById(jobOffer.postedBy || jobOffer.userId)
+      const recorded = await recordCandidateEmail({
+        candidate: user,
+        recruiterUser: recruiterUser && recruiterUser.role === 'recruiter' ? recruiterUser : null,
+        application: app,
+        jobOffer,
+        to,
+        subject,
+        body,
+        messageId: emailResult.messageId,
+      })
+      if (recruiterUser && recruiterUser.role === 'recruiter') {
+        const receivedCopy = Array.isArray(recorded) ? recorded.find(d => d.userId?.toString() === recruiterUser._id.toString()) : null
+        notifyEmailReceived({
+          userId: recruiterUser._id,
+          fromName: candidateName,
+          companyName: company,
+          subject,
+          emailId: receivedCopy?._id?.toString() || null,
+        })
+      }
     }
 
     res.json({ application: app, message: 'Candidature envoyée avec succès !', messageId: emailResult.messageId })

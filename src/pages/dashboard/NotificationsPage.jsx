@@ -1,55 +1,107 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Bell, CheckCircle, Mail, Briefcase, Scissors, Clock,
-  CheckCheck, Inbox, AlertTriangle, Loader2
+  CheckCircle, Mail, Briefcase, Scissors, Clock,
+  CheckCheck, Inbox, AlertTriangle, Loader2, ExternalLink, ArrowRight
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 import {
   useNotifications,
+  useNotification,
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
 } from '@/api/hooks';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
 
-const filters = ['Toutes', 'Non lues', 'Offres', 'Candidatures', 'Rappels'];
+const filters = ['Toutes', 'Non lues', 'Offres', 'Candidatures', 'Emails', 'Rappels'];
 
 const typeConfig = {
   nouvelle_offre: {
     icon: Briefcase,
     color: 'text-primary',
-    bg: 'bg-primary/10'
+    bg: 'bg-primary/10',
+    label: 'Offre'
   },
   candidature: {
     icon: CheckCircle,
     color: 'text-accent',
-    bg: 'bg-accent/10'
+    bg: 'bg-accent/10',
+    label: 'Candidature'
   },
   email: {
     icon: Mail,
     color: 'text-purple-500',
-    bg: 'bg-purple-500/10'
+    bg: 'bg-purple-500/10',
+    label: 'Email'
   },
   scrapping: {
     icon: Scissors,
     color: 'text-orange-500',
-    bg: 'bg-orange-500/10'
+    bg: 'bg-orange-500/10',
+    label: 'Scraping'
   },
   rappel: {
     icon: Clock,
     color: 'text-yellow-500',
-    bg: 'bg-yellow-500/10'
-  }
+    bg: 'bg-yellow-500/10',
+    label: 'Rappel'
+  },
+  candidature_statut: {
+    icon: CheckCircle,
+    color: 'text-accent',
+    bg: 'bg-accent/10',
+    label: 'Candidature'
+  },
+  nouvelle_entreprise: {
+    icon: Briefcase,
+    color: 'text-primary',
+    bg: 'bg-primary/10',
+    label: 'Entreprise'
+  },
+  candidat_suggere: {
+    icon: Briefcase,
+    color: 'text-primary',
+    bg: 'bg-primary/10',
+    label: 'Candidats'
+  },
+  nouvelle_candidature: {
+    icon: CheckCircle,
+    color: 'text-accent',
+    bg: 'bg-accent/10',
+    label: 'Candidature'
+  },
 };
+
+const DEFAULT_ACTION_URL = '/notifications';
+
+function resolveActionUrl(notification) {
+  if (notification.actionUrl) return notification.actionUrl;
+
+  const data = notification.data || {};
+  if (data.jobOfferId) return `/jobs/${data.jobOfferId}`;
+  if (data.applicationId) return `/applications/${data.applicationId}`;
+  if (data.companyEmailId) return `/company-emails`;
+  return DEFAULT_ACTION_URL;
+}
 
 const filterToApiType = {
   'Non lues': { unreadOnly: 'true' },
   'Offres': { type: 'nouvelle_offre' },
-  'Candidatures': { type: 'candidature' },
+  'Candidatures': {
+    types: ['candidature', 'candidature_statut', 'nouvelle_candidature', 'entretien', 'acceptation'].join(','),
+  },
+  'Emails': { type: 'email' },
   'Rappels': { type: 'rappel' },
 };
 
@@ -88,10 +140,13 @@ function NotificationSkeleton() {
 
 export default function NotificationsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState('Toutes');
   const [page, setPage] = useState(1);
+  const [detailId, setDetailId] = useState(searchParams.get('id') || null);
   const [highlightedId, setHighlightedId] = useState(null);
   const highlightTimeoutRef = useRef(null);
+  const openedDetailMarkRef = useRef(null);
 
   const apiFilters = useMemo(() => {
     const filters = { page, limit: 20 };
@@ -107,9 +162,21 @@ export default function NotificationsPage() {
   const notifications = data?.notifications ?? [];
   const unreadCount = data?.unreadCount ?? 0;
 
-  const highlightId = searchParams.get('id');
+  const { data: fetchedDetail } = useNotification(detailId);
+
+  const detailNotification = detailId
+    ? (notifications.find(n => (n._id || n.id) === detailId) ||
+       (fetchedDetail?.notification && String(fetchedDetail.notification._id) === String(detailId)
+         ? fetchedDetail.notification
+         : null))
+    : null;
 
   useEffect(() => {
+    setDetailId(searchParams.get('id') || null);
+  }, [searchParams]);
+
+  useEffect(() => {
+    const highlightId = searchParams.get('id');
     if (highlightId && notifications.length > 0) {
       setHighlightedId(highlightId);
       const timer = setTimeout(() => {
@@ -120,22 +187,54 @@ export default function NotificationsPage() {
       }, 100);
       highlightTimeoutRef.current = setTimeout(() => {
         setHighlightedId(null);
-        searchParams.delete('id');
-        setSearchParams(searchParams, { replace: true });
       }, 3000);
       return () => {
         clearTimeout(timer);
         clearTimeout(highlightTimeoutRef.current);
       };
     }
-  }, [highlightId, notifications.length]);
+  }, [searchParams, notifications.length]);
 
   const markAsRead = (id) => {
     markRead.mutate(id);
   };
 
+  useEffect(() => {
+    if (!detailNotification || detailNotification.isRead) return;
+    const id = detailNotification._id || detailNotification.id;
+    if (openedDetailMarkRef.current === id) return;
+    openedDetailMarkRef.current = id;
+    markAsRead(id);
+  }, [detailNotification, markRead]);
+
   const markAllAsRead = () => {
     markAllRead.mutate();
+  };
+
+  const openDetail = (id) => {
+    setDetailId(id);
+    if (!markRead.isPending) markAsRead(id);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set('id', id);
+      return next;
+    }, { replace: true });
+  };
+
+  const closeDetail = () => {
+    setDetailId(null);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.delete('id');
+      return next;
+    }, { replace: true });
+  };
+
+  const goToAction = () => {
+    if (!detailNotification) return;
+    const url = resolveActionUrl(detailNotification);
+    closeDetail();
+    navigate(url);
   };
 
   if (error) {
@@ -152,6 +251,10 @@ export default function NotificationsPage() {
       </div>
     );
   }
+
+  const detailConfig = detailNotification
+    ? (typeConfig[detailNotification.type] || typeConfig.email)
+    : null;
 
   return (
     <motion.div
@@ -230,8 +333,10 @@ export default function NotificationsPage() {
               </motion.div>
             ) : (
               notifications.map((notification, index) => {
+                const id = notification._id || notification.id;
                 const config = typeConfig[notification.type] || typeConfig.email;
                 const Icon = config.icon;
+                const isRead = notification.isRead || notification.read;
                 const timeAgo = formatDistanceToNow(new Date(notification.createdAt), {
                   addSuffix: true,
                   locale: fr
@@ -239,18 +344,18 @@ export default function NotificationsPage() {
 
                 return (
                   <motion.div
-                    key={notification.id}
-                    id={`notif-${notification._id || notification.id}`}
+                    key={id}
+                    id={`notif-${id}`}
                     variants={listItem}
                     initial="hidden"
                     animate="visible"
                     exit="exit"
                     transition={{ delay: index * 0.03 }}
-                    onClick={() => markAsRead(notification.id)}
+                    onClick={() => openDetail(id)}
                     className={`flex items-start gap-4 p-4 sm:p-5 border-b border-border last:border-0 cursor-pointer transition-all duration-500 hover:bg-muted ${
-                      highlightedId === (notification._id || notification.id)
+                      highlightedId === id
                         ? 'bg-primary/[0.08] ring-2 ring-ring/40 shadow-lg shadow-primary/10'
-                        : !notification.read ? 'bg-primary/[0.03]' : ''
+                        : !isRead ? 'bg-primary/[0.03]' : ''
                     }`}
                   >
                     <div className={`flex-shrink-0 p-2.5 rounded-lg ${config.bg}`}>
@@ -260,20 +365,26 @@ export default function NotificationsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className={`text-sm text-foreground truncate ${
-                          !notification.read ? 'font-semibold' : 'font-medium'
+                          !isRead ? 'font-semibold' : 'font-medium'
                         }`}>
                           {notification.title}
                         </p>
-                        {!notification.read && (
+                        {!isRead && (
                           <span className="flex-shrink-0 w-2 h-2 bg-primary rounded-full" />
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
                         {notification.message}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1.5">
-                        {timeAgo}
-                      </p>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <p className="text-xs text-muted-foreground">{timeAgo}</p>
+                        {notification.actionUrl && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
+                            Voir le détail
+                            <ArrowRight size={12} />
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </motion.div>
                 );
@@ -282,6 +393,80 @@ export default function NotificationsPage() {
           </AnimatePresence>
         )}
       </div>
+
+      {/* Détails de la notification */}
+      <Sheet open={!!detailNotification} onOpenChange={(open) => { if (!open) closeDetail() }}>
+        <SheetContent className="w-full sm:w-[440px] sm:max-w-[440px]" showCloseButton={false}>
+          {detailNotification && detailConfig ? (
+            <>
+              <SheetHeader className="border-b border-border">
+                <div className="pr-10">
+                  <div className="flex items-center gap-3">
+                    <div className={`flex-shrink-0 p-2.5 rounded-lg ${detailConfig.bg}`}>
+                      <detailConfig.icon size={20} className={detailConfig.color} />
+                    </div>
+                    <div>
+                      <Badge variant="secondary" className="mb-1 text-[10px] uppercase tracking-wide">
+                        {detailConfig.label || detailNotification.type}
+                      </Badge>
+                      <SheetTitle className="text-base leading-snug break-words">
+                        {detailNotification.title}
+                      </SheetTitle>
+                      <SheetDescription className="mt-1 text-xs">
+                        {format(new Date(detailNotification.createdAt), "EEEE d MMMM yyyy 'à' HH:mm", { locale: fr })}
+                      </SheetDescription>
+                    </div>
+                  </div>
+                </div>
+              </SheetHeader>
+
+              <div className="flex-1 overflow-y-auto px-5 py-4">
+                <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+                  {detailNotification.message}
+                </p>
+                {detailNotification.data && Object.keys(detailNotification.data).length > 0 && (
+                  <div className="mt-4 rounded-lg bg-muted p-3 space-y-1.5">
+                    {Object.entries(detailNotification.data).map(([key, value]) => {
+                      if (typeof value === 'object' || value === null || value === undefined) return null;
+                      const labels = {
+                        jobOfferId: 'Offre',
+                        applicationId: 'Candidature',
+                        companyName: 'Entreprise',
+                        subject: 'Objet',
+                        newStatus: 'Statut',
+                        source: 'Source',
+                        matchCount: 'Correspondances',
+                        totalSkills: 'Compétences',
+                        candidateCount: 'Candidats',
+                        count: 'Résultats',
+                      };
+                      return (
+                        <div key={key} className="flex items-start justify-between gap-3 text-xs">
+                          <span className="text-muted-foreground">{labels[key] || key}</span>
+                          <span className="font-medium text-foreground text-right break-words">{String(value)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2 border-t border-border p-4">
+                <Button
+                  onClick={goToAction}
+                  className="gap-1.5"
+                >
+                  <ExternalLink size={15} />
+                  Voir le détail
+                </Button>
+                <Button variant="outline" onClick={() => markAsRead(detailNotification._id || detailNotification.id)}>
+                  Marquer comme lu
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </SheetContent>
+      </Sheet>
     </motion.div>
   );
 }

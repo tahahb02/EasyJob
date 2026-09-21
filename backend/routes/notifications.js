@@ -7,9 +7,13 @@ const router = express.Router()
 
 router.get('/', protect, async (req, res) => {
   try {
-    const { type, unreadOnly, page = 1, limit = 50 } = req.query
+    const { type, types, unreadOnly, page = 1, limit = 50 } = req.query
     const query = { userId: req.user._id }
     if (type) query.type = type
+    if (types) {
+      const list = String(types).split(',').map(t => t.trim()).filter(Boolean)
+      if (list.length > 0) query.type = { $in: list }
+    }
     if (unreadOnly === 'true') query.isRead = false
 
     const skip = (parseInt(page) - 1) * parseInt(limit)
@@ -20,6 +24,16 @@ router.get('/', protect, async (req, res) => {
     ])
 
     res.json({ notifications, total, unreadCount, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) })
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+router.get('/:id', protect, async (req, res) => {
+  try {
+    const notification = await Notification.findOne({ _id: req.params.id, userId: req.user._id })
+    if (!notification) return res.status(404).json({ error: 'Notification non trouvée' })
+    res.json({ notification })
   } catch (error) {
     res.status(500).json({ error: 'Erreur serveur' })
   }

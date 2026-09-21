@@ -63,7 +63,7 @@ export async function notifyNewJobOffer(jobOffer) {
         title: 'Nouvelle offre correspondant à votre profil',
         message: `${jobOffer.title} chez ${jobOffer.company} - ${jobOffer.location}${jobOffer.isRemote ? ' (Remote)' : ''}`,
         data: { jobOfferId: jobOffer._id, matchCount, totalSkills: skills.length },
-        actionUrl: `/job-offers/${jobOffer._id}`,
+        actionUrl: `/jobs/${jobOffer._id}`,
       })
     }
   } catch (err) {
@@ -149,7 +149,7 @@ export async function notifyScrapingComplete(userId, results) {
       title: 'Scraping terminé',
       message: `${results.count || 0} nouvelles offres d'emploi ont été trouvées. Consultez les résultats`,
       data: { count: results.count, source: results.source, results },
-      actionUrl: `/job-offers?source=${results.source || 'scraped'}`,
+      actionUrl: `/jobs?source=${results.source || 'scraped'}`,
     })
   } catch (err) {
     console.error('Erreur notifyScrapingComplete:', err.message)
@@ -167,7 +167,7 @@ export async function notifyNewApplicationToRecruiter(application, jobOffer) {
       title: 'Nouvelle candidature reçue',
       message: `Un candidat a postulé à votre offre ${jobOffer.title}`,
       data: { applicationId: application._id, jobOfferId: jobOffer._id },
-      actionUrl: `/recruiter/applications`,
+      actionUrl: `/recruiter-space/applications`,
     })
   } catch (err) {
     console.error('Erreur notifyNewApplicationToRecruiter:', err.message)
@@ -182,7 +182,7 @@ export async function notifySuggestedCandidates(recruiterId, jobOffer, candidate
       title: 'Candidats suggérés pour votre offre',
       message: `${candidateCount} candidats correspondent à votre offre ${jobOffer.title}`,
       data: { jobOfferId: jobOffer._id, candidateCount },
-      actionUrl: `/recruiter/jobs/${jobOffer._id}/candidates`,
+      actionUrl: `/recruiter-space/jobs/${jobOffer._id}`,
     })
   } catch (err) {
     console.error('Erreur notifySuggestedCandidates:', err.message)
@@ -208,25 +208,37 @@ export async function notifyEncouragement(userId) {
       title: msg.title,
       message: msg.message,
       data: {},
-      actionUrl: '/job-offers',
+      actionUrl: '/jobs',
     })
   } catch (err) {
     console.error('Erreur notifyEncouragement:', err.message)
   }
 }
 
-export async function notifyEmailFromCompany(userId, companyName, subject) {
+export async function notifyEmailFromCompany(userId, companyName, subject, emailId = null) {
+  await notifyEmailReceived({
+    userId,
+    fromName: companyName,
+    companyName,
+    subject,
+    emailId,
+  })
+}
+
+// Notification générique quand un utilisateur reçoit un email (via la plateforme).
+export async function notifyEmailReceived({ userId, fromName, companyName = '', subject, emailId = null }) {
   try {
+    const sender = fromName || companyName || 'Un utilisateur'
     await createNotification({
       userId,
       type: 'email',
-      title: 'Email reçu d\'une entreprise',
-      message: `${companyName} vous a envoyé un email : ${subject}`,
-      data: { companyName, subject },
-      actionUrl: '/applications',
+      title: 'Email reçu',
+      message: `${sender} vous a envoyé un email : ${subject || 'Sans objet'}`,
+      data: { companyName, subject, emailId, fromName: sender },
+      actionUrl: `/messages?tab=emails${emailId ? `&email=${emailId}` : ''}`,
     })
   } catch (err) {
-    console.error('Erreur notifyEmailFromCompany:', err.message)
+    console.error('Erreur notifyEmailReceived:', err.message)
   }
 }
 
@@ -241,4 +253,5 @@ export default {
   notifySuggestedCandidates,
   notifyEncouragement,
   notifyEmailFromCompany,
+  notifyEmailReceived,
 }

@@ -19,6 +19,7 @@ import cvRoutes from './routes/cv.js'
 import portfolioRoutes from './routes/portfolio.js'
 import recruiterSpaceRoutes from './routes/recruiterSpace.js'
 import companyEmailRoutes from './routes/companyEmails.js'
+import mailRoutes from './routes/mail.js'
 import seedRoutes from './routes/seed.js'
 
 mongoose.set('toJSON', { virtuals: true, versionKey: false })
@@ -64,6 +65,7 @@ app.use('/api/search-profiles', searchProfileRoutes)
 app.use('/api/analytics', analyticsRoutes)
 app.use('/api/recruiter-space', recruiterSpaceRoutes)
 app.use('/api/company-emails', companyEmailRoutes)
+app.use('/api/mail', mailRoutes)
 app.use('/api/seed', seedRoutes)
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }))

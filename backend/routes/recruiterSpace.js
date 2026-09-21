@@ -17,6 +17,7 @@ import {
   notifySuggestedCandidates,
   notifyEmailFromCompany,
 } from '../services/NotificationService.js'
+import { recordRecruiterEmail } from '../services/MailService.js'
 
 const router = express.Router()
 
@@ -803,7 +804,16 @@ router.post('/candidates/:userId/email', protect, authorize('recruiter'), async 
     })
 
     if (result.success) {
-      notifyEmailFromCompany(req.params.userId, profile?.companyName || `${req.user.firstName} ${req.user.lastName}`, subject)
+      const recorded = await recordRecruiterEmail({
+        recruiterUser: req.user,
+        candidateUser: targetUser,
+        subject,
+        body: message,
+        companyName: profile?.companyName || '',
+        messageId: result.messageId,
+      })
+      const receivedCopy = Array.isArray(recorded) ? recorded.find(d => d.userId?.toString() === targetUser._id.toString()) : null
+      notifyEmailFromCompany(req.params.userId, profile?.companyName || `${req.user.firstName} ${req.user.lastName}`, subject, receivedCopy?._id?.toString())
       res.json({ message: 'Email envoyé avec succès', messageId: result.messageId })
     } else {
       res.status(500).json({ error: 'Erreur lors de l\'envoi de l\'email' })

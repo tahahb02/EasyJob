@@ -3,19 +3,23 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bell, CheckCircle, Mail, Briefcase, Scissors, Clock,
-  Inbox, ChevronRight, Loader2
+  Inbox, ChevronRight, Loader2, UserPlus, Sparkles, CalendarCheck
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import {
   useNotifications,
-  useMarkNotificationRead,
   useUnreadNotificationCount,
+  useMarkNotificationRead,
 } from '@/api/hooks'
 
 const typeConfig = {
   nouvelle_offre: { icon: Briefcase, color: 'text-primary-500', bg: 'bg-primary-500/10' },
   candidature: { icon: CheckCircle, color: 'text-secondary-500', bg: 'bg-secondary-500/10' },
+  candidature_statut: { icon: CheckCircle, color: 'text-secondary-500', bg: 'bg-secondary-500/10' },
+  nouvelle_candidature: { icon: UserPlus, color: 'text-secondary-500', bg: 'bg-secondary-500/10' },
+  entretien: { icon: CalendarCheck, color: 'text-secondary-500', bg: 'bg-secondary-500/10' },
+  acceptation: { icon: Sparkles, color: 'text-secondary-500', bg: 'bg-secondary-500/10' },
   email: { icon: Mail, color: 'text-purple-500', bg: 'bg-purple-500/10' },
   scrapping: { icon: Scissors, color: 'text-orange-500', bg: 'bg-orange-500/10' },
   rappel: { icon: Clock, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
@@ -31,9 +35,10 @@ export default function NotificationDropdown() {
   const unreadCount = unreadData ?? 0
 
   const { data, isLoading } = useNotifications({ limit: 20 })
-  const markRead = useMarkNotificationRead()
 
   const notifications = data?.notifications ?? []
+
+  const markRead = useMarkNotificationRead()
 
   const visibleNotifications = notifications.slice(0, visibleCount)
   const hasMore = notifications.length > visibleCount
@@ -49,6 +54,9 @@ export default function NotificationDropdown() {
 
   const handleClickNotification = (id, e) => {
     e.stopPropagation()
+    if (!notifications.find(n => (n._id || n.id) === id)?.isRead) {
+      markRead.mutate(id)
+    }
     setOpen(false)
     navigate(`/notifications?id=${id}`)
   }
