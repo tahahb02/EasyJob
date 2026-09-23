@@ -1371,7 +1371,7 @@ export default function ProfilePage() {
           </Section>
 
           {/* Save Button */}
-          <div className="sticky bottom-0 py-4 bg-background/80 backdrop-blur-xl -mx-4 px-4">
+          <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] py-4 bg-background/80 backdrop-blur-xl -mx-4 px-4 lg:bottom-0">
             <Button
               type="submit"
               disabled={updateProfile.isPending}

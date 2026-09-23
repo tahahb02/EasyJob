@@ -4,6 +4,7 @@ import { SidebarProvider, useSidebar } from '@/context/SidebarContext'
 import AppSidebar from '@/components/layout/AppSidebar'
 import AppHeader from '@/components/layout/AppHeader'
 import MobileHeader from '@/components/MobileHeader'
+import MobileBottomNav from '@/components/layout/MobileBottomNav'
 
 function Layout() {
   const { collapsed } = useSidebar()
@@ -18,7 +19,7 @@ function Layout() {
       >
         <MobileHeader />
         <AppHeader />
-        <main className="min-w-0 flex-1 overflow-x-clip p-4 md:p-6 lg:p-8">
+        <main className="min-w-0 flex-1 overflow-x-clip px-4 pb-28 pt-4 md:px-6 md:pb-28 md:pt-6 lg:px-8 lg:pb-8 lg:pt-8">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={location.pathname}
@@ -32,6 +33,7 @@ function Layout() {
           </AnimatePresence>
         </main>
       </div>
+      <MobileBottomNav />
     </div>
   )
 }

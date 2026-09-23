@@ -260,6 +260,7 @@
     scroll-behavior: smooth;
     overflow-x: clip;
     -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
     @apply font-sans;
   }
 
@@ -326,6 +327,26 @@
   .recharts-legend-item text {
     fill: var(--muted-foreground);
     color: var(--muted-foreground);
+  }
+}
+
+/* ============================================================
+   MOBILE & TABLETTE — confort tactile natif
+   ============================================================ */
+
+/* Évite le zoom automatique d'iOS au focus des champs (< 16px)
+   et gonfle légèrement les champs natifs sur mobile uniquement */
+@media (max-width: 767px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  /* Les graphiques ne doivent pas bloquer le scroll vertical */
+  .recharts-wrapper,
+  .recharts-surface {
+    touch-action: pan-y;
   }
 }
 

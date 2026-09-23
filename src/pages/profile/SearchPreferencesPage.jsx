@@ -650,7 +650,7 @@ export default function SearchPreferencesPage() {
             </div>
           </motion.div>
 
-          <div className="sticky bottom-0 py-4 bg-muted/80 dark:bg-background/80 backdrop-blur-xl -mx-4 px-4 flex items-center justify-between">
+          <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] py-4 bg-muted/80 dark:bg-background/80 backdrop-blur-xl -mx-4 px-4 flex items-center justify-between lg:bottom-0">
             <div className="flex items-center gap-2">
               {selectedId && (
                 <>

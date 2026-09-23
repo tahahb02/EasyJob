@@ -311,7 +311,7 @@ export default function ApplicationsPage() {
       {/* List */}
       {isLoading ? (
         <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <Table>
+          <Table className="min-w-[720px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Statut</TableHead>
@@ -327,7 +327,7 @@ export default function ApplicationsPage() {
         </div>
       ) : sortedApps.length > 0 ? (
         <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <Table>
+          <Table className="min-w-[720px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Statut</TableHead>

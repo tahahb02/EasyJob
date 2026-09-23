@@ -192,7 +192,7 @@ function MessagesTab() {
   };
 
   return (
-    <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden flex h-[calc(100vh-290px)] min-h-[480px]">
+    <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden flex h-[calc(100vh-290px)] h-[calc(100dvh-290px)] min-h-[480px]">
       <div className={`w-full sm:w-80 lg:w-96 border-r border-border flex flex-col ${
         selectedEmail ? 'hidden sm:flex' : 'flex'
       }`}>
