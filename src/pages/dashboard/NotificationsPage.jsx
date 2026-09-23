@@ -3,9 +3,9 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CheckCircle, Mail, Briefcase, Scissors, Clock,
-  CheckCheck, Inbox, AlertTriangle, Loader2, ExternalLink, ArrowRight
+  CheckCheck, Inbox, AlertTriangle, Loader2, ArrowRight
 } from 'lucide-react';
-import { formatDistanceToNow, format } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 import {
@@ -16,13 +16,7 @@ import {
 } from '@/api/hooks';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from '@/components/ui/sheet';
+import NotificationDetailModal from '@/components/NotificationDetailModal';
 
 const filters = ['Toutes', 'Non lues', 'Offres', 'Candidatures', 'Emails', 'Rappels'];
 
@@ -252,10 +246,6 @@ export default function NotificationsPage() {
     );
   }
 
-  const detailConfig = detailNotification
-    ? (typeConfig[detailNotification.type] || typeConfig.email)
-    : null;
-
   return (
     <motion.div
       variants={container}
@@ -395,78 +385,12 @@ export default function NotificationsPage() {
       </div>
 
       {/* Détails de la notification */}
-      <Sheet open={!!detailNotification} onOpenChange={(open) => { if (!open) closeDetail() }}>
-        <SheetContent className="w-full sm:w-[440px] sm:max-w-[440px]" showCloseButton={false}>
-          {detailNotification && detailConfig ? (
-            <>
-              <SheetHeader className="border-b border-border">
-                <div className="pr-10">
-                  <div className="flex items-center gap-3">
-                    <div className={`flex-shrink-0 p-2.5 rounded-lg ${detailConfig.bg}`}>
-                      <detailConfig.icon size={20} className={detailConfig.color} />
-                    </div>
-                    <div>
-                      <Badge variant="secondary" className="mb-1 text-[10px] uppercase tracking-wide">
-                        {detailConfig.label || detailNotification.type}
-                      </Badge>
-                      <SheetTitle className="text-base leading-snug break-words">
-                        {detailNotification.title}
-                      </SheetTitle>
-                      <SheetDescription className="mt-1 text-xs">
-                        {format(new Date(detailNotification.createdAt), "EEEE d MMMM yyyy 'à' HH:mm", { locale: fr })}
-                      </SheetDescription>
-                    </div>
-                  </div>
-                </div>
-              </SheetHeader>
-
-              <div className="flex-1 overflow-y-auto px-5 py-4">
-                <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-                  {detailNotification.message}
-                </p>
-                {detailNotification.data && Object.keys(detailNotification.data).length > 0 && (
-                  <div className="mt-4 rounded-lg bg-muted p-3 space-y-1.5">
-                    {Object.entries(detailNotification.data).map(([key, value]) => {
-                      if (typeof value === 'object' || value === null || value === undefined) return null;
-                      const labels = {
-                        jobOfferId: 'Offre',
-                        applicationId: 'Candidature',
-                        companyName: 'Entreprise',
-                        subject: 'Objet',
-                        newStatus: 'Statut',
-                        source: 'Source',
-                        matchCount: 'Correspondances',
-                        totalSkills: 'Compétences',
-                        candidateCount: 'Candidats',
-                        count: 'Résultats',
-                      };
-                      return (
-                        <div key={key} className="flex items-start justify-between gap-3 text-xs">
-                          <span className="text-muted-foreground">{labels[key] || key}</span>
-                          <span className="font-medium text-foreground text-right break-words">{String(value)}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-2 border-t border-border p-4">
-                <Button
-                  onClick={goToAction}
-                  className="gap-1.5"
-                >
-                  <ExternalLink size={15} />
-                  Voir le détail
-                </Button>
-                <Button variant="outline" onClick={() => markAsRead(detailNotification._id || detailNotification.id)}>
-                  Marquer comme lu
-                </Button>
-              </div>
-            </>
-          ) : null}
-        </SheetContent>
-      </Sheet>
+      <NotificationDetailModal
+        notification={detailNotification}
+        onClose={closeDetail}
+        onMarkRead={markAsRead}
+        onGoToAction={goToAction}
+      />
     </motion.div>
   );
 }

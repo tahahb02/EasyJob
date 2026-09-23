@@ -27,21 +27,17 @@ const typeConfig = {
 
 export default function NotificationDropdown() {
   const [open, setOpen] = useState(false)
-  const [visibleCount, setVisibleCount] = useState(5)
   const ref = useRef(null)
   const navigate = useNavigate()
 
   const { data: unreadData } = useUnreadNotificationCount()
   const unreadCount = unreadData ?? 0
 
-  const { data, isLoading } = useNotifications({ limit: 20 })
+  const { data, isLoading } = useNotifications({ limit: 100 })
 
   const notifications = data?.notifications ?? []
 
   const markRead = useMarkNotificationRead()
-
-  const visibleNotifications = notifications.slice(0, visibleCount)
-  const hasMore = notifications.length > visibleCount
 
   const handleClickOutside = useCallback((e) => {
     if (ref.current && !ref.current.contains(e.target)) setOpen(false)
@@ -52,11 +48,10 @@ export default function NotificationDropdown() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [open, handleClickOutside])
 
-  const handleClickNotification = (id, e) => {
+  const handleClickNotification = (notif, e) => {
     e.stopPropagation()
-    if (!notifications.find(n => (n._id || n.id) === id)?.isRead) {
-      markRead.mutate(id)
-    }
+    const id = notif._id || notif.id
+    if (!notif.isRead) markRead.mutate(id)
     setOpen(false)
     navigate(`/notifications?id=${id}`)
   }
@@ -109,7 +104,7 @@ export default function NotificationDropdown() {
                 <div className="flex items-center justify-center py-10">
                   <Loader2 className="w-6 h-6 animate-spin text-primary-500" />
                 </div>
-              ) : visibleNotifications.length === 0 ? (
+              ) : notifications.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 px-4">
                   <div className="p-3 bg-surface-100 dark:bg-surface-800 rounded-xl mb-3">
                     <Inbox size={24} className="text-surface-400 dark:text-surface-500" />
@@ -118,7 +113,7 @@ export default function NotificationDropdown() {
                   <p className="text-xs text-surface-400 dark:text-surface-500 mt-0.5">Vous êtes à jour !</p>
                 </div>
               ) : (
-                visibleNotifications.map((notif) => {
+                notifications.map((notif) => {
                   const config = typeConfig[notif.type] || typeConfig.email
                   const Icon = config.icon
                   const timeAgo = formatDistanceToNow(new Date(notif.createdAt), {
@@ -129,7 +124,7 @@ export default function NotificationDropdown() {
                   return (
                     <div
                       key={notif._id}
-                      onClick={(e) => handleClickNotification(notif._id, e)}
+                      onClick={(e) => handleClickNotification(notif, e)}
                       className={`flex items-start gap-3 px-5 py-3.5 cursor-pointer transition-colors hover:bg-surface-50 dark:hover:bg-surface-800 ${
                         !notif.isRead ? 'bg-primary-500/[0.03]' : ''
                       }`}
@@ -162,18 +157,7 @@ export default function NotificationDropdown() {
             </div>
 
             {/* Footer */}
-            {hasMore && (
-              <div className="border-t border-surface-100 dark:border-surface-700">
-                <button
-                  onClick={() => setVisibleCount((c) => c + 5)}
-                  className="w-full flex items-center justify-center gap-1.5 px-5 py-3 text-xs font-medium text-primary-500 hover:bg-primary-500/5 transition"
-                >
-                  Voir plus
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-            )}
-            {!hasMore && visibleNotifications.length > 0 && (
+            {notifications.length > 0 && (
               <div className="border-t border-surface-100 dark:border-surface-700">
                 <Link
                   to="/notifications"
