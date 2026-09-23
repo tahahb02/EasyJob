@@ -654,3 +654,100 @@ export const useReplyMail = () => {
     },
   })
 }
+
+// ─── ADMIN ─────────────────────────────────────────────────────────
+export const useAdminOverview = () => useQuery({
+  queryKey: ['admin', 'overview'],
+  queryFn: async () => { const { data } = await api.get('/admin/overview'); return data },
+})
+
+export const useAdminTimeline = (days = 30) => useQuery({
+  queryKey: ['admin', 'timeline', days],
+  queryFn: async () => { const { data } = await api.get(`/admin/timeline?days=${days}`); return data },
+  placeholderData: (prev) => prev,
+})
+
+export const useAdminMonthly = (months = 12) => useQuery({
+  queryKey: ['admin', 'monthly', months],
+  queryFn: async () => { const { data } = await api.get(`/admin/monthly?months=${months}`); return data },
+  placeholderData: (prev) => prev,
+})
+
+export const useAdminUsers = (filters = {}) => useQuery({
+  queryKey: ['admin', 'users', filters],
+  queryFn: async () => {
+    const params = new URLSearchParams()
+    Object.entries(filters).forEach(([k, v]) => { if (v != null && v !== '') params.set(k, v) })
+    const { data } = await api.get(`/admin/users?${params}`)
+    return data
+  },
+})
+
+export const useCreateAdminUser = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (userData) => { const { data } = await api.post('/admin/users', userData); return data },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'overview'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'timeline'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'monthly'] })
+    },
+  })
+}
+
+export const useUpdateAdminUser = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, ...updates }) => { const { data } = await api.put(`/admin/users/${id}`, updates); return data },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'recruiters'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'overview'] })
+    },
+  })
+}
+
+export const useDeleteAdminUser = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id) => { const { data } = await api.delete(`/admin/users/${id}`); return data },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'overview'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'recruiters'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'timeline'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'monthly'] })
+    },
+  })
+}
+
+export const useAdminRecruiters = (filters = {}) => useQuery({
+  queryKey: ['admin', 'recruiters', filters],
+  queryFn: async () => {
+    const params = new URLSearchParams()
+    Object.entries(filters).forEach(([k, v]) => { if (v != null && v !== '') params.set(k, v) })
+    const { data } = await api.get(`/admin/recruiters?${params}`)
+    return data
+  },
+})
+
+export const useAdminCompanies = (filters = {}) => useQuery({
+  queryKey: ['admin', 'companies', filters],
+  queryFn: async () => {
+    const params = new URLSearchParams()
+    Object.entries(filters).forEach(([k, v]) => { if (v != null && v !== '') params.set(k, v) })
+    const { data } = await api.get(`/admin/companies?${params}`)
+    return data
+  },
+})
+
+export const useAdminJobs = (filters = {}) => useQuery({
+  queryKey: ['admin', 'jobs', filters],
+  queryFn: async () => {
+    const params = new URLSearchParams()
+    Object.entries(filters).forEach(([k, v]) => { if (v != null && v !== '') params.set(k, v) })
+    const { data } = await api.get(`/admin/jobs?${params}`)
+    return data
+  },
+})

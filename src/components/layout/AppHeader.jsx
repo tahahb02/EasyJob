@@ -37,6 +37,15 @@ const recruiterNav = [
   { icon: Bell, label: 'Notifications', path: '/notifications' },
 ]
 
+const adminNav = [
+  { icon: LayoutDashboard, label: 'Dashboard Admin', path: '/admin' },
+  { icon: Users, label: 'Utilisateurs', path: '/admin/users' },
+  { icon: Briefcase, label: 'Recruteurs', path: '/admin/recruiters' },
+  { icon: Building2, label: 'Entreprises', path: '/admin/companies' },
+  { icon: FileText, label: 'Offres d\'emploi', path: '/admin/jobs' },
+  { icon: Bell, label: 'Notifications', path: '/notifications' },
+]
+
 const breadcrumbMap = {
   '/dashboard': [{ label: 'Tableau de bord' }],
   '/jobs': [{ label: 'Offres d\'emploi' }],
@@ -59,6 +68,11 @@ const breadcrumbMap = {
   '/recruiter-space/candidates': [{ label: 'Candidats' }],
   '/recruiter-space/applications': [{ label: 'Candidatures' }],
   '/recruiter-space/profile': [{ label: 'Profil Entreprise' }],
+  '/admin': [{ label: 'Administration', path: '/admin' }, { label: 'Dashboard' }],
+  '/admin/users': [{ label: 'Administration', path: '/admin' }, { label: 'Utilisateurs' }],
+  '/admin/recruiters': [{ label: 'Administration', path: '/admin' }, { label: 'Recruteurs' }],
+  '/admin/companies': [{ label: 'Administration', path: '/admin' }, { label: 'Entreprises' }],
+  '/admin/jobs': [{ label: 'Administration', path: '/admin' }, { label: 'Offres d\'emploi' }],
 }
 
 function Breadcrumbs() {
@@ -138,7 +152,8 @@ function NotificationBell() {
 function HeaderUserMenu() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const isRecruiter = user?.role === 'recruiter'
+  const isAdmin = user?.role === 'admin'
+  const isRecruiter = !isAdmin && user?.role === 'recruiter'
   const initials = user
     ? (user.firstName?.[0] ?? '') + (user.lastName?.[0] ?? '') || user.email?.[0]?.toUpperCase()
     : ''
@@ -154,9 +169,9 @@ function HeaderUserMenu() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem onClick={() => navigate(isRecruiter ? '/recruiter-space/profile' : '/profile')}>
+        <DropdownMenuItem onClick={() => navigate(isAdmin ? '/admin' : isRecruiter ? '/recruiter-space/profile' : '/profile')}>
           <User className="mr-2 size-4" />
-          Profil
+          {isAdmin ? 'Espace admin' : 'Profil'}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => { logout(); navigate('/') }} className="text-destructive focus:text-destructive">
@@ -171,8 +186,9 @@ function HeaderUserMenu() {
 function CommandMenu({ open, setOpen }) {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const isRecruiter = user?.role === 'recruiter'
-  const items = isRecruiter ? recruiterNav : candidateNav
+  const isAdmin = user?.role === 'admin'
+  const isRecruiter = !isAdmin && user?.role === 'recruiter'
+  const items = isAdmin ? adminNav : isRecruiter ? recruiterNav : candidateNav
 
   useEffect(() => {
     const down = (e) => {

@@ -60,11 +60,33 @@ const recruiterGroups = [
   },
 ]
 
+const adminGroups = [
+  {
+    label: 'Administration',
+    items: [
+      { icon: LayoutDashboard, label: 'Dashboard Admin', path: '/admin' },
+      { icon: Users, label: 'Utilisateurs', path: '/admin/users' },
+      { icon: Briefcase, label: 'Recruteurs', path: '/admin/recruiters' },
+      { icon: Building2, label: 'Entreprises', path: '/admin/companies' },
+      { icon: FileText, label: 'Offres d\'emploi', path: '/admin/jobs' },
+      { icon: Bell, label: 'Notifications', path: '/notifications', badge: true },
+    ],
+  },
+  {
+    label: 'Outils',
+    items: [
+      { icon: Search, label: 'Annuaire Entreprises', path: '/company-emails' },
+      { icon: MessageSquare, label: 'Messages', path: '/messages' },
+    ],
+  },
+]
+
 function SidebarNav({ collapsed, onNav }) {
   const { user } = useAuth()
   const { data: unreadCount } = useUnreadNotificationCount()
-  const isRecruiter = user?.role === 'recruiter'
-  const groups = isRecruiter ? recruiterGroups : candidateGroups
+  const isAdmin = user?.role === 'admin'
+  const isRecruiter = !isAdmin && user?.role === 'recruiter'
+  const groups = isAdmin ? adminGroups : isRecruiter ? recruiterGroups : candidateGroups
 
   return (
     <nav className="space-y-6 px-2">
@@ -131,12 +153,15 @@ function SidebarNav({ collapsed, onNav }) {
 function UserMenu({ collapsed }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const isRecruiter = user?.role === 'recruiter'
+  const isAdmin = user?.role === 'admin'
+  const isRecruiter = !isAdmin && user?.role === 'recruiter'
   const initials = user
     ? (user.firstName?.[0] ?? '') + (user.lastName?.[0] ?? '') || user.email?.[0]?.toUpperCase()
     : ''
 
   const handleLogout = () => { logout(); navigate('/') }
+
+  const profilePath = isAdmin ? '/admin' : isRecruiter ? '/recruiter-space/profile' : '/profile'
 
   return (
     <DropdownMenu>
@@ -160,9 +185,9 @@ function UserMenu({ collapsed }) {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-56">
-        <DropdownMenuItem onClick={() => navigate(isRecruiter ? '/recruiter-space/profile' : '/profile')}>
+        <DropdownMenuItem onClick={() => navigate(profilePath)}>
           <User className="mr-2 size-4" />
-          Profil
+          {isAdmin ? 'Espace admin' : 'Profil'}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">

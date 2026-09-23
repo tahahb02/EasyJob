@@ -43,7 +43,9 @@ export default function LoginPage() {
     const result = await login(data.email, data.password)
     if (result.success) {
       toast.success('Connexion réussie !')
-      if (result.user?.role === 'recruiter') {
+      if (result.user?.role === 'admin') {
+        navigate('/admin')
+      } else if (result.user?.role === 'recruiter') {
         navigate('/recruiter-space/dashboard')
       } else {
         navigate('/dashboard')

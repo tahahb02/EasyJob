@@ -12,6 +12,7 @@
     "server": "node backend/start.js",
     "start": "node backend/start.js",
     "seed": "node backend/seed.js",
+    "seedAdmin": "node backend/seedAdmin.js",
     "build": "vite build",
     "build:api": "node build-api.js",
     "lint": "oxlint",

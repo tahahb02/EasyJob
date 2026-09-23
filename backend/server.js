@@ -21,6 +21,7 @@ import recruiterSpaceRoutes from './routes/recruiterSpace.js'
 import companyEmailRoutes from './routes/companyEmails.js'
 import mailRoutes from './routes/mail.js'
 import seedRoutes from './routes/seed.js'
+import adminRoutes from './routes/admin.js'
 
 mongoose.set('toJSON', { virtuals: true, versionKey: false })
 mongoose.set('toObject', { virtuals: true, versionKey: false })
@@ -67,6 +68,7 @@ app.use('/api/recruiter-space', recruiterSpaceRoutes)
 app.use('/api/company-emails', companyEmailRoutes)
 app.use('/api/mail', mailRoutes)
 app.use('/api/seed', seedRoutes)
+app.use('/api/admin', adminRoutes)
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }))
 
@@ -93,9 +95,42 @@ async function connectDB() {
     console.log('✅ MongoDB connecté')
     const { fixJobOfferIndexes } = await import('./services/dbMigration.js')
     await fixJobOfferIndexes()
+    await ensureAdminAccount()
   } catch (err) {
     console.error('❌ MongoDB connection failed:', err.message)
     throw err
+  }
+}
+
+async function ensureAdminAccount() {
+  try {
+    const User = (await import('./models/User.js')).default
+    const email = (process.env.ADMIN_EMAIL || 'admin@gmail.com').toLowerCase()
+    const existing = await User.findOne({ email })
+
+    if (existing) {
+      if (existing.role !== 'admin') {
+        existing.role = 'admin'
+        await existing.save()
+        console.log('🔐 Compte existant promu en administrateur:', email)
+      }
+      return
+    }
+
+    await User.create({
+      firstName: process.env.ADMIN_FIRST_NAME || 'Directeur',
+      lastName: process.env.ADMIN_LAST_NAME || 'EasyJob',
+      email,
+      password: process.env.ADMIN_PASSWORD || 'admin123',
+      phone: '',
+      role: 'admin',
+      isEmailVerified: true,
+      isActive: true,
+      onboardingCompleted: true,
+    })
+    console.log('🔐 Compte administrateur créé automatiquement:', email)
+  } catch (err) {
+    console.error('❌ Échec création compte admin:', err.message)
   }
 }
 

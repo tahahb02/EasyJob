@@ -48,6 +48,14 @@ import RecruiterApplicationsPage from '@/pages/recruiter/RecruiterApplicationsPa
 import RecruiterProfilePage from '@/pages/recruiter/RecruiterProfilePage'
 import NotFoundPage from '@/pages/NotFoundPage'
 
+// Pages Admin
+import AdminGuard from '@/components/AdminGuard'
+import AdminDashboardPage from '@/pages/admin/AdminDashboardPage'
+import AdminUsersPage from '@/pages/admin/AdminUsersPage'
+import AdminRecruitersPage from '@/pages/admin/AdminRecruitersPage'
+import AdminCompaniesPage from '@/pages/admin/AdminCompaniesPage'
+import AdminJobsPage from '@/pages/admin/AdminJobsPage'
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -100,6 +108,15 @@ export default function App() {
                 <Route path="/recruiter-space/candidates" element={<RecruiterCandidatesPage />} />
                 <Route path="/recruiter-space/applications" element={<RecruiterApplicationsPage />} />
                 <Route path="/recruiter-space/profile" element={<RecruiterProfilePage />} />
+
+                {/* Admin routes */}
+                <Route element={<AdminGuard />}>
+                  <Route path="/admin" element={<AdminDashboardPage />} />
+                  <Route path="/admin/users" element={<AdminUsersPage />} />
+                  <Route path="/admin/recruiters" element={<AdminRecruitersPage />} />
+                  <Route path="/admin/companies" element={<AdminCompaniesPage />} />
+                  <Route path="/admin/jobs" element={<AdminJobsPage />} />
+                </Route>
               </Route>
               </Route>
             </Route>
