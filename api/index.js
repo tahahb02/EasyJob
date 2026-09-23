@@ -13,6 +13,70 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
+// backend/models/User.js
+var User_exports = {};
+__export(User_exports, {
+  default: () => User_default
+});
+import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
+var userSchema, User_default;
+var init_User = __esm({
+  "backend/models/User.js"() {
+    userSchema = new mongoose.Schema({
+      firstName: { type: String, required: true, trim: true },
+      lastName: { type: String, required: true, trim: true },
+      email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+      password: { type: String, required: true, minlength: 6 },
+      phone: { type: String, default: "" },
+      role: { type: String, enum: ["candidat", "recruiter", "admin"], default: "candidat" },
+      avatar: { type: String, default: "" },
+      isActive: { type: Boolean, default: true },
+      isEmailVerified: { type: Boolean, default: false },
+      emailVerificationCode: String,
+      emailVerificationExpire: Date,
+      refreshToken: String,
+      resetPasswordToken: String,
+      resetPasswordExpire: Date,
+      lastLogin: Date,
+      loginAttempts: { type: Number, default: 0 },
+      lockUntil: Date,
+      onboardingCompleted: { type: Boolean, default: false },
+      onboardingStep: { type: Number, default: 0 },
+      jobSearchStatus: {
+        type: String,
+        enum: ["none", "actively_looking", "open_to_offers", "urgent", "seeking_internship"],
+        default: "none"
+      },
+      preferences: {
+        language: { type: String, default: "fr" },
+        theme: { type: String, enum: ["light", "dark", "system"], default: "light" },
+        emailNotifications: { type: Boolean, default: true }
+      }
+    }, { timestamps: true });
+    userSchema.pre("save", async function() {
+      if (!this.isModified("password")) return;
+      this.password = await bcrypt.hash(this.password, 12);
+    });
+    userSchema.methods.comparePassword = async function(candidatePassword) {
+      return bcrypt.compare(candidatePassword, this.password);
+    };
+    userSchema.methods.toJSON = function() {
+      const obj = this.toObject();
+      delete obj.password;
+      delete obj.refreshToken;
+      delete obj.emailVerificationCode;
+      delete obj.emailVerificationExpire;
+      delete obj.resetPasswordToken;
+      delete obj.resetPasswordExpire;
+      delete obj.loginAttempts;
+      delete obj.lockUntil;
+      return obj;
+    };
+    User_default = mongoose.model("User", userSchema);
+  }
+});
+
 // backend/utils/sendEmail.js
 var sendEmail_exports = {};
 __export(sendEmail_exports, {
@@ -337,10 +401,10 @@ var dbMigration_exports = {};
 __export(dbMigration_exports, {
   fixJobOfferIndexes: () => fixJobOfferIndexes
 });
-import mongoose19 from "mongoose";
+import mongoose20 from "mongoose";
 async function fixJobOfferIndexes() {
   try {
-    const db = mongoose19.connection.db;
+    const db = mongoose20.connection.db;
     if (!db) return;
     const collection = db.collection("joboffers");
     const indexes = await collection.indexes();
@@ -349,7 +413,7 @@ async function fixJobOfferIndexes() {
       await collection.dropIndex(OLD_JOB_INDEX);
       console.log("\u{1F9F9} Ancien index unique supprim\xE9 (userId_1_source_1_sourceId_1)");
     }
-    await mongoose19.model("JobOffer").createIndexes();
+    await mongoose20.model("JobOffer").createIndexes();
   } catch (err) {
     console.error("Migration index JobOffer \xE9chou\xE9e:", err.message);
   }
@@ -365,71 +429,17 @@ var init_dbMigration = __esm({
 import dotenv2 from "dotenv";
 
 // backend/server.js
-import express18 from "express";
-import mongoose20 from "mongoose";
+import express19 from "express";
+import mongoose21 from "mongoose";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import cookieParser from "cookie-parser";
 
 // backend/routes/auth.js
+init_User();
 import express from "express";
 import jwt3 from "jsonwebtoken";
-
-// backend/models/User.js
-import mongoose from "mongoose";
-import bcrypt from "bcryptjs";
-var userSchema = new mongoose.Schema({
-  firstName: { type: String, required: true, trim: true },
-  lastName: { type: String, required: true, trim: true },
-  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-  password: { type: String, required: true, minlength: 6 },
-  phone: { type: String, default: "" },
-  role: { type: String, enum: ["candidat", "recruiter", "admin"], default: "candidat" },
-  avatar: { type: String, default: "" },
-  isActive: { type: Boolean, default: true },
-  isEmailVerified: { type: Boolean, default: false },
-  emailVerificationCode: String,
-  emailVerificationExpire: Date,
-  refreshToken: String,
-  resetPasswordToken: String,
-  resetPasswordExpire: Date,
-  lastLogin: Date,
-  loginAttempts: { type: Number, default: 0 },
-  lockUntil: Date,
-  onboardingCompleted: { type: Boolean, default: false },
-  onboardingStep: { type: Number, default: 0 },
-  jobSearchStatus: {
-    type: String,
-    enum: ["none", "actively_looking", "open_to_offers", "urgent", "seeking_internship"],
-    default: "none"
-  },
-  preferences: {
-    language: { type: String, default: "fr" },
-    theme: { type: String, enum: ["light", "dark", "system"], default: "light" },
-    emailNotifications: { type: Boolean, default: true }
-  }
-}, { timestamps: true });
-userSchema.pre("save", async function() {
-  if (!this.isModified("password")) return;
-  this.password = await bcrypt.hash(this.password, 12);
-});
-userSchema.methods.comparePassword = async function(candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
-};
-userSchema.methods.toJSON = function() {
-  const obj = this.toObject();
-  delete obj.password;
-  delete obj.refreshToken;
-  delete obj.emailVerificationCode;
-  delete obj.emailVerificationExpire;
-  delete obj.resetPasswordToken;
-  delete obj.resetPasswordExpire;
-  delete obj.loginAttempts;
-  delete obj.lockUntil;
-  return obj;
-};
-var User_default = mongoose.model("User", userSchema);
 
 // backend/models/UserProfile.js
 import mongoose2 from "mongoose";
@@ -528,6 +538,7 @@ var generateResetPasswordToken = () => {
 init_sendEmail();
 
 // backend/middlewares/auth.js
+init_User();
 import jwt2 from "jsonwebtoken";
 var protect = async (req, res, next) => {
   let token;
@@ -805,6 +816,7 @@ router.put("/job-search-status", protect, async (req, res) => {
 var auth_default = router;
 
 // backend/routes/profile.js
+init_User();
 import express2 from "express";
 import mongoose4 from "mongoose";
 
@@ -1092,6 +1104,9 @@ var notificationSchema = new mongoose7.Schema({
 notificationSchema.index({ userId: 1, createdAt: -1 });
 notificationSchema.index({ userId: 1, isRead: 1 });
 var Notification_default = mongoose7.model("Notification", notificationSchema);
+
+// backend/services/NotificationService.js
+init_User();
 
 // backend/models/CompanyEmail.js
 import mongoose8 from "mongoose";
@@ -2107,6 +2122,7 @@ function calculateCandidateMatch(candidateProfile, jobOffer) {
 }
 
 // backend/services/candidateInfo.js
+init_User();
 import mongoose9 from "mongoose";
 async function buildCandidateInfo(userId, jobOffer) {
   const [user, profile] = await Promise.all([
@@ -2342,6 +2358,7 @@ var jobs_default = router3;
 
 // backend/routes/applications.js
 import express4 from "express";
+init_User();
 
 // backend/models/CV.js
 import mongoose10 from "mongoose";
@@ -2994,6 +3011,7 @@ var scrapingLogSchema = new mongoose13.Schema({
 var ScrapingLog_default = mongoose13.model("ScrapingLog", scrapingLogSchema);
 
 // backend/routes/scraping.js
+init_User();
 var router8 = express8.Router();
 router8.post("/run", protect, async (req, res) => {
   try {
@@ -4259,6 +4277,7 @@ var portfolio_default = router13;
 // backend/routes/recruiterSpace.js
 import express14 from "express";
 import mongoose18 from "mongoose";
+init_User();
 init_sendEmail();
 var router14 = express14.Router();
 function generateCandidateSummary2(text, parsedData, userProfile) {
@@ -5035,6 +5054,7 @@ var companyEmails_default = router15;
 
 // backend/routes/mail.js
 import express16 from "express";
+init_User();
 init_sendEmail();
 var router16 = express16.Router();
 var MAIL_SUBJECT_PREFIX = "[EasyJob] ";
@@ -5425,10 +5445,556 @@ router17.post("/recruiter-jobs", protect, async (req, res) => {
 });
 var seed_default = router17;
 
+// backend/routes/admin.js
+init_User();
+import express18 from "express";
+import mongoose19 from "mongoose";
+import crypto2 from "crypto";
+var router18 = express18.Router();
+router18.use(protect, authorize("admin"));
+function startOfDay(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+function startOfWeek(date) {
+  const d = startOfDay(date);
+  const day = d.getDay() || 7;
+  d.setDate(d.getDate() - day + 1);
+  return d;
+}
+function startOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+function startOfYear(date) {
+  return new Date(date.getFullYear(), 0, 1);
+}
+async function countRegistrations(from, to, roles) {
+  if (!from) return 0;
+  const query = { createdAt: { $gte: from } };
+  if (to) query.createdAt.$lt = to;
+  if (roles) query.role = roles;
+  return User_default.countDocuments(query);
+}
+router18.get("/overview", async (req, res) => {
+  try {
+    const now2 = /* @__PURE__ */ new Date();
+    const todayStart = startOfDay(now2);
+    const weekStart = startOfWeek(now2);
+    const monthStart = startOfMonth(now2);
+    const yearStart = startOfYear(now2);
+    const [
+      totalUsers,
+      totalCandidates,
+      totalRecruiters,
+      totalAdmins,
+      activeAccounts,
+      verifiedAccounts,
+      totalCompanies,
+      partnerCompanies,
+      totalJobs,
+      activeJobs,
+      totalApplications,
+      candidatesToday,
+      candidatesWeek,
+      candidatesMonth,
+      candidatesYear,
+      recruitersToday,
+      recruitersWeek,
+      recruitersMonth,
+      recruitersYear,
+      totalUsersToday,
+      totalUsersWeek,
+      totalUsersMonth,
+      totalUsersYear,
+      recentUsers,
+      recentJobs,
+      jobsBySector
+    ] = await Promise.all([
+      User_default.countDocuments({}),
+      User_default.countDocuments({ role: "candidat" }),
+      User_default.countDocuments({ role: "recruiter" }),
+      User_default.countDocuments({ role: "admin" }),
+      User_default.countDocuments({ isActive: true }),
+      User_default.countDocuments({ isEmailVerified: true }),
+      RecruiterProfile_default.countDocuments({}),
+      CompanyEmail_default.countDocuments({ isActive: true }),
+      JobOffer_default.countDocuments({}),
+      JobOffer_default.countDocuments({ isActive: true }),
+      Application_default.countDocuments({}),
+      countRegistrations(todayStart, null, "candidat"),
+      countRegistrations(weekStart, todayStart, "candidat"),
+      countRegistrations(monthStart, weekStart, "candidat"),
+      countRegistrations(yearStart, monthStart, "candidat"),
+      countRegistrations(todayStart, null, "recruiter"),
+      countRegistrations(weekStart, todayStart, "recruiter"),
+      countRegistrations(monthStart, weekStart, "recruiter"),
+      countRegistrations(yearStart, monthStart, "recruiter"),
+      countRegistrations(todayStart, null),
+      countRegistrations(weekStart, todayStart),
+      countRegistrations(monthStart, weekStart),
+      countRegistrations(yearStart, monthStart),
+      User_default.find({}).sort({ lastLogin: -1 }).limit(8).select("firstName lastName email role isActive lastLogin createdAt avatar"),
+      JobOffer_default.find({}).sort({ createdAt: -1 }).limit(6).select("title company location contractType postedBy isActive createdAt"),
+      JobOffer_default.aggregate([
+        { $match: { source: "recruiter" } },
+        { $group: { _id: "$sector", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 8 }
+      ])
+    ]);
+    const recruiterIds = await RecruiterProfile_default.find({}).select("userId");
+    res.json({
+      overview: {
+        totalUsers,
+        totalCandidates,
+        totalRecruiters,
+        totalAdmins,
+        activeAccounts,
+        verifiedAccounts,
+        totalCompanies,
+        partnerCompanies,
+        totalJobs,
+        activeJobs,
+        totalApplications
+      },
+      registrations: {
+        today: candidatesToday + recruitersToday,
+        week: candidatesWeek + recruitersWeek,
+        month: candidatesMonth + recruitersMonth,
+        year: candidatesYear + recruitersYear,
+        todayTotal: totalUsersToday,
+        weekTotal: totalUsersWeek,
+        monthTotal: totalUsersMonth,
+        yearTotal: totalUsersYear,
+        candidats: {
+          today: candidatesToday,
+          week: candidatesWeek,
+          month: candidatesMonth,
+          year: candidatesYear
+        },
+        recruteurs: {
+          today: recruitersToday,
+          week: recruitersWeek,
+          month: recruitersMonth,
+          year: recruitersYear
+        }
+      },
+      recruiterCompanyIds: recruiterIds.map((r) => r.userId),
+      recentUsers,
+      recentJobs,
+      jobsBySector: jobsBySector.filter((j) => j._id).map((j) => ({ name: j._id, count: j.count }))
+    });
+  } catch (error) {
+    console.error("Erreur admin overview:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router18.get("/timeline", async (req, res) => {
+  try {
+    const days = Math.min(parseInt(req.query.days) || 30, 90);
+    const start = /* @__PURE__ */ new Date();
+    start.setDate(start.getDate() - (days - 1));
+    start.setHours(0, 0, 0, 0);
+    const [usersAgg, jobsAgg, appsAgg] = await Promise.all([
+      User_default.aggregate([
+        { $match: { createdAt: { $gte: start } } },
+        { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, total: { $sum: 1 }, candidats: { $sum: { $cond: [{ $eq: ["$role", "candidat"] }, 1, 0] } }, recruteurs: { $sum: { $cond: [{ $eq: ["$role", "recruiter"] }, 1, 0] } } } }
+      ]),
+      JobOffer_default.aggregate([
+        { $match: { createdAt: { $gte: start } } },
+        { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, count: { $sum: 1 } } }
+      ]),
+      Application_default.aggregate([
+        { $match: { createdAt: { $gte: start } } },
+        { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, count: { $sum: 1 } } }
+      ])
+    ]);
+    const usersMap = new Map(usersAgg.map((u) => [u._id, u]));
+    const jobsMap = new Map(jobsAgg.map((j) => [j._id, j.count]));
+    const appsMap = new Map(appsAgg.map((a) => [a._id, a.count]));
+    const series = [];
+    for (let i = 0; i < days; i++) {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      const key = d.toISOString().slice(0, 10);
+      const u = usersMap.get(key) || { total: 0, candidats: 0, recruteurs: 0 };
+      series.push({
+        date: key,
+        label: d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }),
+        utilisateurs: u.total,
+        candidats: u.candidats,
+        recruteurs: u.recruteurs,
+        offres: jobsMap.get(key) || 0,
+        candidatures: appsMap.get(key) || 0
+      });
+    }
+    res.json({
+      days,
+      currentTotals: {
+        utilisateurs: usersMap.size ? [...usersMap.values()].reduce((s, v) => s + v.total, 0) : 0,
+        candidats: usersMap.size ? [...usersMap.values()].reduce((s, v) => s + v.candidats, 0) : 0,
+        recruteurs: usersMap.size ? [...usersMap.values()].reduce((s, v) => s + v.recruteurs, 0) : 0
+      },
+      series
+    });
+  } catch (error) {
+    console.error("Erreur admin timeline:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router18.get("/monthly", async (req, res) => {
+  try {
+    const months = Math.min(parseInt(req.query.months) || 12, 24);
+    const start = /* @__PURE__ */ new Date();
+    start.setDate(1);
+    start.setMonth(start.getMonth() - (months - 1));
+    start.setHours(0, 0, 0, 0);
+    const [usersAgg, jobsAgg, appsAgg] = await Promise.all([
+      User_default.aggregate([
+        { $match: { createdAt: { $gte: start } } },
+        { $group: { _id: { $dateToString: { format: "%Y-%m", date: "$createdAt" } }, total: { $sum: 1 }, candidats: { $sum: { $cond: [{ $eq: ["$role", "candidat"] }, 1, 0] } }, recruteurs: { $sum: { $cond: [{ $eq: ["$role", "recruiter"] }, 1, 0] } } } }
+      ]),
+      JobOffer_default.aggregate([
+        { $match: { createdAt: { $gte: start } } },
+        { $group: { _id: { $dateToString: { format: "%Y-%m", date: "$createdAt" } }, count: { $sum: 1 } } }
+      ]),
+      Application_default.aggregate([
+        { $match: { createdAt: { $gte: start } } },
+        { $group: { _id: { $dateToString: { format: "%Y-%m", date: "$createdAt" } }, count: { $sum: 1 } } }
+      ])
+    ]);
+    const usersMap = new Map(usersAgg.map((u) => [u._id, u]));
+    const jobsMap = new Map(jobsAgg.map((j) => [j._id, j.count]));
+    const appsMap = new Map(appsAgg.map((a) => [a._id, a.count]));
+    const series = [];
+    let runningTotal = 0;
+    for (let i = 0; i < months; i++) {
+      const d = new Date(start);
+      d.setMonth(d.getMonth() + i);
+      const key = d.toISOString().slice(0, 7);
+      const u = usersMap.get(key) || { total: 0, candidats: 0, recruteurs: 0 };
+      runningTotal += u.total;
+      series.push({
+        month: key,
+        label: d.toLocaleDateString("fr-FR", { month: "short", year: "numeric" }),
+        utilisateurs: u.total,
+        candidats: u.candidats,
+        recruteurs: u.recruteurs,
+        offres: jobsMap.get(key) || 0,
+        candidatures: appsMap.get(key) || 0,
+        cumul: runningTotal
+      });
+    }
+    res.json({ months, series });
+  } catch (error) {
+    console.error("Erreur admin monthly:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router18.get("/users", async (req, res) => {
+  try {
+    const { role, search, isActive } = req.query;
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+    const query = {};
+    if (role && role !== "all") query.role = role;
+    if (isActive === "true") query.isActive = true;
+    if (isActive === "false") query.isActive = false;
+    if (search) {
+      const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      query.$or = [{ firstName: regex }, { lastName: regex }, { email: regex }, { phone: regex }];
+    }
+    const [users, total] = await Promise.all([
+      User_default.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).select("firstName lastName email phone role avatar isActive isEmailVerified lastLogin createdAt onboardingCompleted"),
+      User_default.countDocuments(query)
+    ]);
+    res.json({ users, total, page, pages: Math.max(Math.ceil(total / limit), 1), limit });
+  } catch (error) {
+    console.error("Erreur admin users:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router18.get("/recruiters", async (req, res) => {
+  try {
+    const { search } = req.query;
+    const profiles = await RecruiterProfile_default.find({}).select("userId companyName industry companySize companyLocation companyLogo jobPostingsCount totalApplications");
+    const userIds = profiles.map((p) => p.userId);
+    const query = { role: "recruiter" };
+    if (search) {
+      const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      query.$or = [{ firstName: regex }, { lastName: regex }, { email: regex }];
+    }
+    const users = await User_default.find(query).select("firstName lastName email phone isActive avatar lastLogin createdAt");
+    const companiesMap = new Map(profiles.map((p) => [p.userId.toString(), p]));
+    const counts = await JobOffer_default.aggregate([
+      { $match: { source: "recruiter", postedBy: { $in: userIds } } },
+      { $group: { _id: "$postedBy", jobs: { $sum: 1 }, activeJobs: { $sum: { $cond: ["$isActive", 1, 0] } } } }
+    ]);
+    const jobsMap = new Map(counts.map((c) => [c._id.toString(), c]));
+    const recruiterJobIds = await JobOffer_default.find({ source: "recruiter", postedBy: { $in: userIds } }).select("_id");
+    const recruiterJobIdList = recruiterJobIds.map((j) => j._id);
+    const appsAgg = await Application_default.aggregate([
+      { $match: { jobOfferId: { $in: recruiterJobIdList } } },
+      { $lookup: { from: "joboffers", localField: "jobOfferId", foreignField: "_id", as: "job" } },
+      { $unwind: { path: "$job", preserveNullAndEmptyArrays: false } },
+      { $group: { _id: "$job.postedBy", count: { $sum: 1 } } }
+    ]);
+    const appsMap = new Map(appsAgg.map((a) => [a._id.toString(), a.count]));
+    const recruiters = users.map((user) => {
+      const company = companiesMap.get(user._id.toString());
+      const jobCounts = jobsMap.get(user._id.toString()) || { jobs: 0, activeJobs: 0 };
+      return {
+        _id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phone: user.phone,
+        avatar: user.avatar,
+        isActive: user.isActive,
+        lastLogin: user.lastLogin,
+        createdAt: user.createdAt,
+        company: company ? {
+          companyName: company.companyName,
+          industry: company.industry,
+          companySize: company.companySize,
+          companyLocation: company.companyLocation,
+          companyLogo: company.companyLogo,
+          jobPostingsCount: company.jobPostingsCount
+        } : null,
+        jobsCount: jobCounts.jobs,
+        activeJobs: jobCounts.activeJobs,
+        applicationsCount: appsMap.get(user._id.toString()) || 0
+      };
+    });
+    res.json({ recruiters, total: recruiters.length });
+  } catch (error) {
+    console.error("Erreur admin recruiters:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router18.get("/companies", async (req, res) => {
+  try {
+    const { search } = req.query;
+    const [recruiterProfiles, companyEmails] = await Promise.all([
+      RecruiterProfile_default.find({}).select("userId companyName industry companySize companyLocation companyWebsite companyLogo jobPostingsCount totalApplications"),
+      CompanyEmail_default.find({ isActive: true }).select("companyName email website sector domain companyType companySize city phone description")
+    ]);
+    const jobCounts = await JobOffer_default.aggregate([
+      { $match: { source: "recruiter" } },
+      { $group: { _id: "$company", count: { $sum: 1 } } }
+    ]);
+    const jobsByCompany = new Map(jobCounts.map((j) => [j._id.toLowerCase(), j.count]));
+    const activeCompanies = [];
+    for (const profile of recruiterProfiles) {
+      const user = await User_default.findById(profile.userId).select("firstName lastName email isActive lastLogin createdAt");
+      if (!user) continue;
+      const companyName = profile.companyName;
+      if (search && !companyName.toLowerCase().includes(search.toLowerCase()) && !user.email.toLowerCase().includes(search.toLowerCase())) continue;
+      activeCompanies.push({
+        _id: profile._id,
+        companyName,
+        industry: profile.industry,
+        companySize: profile.companySize,
+        companyLocation: profile.companyLocation,
+        companyWebsite: profile.companyWebsite,
+        companyLogo: profile.companyLogo,
+        jobPostingsCount: profile.jobPostingsCount,
+        jobsCount: jobsByCompany.get(companyName.toLowerCase()) || 0,
+        totalApplications: profile.totalApplications,
+        contactName: `${user.firstName} ${user.lastName}`.trim(),
+        contactEmail: user.email,
+        isActive: user.isActive,
+        lastLogin: user.lastLogin,
+        createdAt: user.createdAt,
+        source: "partenaire"
+      });
+    }
+    for (const company of companyEmails) {
+      if (search && !company.companyName.toLowerCase().includes(search.toLowerCase()) && !company.email.toLowerCase().includes(search.toLowerCase())) continue;
+      activeCompanies.push({
+        _id: company._id,
+        companyName: company.companyName,
+        industry: company.sector,
+        companySize: company.companySize,
+        companyLocation: company.city,
+        companyWebsite: company.website,
+        companyLogo: "",
+        jobsCount: jobsByCompany.get(company.companyName.toLowerCase()) || 0,
+        totalApplications: 0,
+        contactName: "",
+        contactEmail: company.email,
+        isActive: true,
+        lastLogin: null,
+        createdAt: company.createdAt,
+        source: "annuaire",
+        companyType: company.companyType,
+        domain: company.domain,
+        phone: company.phone
+      });
+    }
+    activeCompanies.sort((a, b) => b.jobsCount + b.jobPostingsCount - (a.jobsCount + a.jobPostingsCount));
+    res.json({ companies: activeCompanies, total: activeCompanies.length });
+  } catch (error) {
+    console.error("Erreur admin companies:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router18.get("/jobs", async (req, res) => {
+  try {
+    const { search, source, active } = req.query;
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(parseInt(req.query.limit) || 25, 100);
+    const query = {};
+    if (source && source !== "all") query.source = source;
+    if (active === "true") query.isActive = true;
+    if (active === "false") query.isActive = false;
+    if (search) {
+      const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      query.$or = [{ title: regex }, { company: regex }, { location: regex }, { sector: regex }];
+    }
+    const [jobs, total] = await Promise.all([
+      JobOffer_default.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).select("title company location contractType sector source isActive viewsCount applicationsCount maxApplications postedBy createdAt"),
+      JobOffer_default.countDocuments(query)
+    ]);
+    const postedByIds = jobs.map((j) => j.postedBy).filter(Boolean);
+    const posters = await User_default.find({ _id: { $in: postedByIds } }).select("firstName lastName email");
+    const postersMap = new Map(posters.map((p) => [p._id.toString(), p]));
+    const enriched = jobs.map((j) => ({
+      ...j.toObject(),
+      poster: j.postedBy ? postersMap.get(j.postedBy.toString()) || null : null
+    }));
+    res.json({ jobs: enriched, total, page, pages: Math.max(Math.ceil(total / limit), 1), limit });
+  } catch (error) {
+    console.error("Erreur admin jobs:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router18.post("/users", async (req, res) => {
+  try {
+    const { firstName, lastName, email, password, phone, role, companyName, industry, companySize, companyLocation, position } = req.body;
+    if (!firstName || !lastName || !email) {
+      return res.status(400).json({ error: "Pr\xE9nom, nom et email sont requis" });
+    }
+    const validRoles = ["candidat", "recruiter", "admin"];
+    const userRole = validRoles.includes(role) ? role : "candidat";
+    if (userRole === "recruiter" && !companyName) {
+      return res.status(400).json({ error: "Le nom de l'entreprise est requis pour un recruteur" });
+    }
+    const existing = await User_default.findOne({ email: email.toLowerCase() });
+    if (existing) {
+      return res.status(400).json({ error: "Un compte avec cet email existe d\xE9j\xE0" });
+    }
+    const generatedPassword = password && password.length >= 6 ? password : crypto2.randomBytes(5).toString("hex");
+    const user = await User_default.create({
+      firstName,
+      lastName,
+      email: email.toLowerCase(),
+      password: generatedPassword,
+      phone: phone || "",
+      role: userRole,
+      isEmailVerified: true,
+      isActive: true,
+      onboardingCompleted: true
+    });
+    if (userRole === "recruiter") {
+      await RecruiterProfile_default.create({
+        userId: user._id,
+        companyName,
+        industry: industry || "",
+        companySize: companySize || "11-50",
+        companyLocation: companyLocation || "",
+        position: position || ""
+      });
+    } else if (userRole === "candidat") {
+      await UserProfile_default.create({ userId: user._id });
+    }
+    res.status(201).json({
+      message: "Compte cr\xE9\xE9 avec succ\xE8s",
+      user,
+      generatedPassword: !password ? generatedPassword : null
+    });
+  } catch (error) {
+    console.error("Erreur admin create user:", error);
+    res.status(500).json({ error: "Erreur lors de la cr\xE9ation du compte" });
+  }
+});
+router18.put("/users/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose19.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "ID invalide" });
+    }
+    const user = await User_default.findById(id);
+    if (!user) return res.status(404).json({ error: "Utilisateur non trouv\xE9" });
+    const { isActive, role, password } = req.body;
+    if (req.body.resetPassword) {
+      const newPassword = crypto2.randomBytes(6).toString("hex");
+      user.password = newPassword;
+      user.refreshToken = void 0;
+      await user.save();
+      return res.json({ message: "Mot de passe r\xE9initialis\xE9", user, generatedPassword: newPassword });
+    }
+    if (role && ["candidat", "recruiter", "admin"].includes(role)) {
+      if (user.role === "admin" && role !== "admin") {
+        const adminCount = await User_default.countDocuments({ role: "admin" });
+        if (adminCount <= 1) {
+          return res.status(400).json({ error: "Impossible de r\xE9trograder le dernier administrateur" });
+        }
+      }
+      user.role = role;
+    }
+    if (typeof isActive === "boolean") {
+      if (user._id.toString() === req.user._id.toString() && isActive === false) {
+        return res.status(400).json({ error: "Vous ne pouvez pas d\xE9sactiver votre propre compte" });
+      }
+      user.isActive = isActive;
+    }
+    if (password && password.length >= 6) {
+      user.password = password;
+    }
+    await user.save();
+    res.json({ message: "Utilisateur mis \xE0 jour", user });
+  } catch (error) {
+    console.error("Erreur admin update user:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router18.delete("/users/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose19.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "ID invalide" });
+    }
+    if (id === req.user._id.toString()) {
+      return res.status(400).json({ error: "Vous ne pouvez pas supprimer votre propre compte" });
+    }
+    const user = await User_default.findById(id);
+    if (!user) return res.status(404).json({ error: "Utilisateur non trouv\xE9" });
+    if (user.role === "admin") {
+      const adminCount = await User_default.countDocuments({ role: "admin" });
+      if (adminCount <= 1) {
+        return res.status(400).json({ error: "Impossible de supprimer le dernier administrateur" });
+      }
+    }
+    await Promise.all([
+      UserProfile_default.deleteMany({ userId: id }),
+      RecruiterProfile_default.deleteMany({ userId: id }),
+      JobOffer_default.deleteMany({ postedBy: id })
+    ]);
+    await user.deleteOne();
+    res.json({ message: "Utilisateur supprim\xE9" });
+  } catch (error) {
+    console.error("Erreur admin delete user:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+var admin_default = router18;
+
 // backend/server.js
-mongoose20.set("toJSON", { virtuals: true, versionKey: false });
-mongoose20.set("toObject", { virtuals: true, versionKey: false });
-var app = express18();
+mongoose21.set("toJSON", { virtuals: true, versionKey: false });
+mongoose21.set("toObject", { virtuals: true, versionKey: false });
+var app = express19();
 app.use(helmet({ contentSecurityPolicy: false }));
 var allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:5173").split(",").map((o) => o.trim()).filter(Boolean);
 app.use(cors({
@@ -5441,8 +6007,8 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express18.json({ limit: "10mb" }));
-app.use(express18.urlencoded({ extended: true }));
+app.use(express19.json({ limit: "10mb" }));
+app.use(express19.urlencoded({ extended: true }));
 app.use(cookieParser());
 var limiter = rateLimit({ windowMs: 15 * 60 * 1e3, max: 200, message: { error: "Trop de requ\xEAtes" } });
 app.use("/api/", limiter);
@@ -5463,6 +6029,7 @@ app.use("/api/recruiter-space", recruiterSpace_default);
 app.use("/api/company-emails", companyEmails_default);
 app.use("/api/mail", mail_default);
 app.use("/api/seed", seed_default);
+app.use("/api/admin", admin_default);
 app.get("/api/health", (req, res) => res.json({ status: "ok", timestamp: /* @__PURE__ */ new Date() }));
 app.use("/api", (req, res) => {
   res.status(404).json({ error: `Route non trouv\xE9e: ${req.method} ${req.originalUrl}` });
@@ -5472,20 +6039,50 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || "Erreur serveur interne" });
 });
 async function connectDB() {
-  if (mongoose20.connection.readyState === 1) return;
+  if (mongoose21.connection.readyState === 1) return;
   const uri = process.env.MONGODB_URI;
   if (!uri) {
     console.error("\u274C MONGODB_URI non d\xE9fini");
     throw new Error("MONGODB_URI non d\xE9fini");
   }
   try {
-    await mongoose20.connect(uri);
+    await mongoose21.connect(uri);
     console.log("\u2705 MongoDB connect\xE9");
     const { fixJobOfferIndexes: fixJobOfferIndexes2 } = await Promise.resolve().then(() => (init_dbMigration(), dbMigration_exports));
     await fixJobOfferIndexes2();
+    await ensureAdminAccount();
   } catch (err) {
     console.error("\u274C MongoDB connection failed:", err.message);
     throw err;
+  }
+}
+async function ensureAdminAccount() {
+  try {
+    const User = (await Promise.resolve().then(() => (init_User(), User_exports))).default;
+    const email = (process.env.ADMIN_EMAIL || "admin@gmail.com").toLowerCase();
+    const existing = await User.findOne({ email });
+    if (existing) {
+      if (existing.role !== "admin") {
+        existing.role = "admin";
+        await existing.save();
+        console.log("\u{1F510} Compte existant promu en administrateur:", email);
+      }
+      return;
+    }
+    await User.create({
+      firstName: process.env.ADMIN_FIRST_NAME || "Directeur",
+      lastName: process.env.ADMIN_LAST_NAME || "EasyJob",
+      email,
+      password: process.env.ADMIN_PASSWORD || "admin123",
+      phone: "",
+      role: "admin",
+      isEmailVerified: true,
+      isActive: true,
+      onboardingCompleted: true
+    });
+    console.log("\u{1F510} Compte administrateur cr\xE9\xE9 automatiquement:", email);
+  } catch (err) {
+    console.error("\u274C \xC9chec cr\xE9ation compte admin:", err.message);
   }
 }
 var server_default = app;
