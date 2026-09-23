@@ -36,9 +36,28 @@ export function AuthProvider({ children }) {
     initAuth()
   }, [])
 
+  // Force logout when the session is invalidated (account disabled / token refresh failed)
+  useEffect(() => {
+    const onForceLogout = () => {
+      setUser(null)
+      queryClient.clear()
+    }
+    window.addEventListener('easyjob:force-logout', onForceLogout)
+    return () => window.removeEventListener('easyjob:force-logout', onForceLogout)
+  }, [queryClient])
+
   const login = useCallback(async (email, password) => {
     try {
       const { data } = await api.post('/auth/login', { email, password })
+      if (data.user && data.user.isActive === false) {
+        const disabledError = 'Compte désactivé temporairement, veuillez contacter le responsable ou l\'admin, merci.'
+        localStorage.removeItem('easyjob_access_token')
+        localStorage.removeItem('easyjob_refresh_token')
+        localStorage.removeItem('easyjob_user')
+        localStorage.setItem('easyjob_login_message', disabledError)
+        setUser(null)
+        return { success: false, error: disabledError }
+      }
       localStorage.setItem('easyjob_access_token', data.accessToken)
       localStorage.setItem('easyjob_refresh_token', data.refreshToken)
       localStorage.setItem('easyjob_user', JSON.stringify(data.user))

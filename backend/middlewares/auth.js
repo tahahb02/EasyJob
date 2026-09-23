@@ -14,7 +14,7 @@ export const protect = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
     const user = await User.findById(decoded.id).select('-password -refreshToken -avatar')
     if (!user) return res.status(401).json({ error: 'Utilisateur non trouvé' })
-    if (!user.isActive) return res.status(403).json({ error: 'Compte désactivé' })
+    if (!user.isActive) return res.status(403).json({ error: 'Compte désactivé temporairement, veuillez contacter le responsable ou l\'admin, merci.' })
     req.user = user
     next()
   } catch (error) {

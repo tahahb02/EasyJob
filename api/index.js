@@ -552,7 +552,7 @@ var protect = async (req, res, next) => {
     const decoded = jwt2.verify(token, process.env.JWT_SECRET);
     const user = await User_default.findById(decoded.id).select("-password -refreshToken -avatar");
     if (!user) return res.status(401).json({ error: "Utilisateur non trouv\xE9" });
-    if (!user.isActive) return res.status(403).json({ error: "Compte d\xE9sactiv\xE9" });
+    if (!user.isActive) return res.status(403).json({ error: "Compte d\xE9sactiv\xE9 temporairement, veuillez contacter le responsable ou l'admin, merci." });
     req.user = user;
     next();
   } catch (error) {
@@ -707,7 +707,7 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Email ou mot de passe incorrect" });
     }
     if (!user.isActive) {
-      return res.status(403).json({ error: "Votre compte est temporairement d\xE9sactiv\xE9, veuillez contacter le responsable ou l'admin." });
+      return res.status(403).json({ error: "Compte d\xE9sactiv\xE9 temporairement, veuillez contacter le responsable ou l'admin, merci." });
     }
     user.loginAttempts = 0;
     user.lockUntil = void 0;
@@ -5952,6 +5952,9 @@ router18.put("/users/:id", async (req, res) => {
         return res.status(400).json({ error: "Vous ne pouvez pas d\xE9sactiver votre propre compte" });
       }
       user.isActive = isActive;
+      if (isActive === false) {
+        user.refreshToken = null;
+      }
     }
     if (password && password.length >= 6) {
       user.password = password;

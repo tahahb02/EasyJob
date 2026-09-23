@@ -2,6 +2,10 @@ import axios from 'axios'
 
 const API_URL = import.meta.env.VITE_API_URL || '/api'
 
+function isAccountDisabled(message) {
+  return typeof message === 'string' && message.toLowerCase().includes('désactivé')
+}
+
 const api = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
@@ -20,16 +24,32 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
+function forceLogout(storeMessage) {
+  localStorage.removeItem('easyjob_access_token')
+  localStorage.removeItem('easyjob_refresh_token')
+  localStorage.removeItem('easyjob_user')
+  if (storeMessage) {
+    localStorage.setItem('easyjob_login_message', storeMessage)
+  }
+  window.dispatchEvent(new CustomEvent('easyjob:force-logout'))
+}
+
 // Response interceptor - handle token refresh
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config
-    
+
+    if (error.response?.status === 403 && isAccountDisabled(error.response?.data?.error)) {
+      const isLoginRequest = originalRequest?.url?.endsWith('/auth/login')
+      forceLogout(isLoginRequest ? null : error.response.data.error)
+      return Promise.reject(new Error(error.response.data.error))
+    }
+
     if (error.response?.status === 401 && error.response?.data?.expired && !originalRequest._retry) {
       originalRequest._retry = true
       const refreshToken = localStorage.getItem('easyjob_refresh_token')
-      
+
       if (refreshToken) {
         try {
           const { data } = await axios.post('/api/auth/refresh-token', { refreshToken })
@@ -38,15 +58,12 @@ api.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${data.accessToken}`
           return api(originalRequest)
         } catch (refreshError) {
-          localStorage.removeItem('easyjob_access_token')
-          localStorage.removeItem('easyjob_refresh_token')
-          localStorage.removeItem('easyjob_user')
-          window.location.href = '/login'
+          forceLogout()
           return Promise.reject(refreshError)
         }
       }
     }
-    
+
     const message = error.response?.data?.error || error.message || 'Erreur réseau'
     return Promise.reject(new Error(message))
   }

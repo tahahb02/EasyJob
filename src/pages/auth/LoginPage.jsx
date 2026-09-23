@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Mail, Lock, Eye, EyeOff, Loader2, ShieldCheck, ArrowRight } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, Loader2, ShieldCheck, ArrowRight, AlertTriangle } from 'lucide-react'
 import { LinkedInLogoIcon } from '@radix-ui/react-icons'
 import { toast } from 'sonner'
 import { useAuth } from '@/context/AuthContext'
@@ -33,13 +33,23 @@ function GoogleIcon({ className }) {
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(true)
+  const [bannerError, setBannerError] = useState(null)
   const { login } = useAuth()
   const navigate = useNavigate()
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(schema)
   })
 
+  useEffect(() => {
+    const msg = localStorage.getItem('easyjob_login_message')
+    if (msg) {
+      localStorage.removeItem('easyjob_login_message')
+      setBannerError(msg)
+    }
+  }, [])
+
   const onSubmit = async (data) => {
+    setBannerError(null)
     const result = await login(data.email, data.password)
     if (result.success) {
       toast.success('Connexion réussie !')
@@ -51,7 +61,11 @@ export default function LoginPage() {
         navigate('/dashboard')
       }
     } else {
-      toast.error(result.error)
+      if (result.error && result.error.toLowerCase().includes('désactivé')) {
+        setBannerError(result.error)
+      } else {
+        toast.error(result.error)
+      }
     }
   }
 
@@ -74,6 +88,15 @@ export default function LoginPage() {
       </p>
 
       <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5">
+        {bannerError && (
+          <div
+            className="flex items-start gap-2.5 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            role="alert"
+          >
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <span>{bannerError}</span>
+          </div>
+        )}
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <div className="relative">

@@ -171,7 +171,7 @@ router.post('/login', async (req, res) => {
     }
 
     if (!user.isActive) {
-      return res.status(403).json({ error: 'Votre compte est temporairement désactivé, veuillez contacter le responsable ou l\'admin.' })
+      return res.status(403).json({ error: 'Compte désactivé temporairement, veuillez contacter le responsable ou l\'admin, merci.' })
     }
 
     user.loginAttempts = 0

@@ -564,6 +564,9 @@ router.put('/users/:id', async (req, res) => {
         return res.status(400).json({ error: 'Vous ne pouvez pas désactiver votre propre compte' })
       }
       user.isActive = isActive
+      if (isActive === false) {
+        user.refreshToken = null
+      }
     }
 
     if (password && password.length >= 6) {
