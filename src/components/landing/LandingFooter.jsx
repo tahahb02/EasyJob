@@ -25,7 +25,7 @@ const columns = [
   {
     title: "Légal",
     links: ["Confidentialité", "Conditions d'utilisation", "Mentions légales", "Cookies"],
-    anchors: ["#", "#", "#", "#"],
+    anchors: ["/terms", "/terms", "#", "#"],
   },
 ]
 
@@ -93,16 +93,28 @@ export default function LandingFooter() {
                   {col.title}
                 </h4>
                 <ul className="mt-4 space-y-3">
-                  {col.links.map((label, i) => (
-                    <li key={label}>
-                      <a
-                        href={col.anchors[i]}
-                        className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-                      >
-                        {label}
-                      </a>
-                    </li>
-                  ))}
+                  {col.links.map((label, i) => {
+                    const href = col.anchors[i]
+                    return (
+                      <li key={label}>
+                        {href.startsWith('/') ? (
+                          <Link
+                            to={href}
+                            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            {label}
+                          </Link>
+                        ) : (
+                          <a
+                            href={href}
+                            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            {label}
+                          </a>
+                        )}
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             ))}

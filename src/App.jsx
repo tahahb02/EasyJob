@@ -13,6 +13,7 @@ import RegisterPage from '@/pages/auth/RegisterPage'
 import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage'
 import ResetPasswordPage from '@/pages/auth/ResetPasswordPage'
 import VerifyEmailPage from '@/pages/auth/VerifyEmailPage'
+import TermsPage from '@/pages/legal/TermsPage'
 
 // Pages protégées Candidat
 import DashboardPage from '@/pages/dashboard/DashboardPage'
@@ -71,6 +72,7 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
             <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route path="/terms" element={<TermsPage />} />
 
             {/* Routes protégées */}
             <Route element={<ProtectedRoute />}>
