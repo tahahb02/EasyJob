@@ -706,6 +706,9 @@ router.post("/login", async (req, res) => {
       await user.save();
       return res.status(401).json({ error: "Email ou mot de passe incorrect" });
     }
+    if (!user.isActive) {
+      return res.status(403).json({ error: "Votre compte est temporairement d\xE9sactiv\xE9, veuillez contacter le responsable ou l'admin." });
+    }
     user.loginAttempts = 0;
     user.lockUntil = void 0;
     user.lastLogin = /* @__PURE__ */ new Date();

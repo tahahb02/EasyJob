@@ -53,7 +53,7 @@ function ScoreCircle({ score }) {
   const radius = 40;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (score / 100) * circumference;
-  const color = score >= 80 ? "hsl(var(--accent))" : score >= 60 ? "hsl(var(--warning))" : score >= 40 ? "hsl(var(--warning))" : "hsl(var(--destructive))";
+  const color = score >= 80 ? "var(--accent)" : score >= 60 ? "var(--warning)" : score >= 40 ? "var(--warning)" : "var(--destructive)";
 
   return (
     <div className="relative flex h-28 w-28 items-center justify-center">
@@ -593,7 +593,7 @@ export default function CVPage() {
                           <svg className="absolute h-12 w-12 -rotate-90" viewBox="0 0 48 48">
                             <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" strokeWidth="3" className="text-border" />
                             <circle cx="24" cy="24" r="20" fill="none"
-                              stroke={job.matchScore >= 80 ? "hsl(var(--accent))" : job.matchScore >= 50 ? "hsl(var(--warning))" : "hsl(var(--destructive))"}
+                              stroke={job.matchScore >= 80 ? "var(--accent)" : job.matchScore >= 50 ? "var(--warning)" : "var(--destructive)"}
                               strokeWidth="3" strokeDasharray={`${2 * Math.PI * 20}`}
                               strokeDashoffset={`${2 * Math.PI * 20 * (1 - job.matchScore / 100)}`}
                               strokeLinecap="round" />

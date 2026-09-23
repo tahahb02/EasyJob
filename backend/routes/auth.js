@@ -170,6 +170,10 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Email ou mot de passe incorrect' })
     }
 
+    if (!user.isActive) {
+      return res.status(403).json({ error: 'Votre compte est temporairement désactivé, veuillez contacter le responsable ou l\'admin.' })
+    }
+
     user.loginAttempts = 0
     user.lockUntil = undefined
     user.lastLogin = new Date()

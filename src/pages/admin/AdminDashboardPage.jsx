@@ -56,8 +56,8 @@ const SECTOR_COLORS = [
 
 const tooltipStyle = {
   contentStyle: {
-    backgroundColor: 'hsl(var(--popover))',
-    border: '1px solid hsl(var(--border))',
+    backgroundColor: 'var(--popover)',
+    border: '1px solid var(--border)',
     borderRadius: '0.75rem',
     fontSize: '12px',
     boxShadow: '0 12px 24px rgb(0 0 0 / 0.08)',
@@ -296,9 +296,9 @@ export default function AdminDashboardPage() {
                     <stop offset="95%" stopColor="hsl(var(--chart-4))" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} minTickGap={24} />
-                <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} minTickGap={24} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} allowDecimals={false} />
                 <Tooltip {...tooltipStyle} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Area type="monotone" dataKey="candidats" name="Candidats" stroke="hsl(var(--chart-1))" strokeWidth={2} fill="url(#gradUsers)" />
@@ -319,10 +319,10 @@ export default function AdminDashboardPage() {
           ) : (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={series} margin={{ top: 4, right: 4, left: -12, bottom: 0 }} barGap={4}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} minTickGap={24} />
-                <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <Tooltip {...tooltipStyle} cursor={{ fill: 'hsl(var(--muted) / 0.4)' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} minTickGap={24} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <Tooltip {...tooltipStyle} cursor={{ fill: 'color-mix(in srgb, var(--muted) 40%, transparent)' }} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Bar dataKey="offres" name="Offres" fill="hsl(var(--chart-2))" radius={[3, 3, 0, 0]} maxBarSize={18} />
                 <Bar dataKey="candidatures" name="Candidatures" fill="hsl(var(--chart-3))" radius={[3, 3, 0, 0]} maxBarSize={18} />
@@ -394,9 +394,9 @@ export default function AdminDashboardPage() {
                     <stop offset="95%" stopColor="hsl(var(--chart-5))" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} minTickGap={16} />
-                <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} minTickGap={16} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} allowDecimals={false} />
                 <Tooltip {...tooltipStyle} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Area type="monotone" dataKey="candidats" name="Candidats" stroke="hsl(var(--chart-1))" strokeWidth={2} fill="url(#gradUsers)" />

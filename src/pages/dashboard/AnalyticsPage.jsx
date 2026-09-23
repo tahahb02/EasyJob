@@ -201,9 +201,9 @@ export default function AnalyticsPage() {
               {sourceChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={sourceChartData} barGap={4}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="source" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-                    <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="source" tick={{ fontSize: 12 }} stroke="var(--muted-foreground)" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="var(--muted-foreground)" />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend />
                     <Bar dataKey="candidatures" name="Candidatures" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
@@ -225,9 +225,9 @@ export default function AnalyticsPage() {
                         <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="mois" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-                    <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="mois" tick={{ fontSize: 12 }} stroke="var(--muted-foreground)" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="var(--muted-foreground)" />
                     <Tooltip content={<CustomTooltip />} />
                     <Area
                       type="monotone"
@@ -276,9 +276,9 @@ export default function AnalyticsPage() {
               {offersEvolutionData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={offersEvolutionData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="mois" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-                    <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="mois" tick={{ fontSize: 12 }} stroke="var(--muted-foreground)" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="var(--muted-foreground)" />
                     <Tooltip content={<CustomTooltip />} />
                     <Bar dataKey="offres" name="Offres" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
                   </BarChart>

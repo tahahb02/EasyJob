@@ -64,8 +64,8 @@ function RelevanceCircleLarge({ score }) {
       <svg className="absolute -rotate-90" width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
         <defs>
           <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="hsl(var(--primary))" />
-            <stop offset="100%" stopColor="hsl(var(--accent))" />
+            <stop offset="0%" stopColor="var(--primary)" />
+            <stop offset="100%" stopColor="var(--accent)" />
           </linearGradient>
         </defs>
         <circle
@@ -73,7 +73,7 @@ function RelevanceCircleLarge({ score }) {
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="hsl(var(--primary)/0.12)"
+          stroke="color-mix(in srgb, var(--primary) 12%, transparent)"
           strokeWidth={stroke}
         />
         <motion.circle
@@ -88,7 +88,7 @@ function RelevanceCircleLarge({ score }) {
           initial={{ strokeDashoffset: circumference }}
           animate={{ strokeDashoffset: offset }}
           transition={{ duration: 1, ease: 'easeOut', delay: 0.3 }}
-          style={{ filter: 'drop-shadow(0 0 4px hsl(var(--primary)/0.3))' }}
+          style={{ filter: 'drop-shadow(0 0 4px color-mix(in srgb, var(--primary) 30%, transparent))' }}
         />
       </svg>
       <span className="text-2xl font-bold leading-none tabular-nums text-foreground">
