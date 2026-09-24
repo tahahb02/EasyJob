@@ -451,13 +451,16 @@ export default function CVPage() {
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                     <div className="mt-5 space-y-5">
                       {/* Contact Info */}
-                      {(parsedData.email || parsedData.phone || parsedData.location) && (
+                      {(parsedData.email || parsedData.phone || parsedData.location || parsedData.contact?.linkedin || parsedData.contact?.github || parsedData.contact?.portfolio) && (
                         <div>
                           <h3 className="text-sm font-semibold text-foreground mb-2">Contact</h3>
                           <div className="flex flex-wrap gap-3">
                             {parsedData.email && <span className="flex items-center gap-1.5 text-sm text-muted-foreground"><Mail className="w-3.5 h-3.5" />{parsedData.email}</span>}
                             {parsedData.phone && <span className="flex items-center gap-1.5 text-sm text-muted-foreground"><Phone className="w-3.5 h-3.5" />{parsedData.phone}</span>}
                             {parsedData.location && <span className="flex items-center gap-1.5 text-sm text-muted-foreground"><MapPin className="w-3.5 h-3.5" />{parsedData.location}</span>}
+                            {parsedData.contact?.linkedin && <a href={parsedData.contact.linkedin} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-sm text-primary hover:underline"><Globe className="w-3.5 h-3.5" />LinkedIn</a>}
+                            {parsedData.contact?.github && <a href={parsedData.contact.github} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-sm text-primary hover:underline"><Globe className="w-3.5 h-3.5" />GitHub</a>}
+                            {parsedData.contact?.portfolio && <a href={parsedData.contact.portfolio} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-sm text-primary hover:underline"><Globe className="w-3.5 h-3.5" />Portfolio</a>}
                           </div>
                         </div>
                       )}
@@ -472,6 +475,23 @@ export default function CVPage() {
                           <div className="flex flex-wrap gap-2">
                             {parsedData.skills.map((skill) => (
                               <Badge key={skill} variant="secondary" className="bg-primary/10 text-primary">
+                                {skill}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Soft Skills */}
+                      {parsedData.softSkills?.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-3">
+                            <Sparkles className="w-4 h-4 text-accent" />
+                            <h3 className="text-sm font-semibold text-foreground">Soft skills ({parsedData.softSkills.length})</h3>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {parsedData.softSkills.map((skill) => (
+                              <Badge key={skill} variant="secondary" className="bg-accent/10 text-accent">
                                 {skill}
                               </Badge>
                             ))}
@@ -509,6 +529,48 @@ export default function CVPage() {
                               <div key={i} className="p-3 rounded-lg bg-muted border border-border">
                                 <p className="font-medium text-foreground text-sm">{edu.degree}</p>
                                 <p className="text-sm text-muted-foreground">{edu.institution} · {edu.year}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Certifications */}
+                      {parsedData.certifications?.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-3">
+                            <GraduationCap className="w-4 h-4 text-accent" />
+                            <h3 className="text-sm font-semibold text-foreground">Certifications ({parsedData.certifications.length})</h3>
+                          </div>
+                          <div className="space-y-2">
+                            {parsedData.certifications.map((cert, i) => (
+                              <div key={i} className="p-3 rounded-lg bg-muted border border-border">
+                                <p className="font-medium text-foreground text-sm">{cert.name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {[cert.issuer, cert.year].filter(Boolean).join(" · ") || "Certification"}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Projects */}
+                      {parsedData.projects?.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-3">
+                            <Briefcase className="w-4 h-4 text-accent" />
+                            <h3 className="text-sm font-semibold text-foreground">Projets ({parsedData.projects.length})</h3>
+                          </div>
+                          <div className="space-y-2">
+                            {parsedData.projects.map((proj, i) => (
+                              <div key={i} className="p-3 rounded-lg bg-muted border border-border">
+                                <p className="font-medium text-foreground text-sm">
+                                  {proj.link ? (
+                                    <a href={proj.link} target="_blank" rel="noreferrer" className="hover:underline text-primary">{proj.name}</a>
+                                  ) : proj.name}
+                                </p>
+                                {proj.description && <p className="text-sm text-muted-foreground mt-0.5">{proj.description}</p>}
                               </div>
                             ))}
                           </div>

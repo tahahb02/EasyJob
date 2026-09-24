@@ -138,9 +138,8 @@ export default function LandingFooter() {
             ))}
           </div>
           <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            Fait avec
-            <span className="text-destructive">❤</span>
-            au Maroc
+            Fait par Taha HILAL BIK <br />
+             Software Engineer & Project Manager
           </p>
         </div>
       </div>

@@ -60,7 +60,24 @@ export function SocketProvider({ children }) {
       queryClient.invalidateQueries({ queryKey: ['notifications', 'unreadCount'] })
     })
 
+    // Scraping en temps réel : invalide les requêtes dès qu'un lot est collecté
+    socket.on('scraping:update', (payload) => {
+      queryClient.invalidateQueries({ queryKey: ['jobs'] })
+      queryClient.invalidateQueries({ queryKey: ['scraping'] })
+      if (payload?.runId) queryClient.invalidateQueries({ queryKey: ['scraping', 'status', payload.runId] })
+    })
+
+    socket.on('scraping:done', (payload) => {
+      queryClient.invalidateQueries({ queryKey: ['jobs'] })
+      queryClient.invalidateQueries({ queryKey: ['scraping'] })
+      if (payload?.runId) {
+        queryClient.invalidateQueries({ queryKey: ['scraping', 'status', payload.runId] })
+        queryClient.invalidateQueries({ queryKey: ['scraping', 'logs'] })
+      }
+    })
+
     socketRef.current = socket
+
 
     return () => {
       socket.disconnect()

@@ -1,7 +1,10 @@
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from './axios'
 
 // Auth hooks are in AuthContext
+
+// SOURCES DE SCRAPING (constantes déplacées plus bas – supprimés ce bloc dupliqué)
 
 // Profile hooks
 export const useProfile = () => useQuery({
@@ -24,6 +27,17 @@ export const useJobs = (filters = {}, options = {}) => useQuery({
     const params = new URLSearchParams()
     Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v) })
     const { data } = await api.get(`/jobs?${params}`)
+    return data
+  },
+  ...options,
+})
+
+export const usePublicBoard = (filters = {}, options = {}) => useQuery({
+  queryKey: ['public-board', filters],
+  queryFn: async () => {
+    const params = new URLSearchParams()
+    Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v) })
+    const { data } = await api.get(`/jobs/public-sector?${params}`)
     return data
   },
   ...options,
@@ -244,23 +258,185 @@ export const useAnalyzeCV = () => {
   })
 }
 
+// ─── SCRAPING ─────────────────────────────────────────────────────
 // Scraping hooks
+export const SITE_SOURCES = ['linkedin', 'indeed', 'welcometothejungle', 'rekrute', 'manpower', 'dreamjob', 'onejob', 'marocemploi']
+export const CONCOURS_SOURCE = 'concours'
+export const PUBLIC_SOURCES = ['concours', 'emploi-public']
+export const SOURCE_LABELS = {
+  linkedin: 'LinkedIn',
+  indeed: 'Indeed',
+  welcometothejungle: 'Welcome to the Jungle',
+  rekrute: 'Rekrute',
+  manpower: 'Manpower',
+  dreamjob: 'DreamJob.ma',
+  onejob: 'OneJob.ma',
+  marocemploi: 'MarocEmploi.net',
+  concours: 'Concours publics',
+  'emploi-public': 'Emploi public',
+}
+
 export const useRunScraping = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (params) => { const { data } = await api.post('/scraping/run', params || {}); return data },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['jobs'] })
-      qc.invalidateQueries({ queryKey: ['scraping', 'logs'] })
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['jobs'] }); qc.invalidateQueries({ queryKey: ['public-board'] }); qc.invalidateQueries({ queryKey: ['scraping', 'logs'] }) },
   })
 }
+
+// Suivi en direct du scraping : renvoie une progression 0→100% utilisable
+// par un bouton « remplissage d'eau ». Le backend répond immédiatement avec un
+// runId puis fait tourner la collecte en arrière-plan ; on sonde /scraping/status
+// (toutes les 4 s) et on calcule l'avancement à partir des sources terminées.
+export const useScrapingProgress = () => {
+  const qc = useQueryClient()
+  const [runId, setRunId] = useState(null)
+  const [phase, setPhase] = useState('idle') // idle | running | done
+  const [target, setTarget] = useState(0)
+  const [progress, setProgress] = useState(0)
+  const currentRunRef = useRef(null)
+  const doneRunRef = useRef(null)
+
+  const mutation = useMutation({
+    mutationFn: async (params) => { const { data } = await api.post('/scraping/run', params || {}); return data },
+  })
+
+  const { data: status } = useScrapingStatus(runId)
+
+  // Traduit l'état du log en cible de progression
+  useEffect(() => {
+    if (!runId || !status) return
+    const log = status?.log
+    if (!log) return
+
+    // N'agit que sur le run réellement démarré par cet écran
+    if (runId !== currentRunRef.current) return
+
+    if (log.status && log.status !== 'running') {
+      if (phase === 'done' && doneRunRef.current === runId) return
+      doneRunRef.current = runId
+      setTarget(100)
+      setProgress(100)
+      setPhase('done')
+      const t = setTimeout(() => {
+        setPhase('idle')
+        setTarget(0)
+        setProgress(0)
+        setRunId(null)
+        currentRunRef.current = null
+        doneRunRef.current = null
+      }, 1400)
+      return () => clearTimeout(t)
+    }
+
+    const srcs = Array.isArray(log.sources) ? log.sources : []
+    const total = srcs.length || 1
+    const done = srcs.filter(s => s && s.status && s.status !== 'running').length
+    setTarget(Math.min(92, 12 + Math.round((done / total) * 80)))
+  }, [status, runId, phase])
+
+  // Remplissage fluide vers la cible (effet « verre d'eau »)
+  useEffect(() => {
+    if (phase !== 'running') return
+    const id = setInterval(() => {
+      setProgress(prev => {
+        const diff = target - prev
+        if (Math.abs(diff) < 1) return target
+        return prev + diff * 0.15
+      })
+    }, 130)
+    return () => clearInterval(id)
+  }, [phase, target])
+
+  const start = (params, callbacks = {}) => {
+    if (phase === 'running' || mutation.isPending) return
+    currentRunRef.current = null
+    doneRunRef.current = null
+    setPhase('running')
+    setTarget(12)
+    mutation.mutate(params, {
+      onSuccess: (data) => {
+        if (data?.runId) {
+          setRunId(data.runId)
+          currentRunRef.current = data.runId
+        }
+        qc.invalidateQueries({ queryKey: ['jobs'] })
+        qc.invalidateQueries({ queryKey: ['public-board'] })
+        qc.invalidateQueries({ queryKey: ['scraping', 'logs'] })
+        callbacks?.onSuccess?.(data)
+      },
+      onError: (err) => {
+        setPhase('idle')
+        setTarget(0)
+        setProgress(0)
+        setRunId(null)
+        currentRunRef.current = null
+        doneRunRef.current = null
+        callbacks?.onError?.(err)
+      },
+    })
+  }
+
+  return {
+    start,
+    progress: Math.round(progress),
+    phase,
+    isRunning: phase === 'running' || phase === 'done' || mutation.isPending,
+    isPending: mutation.isPending,
+    runId,
+    reset: () => { setPhase('idle'); setTarget(0); setProgress(0); setRunId(null) },
+  }
+}
+
+export const useScrapingStatus = (runId, options = {}) => useQuery({
+  queryKey: ['scraping', 'status', runId ?? 'latest'],
+  queryFn: async () => { const { data } = await api.get(`/scraping/status${runId ? `?runId=${runId}` : ''}`); return data },
+  enabled: !!runId,
+  refetchInterval: (query) => (query.state.data?.isRunning ? 4000 : false),
+  ...options,
+})
 
 export const useScrapingLogs = () => useQuery({
   queryKey: ['scraping', 'logs'],
   queryFn: async () => { const { data } = await api.get('/scraping/logs'); return data },
 })
 
+export const useScrapingRunner = () => {
+  const qc = useQueryClient()
+  const [runId, setRunId] = useState(null)
+  const [doneEvent, setDoneEvent] = useState(null)
+
+  const mutation = useMutation({
+    mutationFn: async (params) => { const { data } = await api.post('/scraping/run', params || {}); return data },
+    onSuccess: (res) => { if (res?.runId) setRunId(res.runId); qc.invalidateQueries({ queryKey: ['scraping'] }) },
+  })
+
+  const { data: status } = useScrapingStatus(runId)
+
+  const isRunning = mutation.isPending || !!(runId && status?.isRunning)
+  const justFinished = !!runId && !!status && !status.isRunning
+
+  useEffect(() => {
+    if (justFinished && status?.log) { setDoneEvent({ runId, log: status.log }); setRunId(null); qc.invalidateQueries({ queryKey: ['jobs'] }); qc.invalidateQueries({ queryKey: ['public-board'] }); qc.invalidateQueries({ queryKey: ['scraping'] }) }
+  }, [justFinished, status, runId, qc])
+
+  return {
+    start: (params, callbacks) => mutation.mutate(params, callbacks),
+    startAsync: (params, callbacks) => mutation.mutateAsync(params, callbacks),
+    isPending: mutation.isPending,
+    result: doneEvent,
+    clearResult: () => setDoneEvent(null),
+    refetchStatus: () => { if (runId) qc.invalidateQueries({ queryKey: ['scraping', 'status', runId] }) },
+    isRunning, runId, status,
+  }
+}
+
+export const useScrapeGroup = (group) => {
+  const runner = useScrapingRunner()
+  return {
+    ...runner, start: (params, callbacks) => runner.start({ group, ...(params || {}) }, callbacks), isRunning: runner.isRunning, result: runner.result, clearResult: runner.clearResult,
+  }
+}
 // Email templates hooks
 export const useEmailTemplates = () => useQuery({
   queryKey: ['emailTemplates'],
@@ -383,7 +559,7 @@ export const useUpdateRecruiter = () => {
   })
 }
 
-// ─── RECRUITER SPACE HOOKS ────────────────────────────────────
+// â”€â”€â”€ RECRUITER SPACE HOOKS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const useRecruiterDashboard = () => useQuery({
   queryKey: ['recruiterSpace', 'dashboard'],
   queryFn: async () => { const { data } = await api.get('/recruiter-space/dashboard'); return data },
@@ -519,7 +695,7 @@ export const useRecruiterSendEmail = () => {
   })
 }
 
-// ─── RECRUITER JOB BOARD (for candidates) ────────────────────
+// â”€â”€â”€ RECRUITER JOB BOARD (for candidates) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const useRecruiterJobBoard = (filters = {}, options = {}) => useQuery({
   queryKey: ['jobs', 'recruiterBoard', filters],
   queryFn: async () => {
@@ -542,7 +718,7 @@ export const useApplyToRecruiterJob = () => {
   })
 }
 
-// ─── JOB SEARCH STATUS ───────────────────────────────────────
+// â”€â”€â”€ JOB SEARCH STATUS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const useUpdateJobSearchStatus = () => {
   const qc = useQueryClient()
   return useMutation({
@@ -551,7 +727,7 @@ export const useUpdateJobSearchStatus = () => {
   })
 }
 
-// ─── COMPANY EMAILS ───────────────────────────────────────────
+// â”€â”€â”€ COMPANY EMAILS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const useCompanyEmails = (filters = {}) => useQuery({
   queryKey: ['companyEmails', filters],
   queryFn: async () => {
@@ -597,7 +773,7 @@ export const useDeleteCompanyEmail = () => {
   })
 }
 
-// ─── MAILBOX (messages / emails) ───────────────────────────────
+// â”€â”€â”€ MAILBOX (messages / emails) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const useMailbox = (filters = {}, options = {}) => useQuery({
   queryKey: ['mailbox', filters],
   queryFn: async () => {
@@ -655,7 +831,7 @@ export const useReplyMail = () => {
   })
 }
 
-// ─── ADMIN ─────────────────────────────────────────────────────────
+// â”€â”€â”€ ADMIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const useAdminOverview = () => useQuery({
   queryKey: ['admin', 'overview'],
   queryFn: async () => { const { data } = await api.get('/admin/overview'); return data },

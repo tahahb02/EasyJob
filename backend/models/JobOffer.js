@@ -3,7 +3,7 @@ import mongoose from 'mongoose'
 const jobOfferSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   postedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  source: { type: String, enum: ['linkedin', 'indeed', 'welcometothejungle', 'rekrute', 'manpower', 'manual', 'recruiter', 'autre'] },
+  source: { type: String, enum: ['linkedin', 'indeed', 'welcometothejungle', 'rekrute', 'manpower', 'dreamjob', 'onejob', 'marocemploi', 'emplois', 'concours', 'emploi-public', 'manual', 'recruiter', 'autre'] },
   sourceId: String,
   sourceUrl: String,
   title: { type: String, required: true },

@@ -5,7 +5,6 @@ import { toast } from 'sonner'
 import {
   Search,
   RefreshCw,
-  Loader2,
   AlertTriangle,
   Inbox,
   LayoutGrid,
@@ -15,15 +14,22 @@ import {
   Briefcase,
   Building2,
   SearchX,
+  Landmark,
+  Newspaper,
+  CalendarClock,
+  ExternalLink,
+  Info,
 } from 'lucide-react'
 
 import {
   useJobs,
+  usePublicBoard,
   useToggleSaveJob,
-  useRunScraping,
+  useScrapingProgress,
   useApplications,
   useRecruiterJobBoard,
   useApplyToRecruiterJob,
+  PUBLIC_SOURCES,
 } from '@/api/hooks'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -55,7 +61,10 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination'
+import { format } from 'date-fns'
+import { fr } from 'date-fns/locale'
 import JobOfferCard from '@/components/jobOffers/JobOfferCard'
+import ScrapeButton from '@/components/jobOffers/ScrapeButton'
 
 const contractTypes = ['Tous', 'CDI', 'CDD', 'Stage', 'Freelance']
 const locations = ['Toutes', 'Casablanca', 'Rabat', 'Marrakech', 'Tanger', 'Fès']
@@ -66,6 +75,9 @@ const externalSources = [
   { value: 'welcometothejungle', label: 'Welcome to the Jungle' },
   { value: 'rekrute', label: 'Rekrute' },
   { value: 'manpower', label: 'Manpower' },
+  { value: 'dreamjob', label: 'DreamJob.ma' },
+  { value: 'onejob', label: 'OneJob.ma' },
+  { value: 'marocemploi', label: 'MarocEmploi.net' },
 ]
 const sortOptions = [
   { value: 'Pertinence', label: 'Pertinence' },
@@ -79,6 +91,10 @@ const sourceLabels = {
   welcometothejungle: 'Welcome to the Jungle',
   rekrute: 'Rekrute',
   manpower: 'Manpower',
+  dreamjob: 'DreamJob.ma',
+  onejob: 'OneJob.ma',
+  marocemploi: 'MarocEmploi.net',
+  concours: 'Concours publics',
   recruiter: 'Recruteur',
 }
 
@@ -166,6 +182,95 @@ const container = {
   show: { opacity: 1, transition: { staggerChildren: 0.04 } },
 }
 
+const newsCategoryMeta = {
+  'concours-prochain': { label: 'Concours prochain', cls: 'bg-primary/10 text-primary border-primary/20' },
+  info: { label: 'Info de l\'État', cls: 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400' },
+  actualite: { label: 'Actualité', cls: 'bg-teal-500/10 text-teal-600 border-teal-500/20 dark:text-teal-400' },
+}
+
+function NewsIcon({ category }) {
+  if (category === 'concours-prochain') return <CalendarClock className="size-3.5" />
+  if (category === 'info') return <Landmark className="size-3.5" />
+  return <Newspaper className="size-3.5" />
+}
+
+function PublicNewsRow({ item }) {
+  return (
+    <a
+      href={item.sourceUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/50"
+    >
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
+        <NewsIcon category={item.category} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="line-clamp-1 block text-sm font-medium leading-snug transition-colors group-hover:text-primary">
+          {item.title}
+        </span>
+        {item.org && <span className="mt-0.5 block truncate text-xs text-muted-foreground">{item.org}</span>}
+      </span>
+      <span className="mt-1 flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+        {item.eventDate ? (
+          <span className="flex items-center gap-1.5 font-medium text-primary">
+            <CalendarClock className="size-3.5 shrink-0" />
+            {format(new Date(item.eventDate), "d MMM yyyy", { locale: fr })}
+          </span>
+        ) : item.excerpt ? (
+          <span className="hidden max-w-[180px] truncate sm:block">{item.excerpt}</span>
+        ) : null}
+        <ExternalLink className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+      </span>
+    </a>
+  )
+}
+
+function PublicNewsPanel({ items }) {
+  const order = ['concours-prochain', 'info', 'actualite']
+  const groups = order
+    .map(cat => ({ cat, meta: newsCategoryMeta[cat] || newsCategoryMeta.actualite, list: items.filter(i => i.category === cat) }))
+    .filter(g => g.list.length > 0)
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/40 px-4 py-3">
+        <h2 className="flex items-center gap-2 font-display text-base font-semibold tracking-tight">
+          <Newspaper className="size-4 text-primary" />
+          Actualités, infos de l'État & concours prochains
+        </h2>
+        <span className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary">
+            <Info className="size-3" />
+            À consulter
+          </span>
+          {items.length} publication(s)
+        </span>
+      </div>
+      <div className="divide-y divide-border/80">
+        {groups.map(group => (
+          <div key={group.cat} className="px-2 py-3 sm:px-4">
+            <div className="mb-2 flex items-center gap-2 px-2">
+              <Badge variant="secondary" className={`gap-1 border text-[10px] font-semibold ${group.meta.cls}`}>
+                <NewsIcon category={group.cat} />
+                {group.meta.label}
+              </Badge>
+              <span className="text-[11px] text-muted-foreground">{group.list.length} publication(s)</span>
+            </div>
+            <ul className="divide-y divide-border/60">
+              {group.list.map(item => (
+                <li key={item.id}>
+                  <PublicNewsRow item={item} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export default function JobOffersPage() {
   const [activeTab, setActiveTab] = useState('external')
   const [view, setView] = useState('grid')
@@ -186,7 +291,7 @@ export default function JobOffersPage() {
     const filters = { page, limit: 20 }
     if (search.trim()) filters.search = search.trim()
     if (contractType !== 'Tous') filters.contractType = contractType
-    if (location !== 'Toutes') filters.location = location
+    if (location !== 'Toutes' && activeTab !== 'public') filters.location = location
     if (activeTab === 'external') {
       if (source !== 'Toutes') filters.source = source
       if (sort === 'Date') filters.sort = 'date'
@@ -200,12 +305,27 @@ export default function JobOffersPage() {
     return filters
   }, [search, contractType, location, source, sort, page, activeTab])
 
+  const publicFilters = useMemo(() => {
+    const filters = { page, limit: 20 }
+    if (search.trim()) filters.search = search.trim()
+    filters.sort = sort === 'Date' ? 'date' : 'relevance'
+    return filters
+  }, [search, sort, page])
+
   const externalQuery = useJobs(activeTab === 'external' ? apiFilters : undefined, { enabled: activeTab === 'external' })
   const boardQuery = useRecruiterJobBoard(activeTab === 'internal' ? apiFilters : undefined, { enabled: activeTab === 'internal' })
-  const { data, isLoading, error, refetch } = activeTab === 'external' ? externalQuery : boardQuery
+  const publicQuery = usePublicBoard(activeTab === 'public' ? publicFilters : undefined, { enabled: activeTab === 'public' })
+
+  const { data, isLoading, error, refetch } = activeTab === 'external'
+    ? externalQuery
+    : activeTab === 'internal'
+      ? boardQuery
+      : publicQuery
+
+  const newsList = data?.news ?? []
 
 const toggleSave = useToggleSaveJob()
-  const runScraping = useRunScraping()
+  const running = useScrapingProgress()
   const applyToRecruiter = useApplyToRecruiterJob()
   const { data: appsData } = useApplications({})
 
@@ -237,7 +357,16 @@ const toggleSave = useToggleSaveJob()
   }, [search, source, contractType, location, remoteOnly, salaryRange, datePosted])
 
   const handleSave = (id) => toggleSave.mutate(id)
-  const handleScraping = () => runScraping.mutate(undefined, { onSuccess: () => refetch() })
+  const handleScraping = () => {
+    const params = activeTab === 'public' ? { sources: PUBLIC_SOURCES } : undefined
+    running.start(params, {
+      onSuccess: () => {
+        refetch()
+        toast.success('Scrapping terminé avec succès', { duration: 4000 })
+      },
+      onError: (err) => toast.error(err?.response?.data?.error || err?.message || 'Erreur lors du scrapping'),
+    })
+  }
   const handleApplyInternal = (jobId) => {
     applyToRecruiter.mutate({ jobId }, {
       onSuccess: () => toast.success('Candidature envoyée !'),
@@ -299,7 +428,9 @@ const toggleSave = useToggleSaveJob()
           <p className="mt-1 text-sm text-muted-foreground">
             {activeTab === 'external'
               ? 'Offres importées depuis les plateformes externes'
-              : 'Offres internes publiées par les recruteurs'}
+              : activeTab === 'internal'
+                ? 'Offres internes publiées par les recruteurs'
+                : 'Concours et emplois publics, actualités de l\'État et concours prochains'}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -309,15 +440,18 @@ const toggleSave = useToggleSaveJob()
               Mes candidatures
             </Link>
           </Button>
-          {activeTab === 'external' && (
-            <Button size="sm" onClick={handleScraping} disabled={runScraping.isPending}>
-              {runScraping.isPending ? (
-                <Loader2 className="mr-2 size-4 animate-spin" />
-              ) : (
-                <RefreshCw className="mr-2 size-4" />
-              )}
-              {runScraping.isPending ? 'Scrapping...' : 'Lancer le scrapping'}
-            </Button>
+          {activeTab !== 'internal' && (
+            <ScrapeButton
+              size="sm"
+              variant="default"
+              icon={RefreshCw}
+              label={activeTab === 'public' ? 'Lancer le scrapping public' : 'Lancer le scrapping'}
+              activeLabel="Scrapping en cours"
+              progress={running.progress}
+              active={running.isRunning}
+              done={running.phase === 'done'}
+              onClick={handleScraping}
+            />
           )}
         </div>
       </div>
@@ -327,6 +461,7 @@ const toggleSave = useToggleSaveJob()
         {[
           { key: 'external', label: 'Offres externes', icon: Briefcase },
           { key: 'internal', label: 'Offres internes', icon: Building2 },
+          { key: 'public', label: 'Emplois publics & Concours', icon: Landmark },
         ].map((tab) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.key
@@ -382,41 +517,43 @@ const toggleSave = useToggleSaveJob()
             </SelectContent>
           </Select>
 
-          <Select value={location} onValueChange={(v) => { setLocation(v); setPage(1) }}>
-            <SelectTrigger className="h-8 w-auto text-xs">
-              <SelectValue placeholder="Lieu" />
-            </SelectTrigger>
-            <SelectContent>
-              {locations.map((l) => (
-                <SelectItem key={l} value={l}>{l === 'Toutes' ? 'Tous les lieux' : l}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {activeTab !== 'public' && (
+            <Select value={location} onValueChange={(v) => { setLocation(v); setPage(1) }}>
+              <SelectTrigger className="h-8 w-auto text-xs">
+                <SelectValue placeholder="Lieu" />
+              </SelectTrigger>
+              <SelectContent>
+                {locations.map((l) => (
+                  <SelectItem key={l} value={l}>{l === 'Toutes' ? 'Tous les lieux' : l}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
           {activeTab === 'external' && (
-            <>
-              <Select value={source} onValueChange={(v) => { setSource(v); setPage(1) }}>
-                <SelectTrigger className="h-8 w-auto text-xs">
-                  <SelectValue placeholder="Source" />
-                </SelectTrigger>
-                <SelectContent>
-                  {externalSources.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <Select value={source} onValueChange={(v) => { setSource(v); setPage(1) }}>
+              <SelectTrigger className="h-8 w-auto text-xs">
+                <SelectValue placeholder="Source" />
+              </SelectTrigger>
+              <SelectContent>
+                {externalSources.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
-              <Select value={sort} onValueChange={setSort}>
-                <SelectTrigger className="h-8 w-auto text-xs">
-                  <SelectValue placeholder="Trier par" />
-                </SelectTrigger>
-                <SelectContent>
-                  {sortOptions.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>Trier : {s.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </>
+          {(activeTab === 'external' || activeTab === 'public') && (
+            <Select value={sort} onValueChange={setSort}>
+              <SelectTrigger className="h-8 w-auto text-xs">
+                <SelectValue placeholder="Trier par" />
+              </SelectTrigger>
+              <SelectContent>
+                {sortOptions.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>Trier : {s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
 
@@ -468,6 +605,24 @@ const toggleSave = useToggleSaveJob()
         </div>
       </div>
 
+      {/* News & infos de l'État + concours prochains (tri séparé des offres) */}
+      {activeTab === 'public' && !isLoading && newsList.length > 0 && (
+        <PublicNewsPanel items={newsList} />
+      )}
+
+      {/* Séparateur clair : infos à lire ≠ offres à postuler */}
+      {activeTab === 'public' && !isLoading && offers.length > 0 && (
+        <div className="mt-7 flex items-center gap-3">
+          <span className="h-px flex-1 bg-border" />
+          <span className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/5 px-4 py-1.5 text-xs font-semibold text-primary">
+            <Briefcase className="size-3.5" />
+            Offres d'emploi à postuler
+            <span className="font-medium text-muted-foreground">{total} offre(s)</span>
+          </span>
+          <span className="h-px flex-1 bg-border" />
+        </div>
+      )}
+
       {/* Job grid/list */}
       {isLoading ? (
         <div className={view === 'grid' ? 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3' : 'space-y-2'}>
@@ -506,13 +661,23 @@ const toggleSave = useToggleSaveJob()
             <p className="mt-1.5 max-w-sm text-center text-sm text-muted-foreground">
               {activeTab === 'external'
                 ? 'Essayez de modifier vos filtres ou lancez un scraping pour découvrir de nouvelles offres.'
-                : 'Les offres sont classées selon votre profil. Complétez votre profil pour en voir davantage.'}
+                : activeTab === 'public'
+                  ? 'Aucune offre publique pour le moment. Lancez un scraping du secteur public pour récupérer les concours et emplois publics.'
+                  : 'Les offres sont classées selon votre profil. Complétez votre profil pour en voir davantage.'}
             </p>
-            {activeTab === 'external' && (
-              <Button variant="outline" size="sm" className="mt-5" onClick={handleScraping} disabled={runScraping.isPending}>
-                {runScraping.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
-                Lancer le scraping
-              </Button>
+            {activeTab !== 'internal' && (
+              <ScrapeButton
+                variant="outline"
+                size="sm"
+                className="mt-5"
+                icon={RefreshCw}
+                label={activeTab === 'public' ? 'Lancer le scrapping public' : 'Lancer le scraping'}
+                activeLabel="Scrapping en cours"
+                progress={running.progress}
+                active={running.isRunning}
+                done={running.phase === 'done'}
+                onClick={handleScraping}
+              />
             )}
           </motion.div>
         )

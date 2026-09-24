@@ -4,7 +4,6 @@ import { motion } from 'framer-motion'
 import {
   ArrowLeft,
   Play,
-  Loader2,
   Briefcase,
   Globe,
   TreePine,
@@ -15,10 +14,11 @@ import {
   XCircle,
   Settings2,
   Zap,
+  Landmark,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { useRunScraping, useScrapingLogs } from '@/api/hooks'
+import { useScrapingProgress, useScrapingLogs } from '@/api/hooks'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import ScrapeButton from '@/components/jobOffers/ScrapeButton'
 
 const container = {
   hidden: { opacity: 0 },
@@ -101,6 +102,39 @@ const initialPlatforms = [
     lightBg: 'bg-red-50 dark:bg-red-500/10',
     lightText: 'text-red-600 dark:text-red-400',
   },
+  {
+    id: 'dreamjob',
+    name: 'DreamJob.ma',
+    icon: Search,
+    description: 'Leader des offres d\u2019emploi et concours au Maroc',
+    enabled: true,
+    keywords: 'Développeur, Ingénieur, CDI',
+    color: 'bg-amber-500',
+    lightBg: 'bg-amber-50 dark:bg-amber-500/10',
+    lightText: 'text-amber-600 dark:text-amber-400',
+  },
+{
+    id: 'onejob',
+    name: 'OneJob.ma',
+    icon: Briefcase,
+    description: 'Recherche d\u2019emploi avec salaires publi\u00e9s au Maroc',
+    enabled: true,
+    keywords: 'D\u00e9veloppeur, Comptable, Marketing',
+    color: 'bg-sky-500',
+    lightBg: 'bg-sky-50 dark:bg-sky-500/10',
+    lightText: 'text-sky-600 dark:text-sky-400',
+  },
+  {
+    id: 'marocemploi',
+    name: 'MarocEmploi.net',
+    icon: Briefcase,
+    description: 'Plateforme d\u2019emplois au Maroc (postes actifs, CDI, stages)',
+    enabled: true,
+    keywords: 'Employ\u00e9, Agent, Technicien',
+    color: 'bg-lime-600',
+    lightBg: 'bg-lime-50 dark:bg-lime-600/10',
+    lightText: 'text-lime-700 dark:text-lime-400',
+  },
 ]
 
 export default function ScrapingConfigPage() {
@@ -110,15 +144,15 @@ export default function ScrapingConfigPage() {
   const [frequency, setFrequency] = useState('quotidien')
   const [scrapeTime, setScrapeTime] = useState('22:00')
 
-  const runScraping = useRunScraping()
+  const runScraping = useScrapingProgress()
   const { data: logsData, isLoading: logsLoading } = useScrapingLogs()
   const historyEntries = logsData?.logs ?? []
 
   const handleScrape = () => {
     const enabledSources = platforms.filter(p => p.enabled).map(p => p.id)
     const allKeywords = platforms.filter(p => p.enabled).flatMap(p => p.keywords.split(',').map(k => k.trim()).filter(Boolean))
-    
-    runScraping.mutate(
+
+    runScraping.start(
       { keywords: allKeywords.length > 0 ? allKeywords : undefined, sources: enabledSources.length > 0 ? enabledSources : undefined },
       {
         onSuccess: (data) => {
@@ -173,18 +207,17 @@ export default function ScrapingConfigPage() {
             Collectez jusqu'à 100 offres d'emploi par lancement
           </p>
         </div>
-        <Button
+        <ScrapeButton
+          size="lg"
           onClick={handleScrape}
-          disabled={runScraping.isPending}
+          icon={Play}
+          label="Lancer maintenant"
+          activeLabel="Scrapping en cours"
+          progress={runScraping.progress}
+          active={runScraping.isRunning}
+          done={runScraping.phase === 'done'}
           className="gap-2.5 px-6 py-3.5"
-        >
-          {runScraping.isPending ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <Play className="h-5 w-5" />
-          )}
-          {runScraping.isPending ? 'Scrapping en cours...' : 'Lancer maintenant'}
-        </Button>
+        />
       </motion.div>
 
       {/* Platform Cards */}
@@ -251,6 +284,50 @@ export default function ScrapingConfigPage() {
               </motion.div>
             )
           })}
+        </div>
+      </motion.div>
+
+      {/* Concours publics - séparés des offres scrapées des sites */}
+      <motion.div variants={item}>
+        <div className="rounded-xl border border-teal-500/30 bg-teal-500/[0.06] p-6 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="rounded-lg bg-teal-500/10 p-3">
+                <Landmark className="h-5 w-5 text-teal-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Concours publics (emploi-public.ma)</h3>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  Concours de recrutement, emplois supérieurs, postes de responsabilités et experts de la
+                  fonction publique marocaine — collectés séparément et affichés sur{' '}
+                  <span className="font-medium text-foreground">/jobs</span> (onglet « Emplois publics & Concours »)
+                </p>
+              </div>
+            </div>
+            <ScrapeButton
+              variant="outline"
+              icon={Landmark}
+              label="Collecter les concours"
+              activeLabel="Concours en cours"
+              progress={runScraping.progress}
+              active={runScraping.isRunning}
+              done={runScraping.phase === 'done'}
+              onClick={() =>
+                runScraping.start(
+                  { sources: ['concours'] },
+                  {
+                    onSuccess: (data) => toast.success(`Concours terminé ! ${data?.jobsFound ?? 0} concours trouvés`, { duration: 4000 }),
+                    onError: (err) => toast.error(err?.response?.data?.error || err?.message || 'Erreur lors de la collecte des concours'),
+                  }
+                )
+              }
+              className="gap-2 border-teal-500/40 text-teal-600 hover:bg-teal-500/10"
+            />
+          </div>
+          <div className="mt-4 flex items-center gap-2 rounded-lg border border-teal-500/20 bg-teal-500/[0.04] px-4 py-2.5 text-sm text-muted-foreground">
+            <Landmark className="h-4 w-4 shrink-0 text-teal-500" />
+            Les concours ne sont jamais mélangés aux offres scrapées des sites : ils restent dans l'espace « Concours publics ».
+          </div>
         </div>
       </motion.div>
 

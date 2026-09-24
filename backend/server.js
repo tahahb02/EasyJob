@@ -19,7 +19,7 @@ import cvRoutes from './routes/cv.js'
 import portfolioRoutes from './routes/portfolio.js'
 import recruiterSpaceRoutes from './routes/recruiterSpace.js'
 import companyEmailRoutes from './routes/companyEmails.js'
-import mailRoutes from './routes/mail.js'
+import mailRoutes from './routes/mail.js' 
 import seedRoutes from './routes/seed.js'
 import adminRoutes from './routes/admin.js'
 

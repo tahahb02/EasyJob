@@ -956,7 +956,7 @@ import mongoose5 from "mongoose";
 var jobOfferSchema = new mongoose5.Schema({
   userId: { type: mongoose5.Schema.Types.ObjectId, ref: "User" },
   postedBy: { type: mongoose5.Schema.Types.ObjectId, ref: "User" },
-  source: { type: String, enum: ["linkedin", "indeed", "welcometothejungle", "rekrute", "manpower", "manual", "recruiter", "autre"] },
+  source: { type: String, enum: ["linkedin", "indeed", "welcometothejungle", "rekrute", "manpower", "dreamjob", "emplois", "concours", "manual", "recruiter", "autre"] },
   sourceId: String,
   sourceUrl: String,
   title: { type: String, required: true },
@@ -1329,6 +1329,9 @@ async function notifyEmailReceived({ userId, fromName, companyName = "", subject
 // backend/services/jobScraper.js
 import axios from "axios";
 import * as cheerio from "cheerio";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+var execFileAsync = promisify(execFile);
 var USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
@@ -1340,6 +1343,15 @@ function getRandomUA() {
   return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
 var delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function fetchWithCurl(url, headers = {}) {
+  const args = ["-sL", "--compressed", "-A", headers["User-Agent"] || getRandomUA(), url];
+  try {
+    const { stdout } = await execFileAsync("curl", args, { timeout: 3e4, maxBuffer: 8 * 1024 * 1024 });
+    return { data: stdout, status: 200 };
+  } catch (err) {
+    throw new Error(`curl fallback failed for ${url}: ${err.code || err.message}`);
+  }
+}
 async function fetchWithRetry(url, opts = {}, retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -1359,7 +1371,16 @@ async function fetchWithRetry(url, opts = {}, retries = 3) {
       });
       return response;
     } catch (err) {
-      if (attempt === retries) throw err;
+      if (attempt === retries) {
+        if (err.response?.status === 403) {
+          try {
+            return await fetchWithCurl(url, opts.headers || {});
+          } catch (curlErr) {
+            throw curlErr;
+          }
+        }
+        throw err;
+      }
       const waitMs = attempt * 1500 + Math.random() * 1e3;
       await delay(waitMs);
     }
@@ -1474,16 +1495,47 @@ function calculateRelevance(job, userProfile) {
   let score = 30;
   if (!userProfile) return Math.floor(Math.random() * 20) + 50;
   const userSkills = (userProfile.skills || []).map((s) => s.toLowerCase());
+  const userSoftSkills = (userProfile.softSkills || []).map((s) => s.toLowerCase());
   const userDomains = (userProfile.domains || []).map((d) => d.toLowerCase());
   const userKeywords = (userProfile.searchKeywords || []).map((k) => k.toLowerCase());
-  const userExperience = (userProfile.experience || []).map((e) => (e.position || "").toLowerCase());
+  const userExperience = (userProfile.experience || []).map((e) => (e.position || e.title || "").toLowerCase());
   const userTitle = (userProfile.title || "").toLowerCase();
-  const jobText = `${job.title} ${job.description || ""} ${job.sector || ""} ${(job.keywords || []).join(" ")}`.toLowerCase();
+  const userEducation = (userProfile.education || []).map((e) => `${e.degree || e.field || ""} ${e.institution || ""}`.toLowerCase());
+  const userLanguages = (userProfile.languages || []).map(
+    (l) => (typeof l === "string" ? l : l.language || "").split(/[(\[]/)[0].trim().toLowerCase()
+  );
+  const jobText = `${job.title} ${job.description || ""} ${job.sector || ""} ${job.domain || ""} ${(job.keywords || []).join(" ")}`.toLowerCase();
   let skillMatches = 0;
   for (const skill of userSkills) {
     if (skill.length > 2 && jobText.includes(skill)) skillMatches++;
   }
   score += Math.min(skillMatches * 8, 40);
+  let softMatches = 0;
+  for (const ss of userSoftSkills) {
+    if (ss.length > 3 && jobText.includes(ss)) softMatches++;
+  }
+  score += Math.min(softMatches * 4, 12);
+  const educationTokens = userEducation.flatMap((e) => e.split(/\s+/).filter((w) => w.length > 4));
+  for (const token of educationTokens) {
+    if (jobText.includes(token)) {
+      score += 8;
+      break;
+    }
+  }
+  const languageKeywords = {
+    arabe: ["arabe", "arabic"],
+    francais: ["fran\xE7ais", "french"],
+    anglais: ["anglais", "english"],
+    espagnol: ["espagnol", "spanish"],
+    allemand: ["allemand", "german"]
+  };
+  for (const lang of userLanguages) {
+    const keywords = languageKeywords[lang] || [lang];
+    if (keywords.some((k) => jobText.includes(k))) {
+      score += 4;
+      break;
+    }
+  }
   let domainMatch = false;
   for (const domain of userDomains) {
     if (domain.length > 2 && (jobText.includes(domain) || (job.sector || "").toLowerCase().includes(domain))) {
@@ -1859,26 +1911,228 @@ async function scrapeManpower(keywords, location = "Maroc", userProfile = null) 
   });
   return unique.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
 }
-async function scrapeAllSources(keywords, location = "Maroc", enabledSources = ["linkedin", "indeed", "rekrute"], userProfile = null) {
-  const results = {
-    linkedin: { jobs: [], status: "pending", duration: 0 },
-    indeed: { jobs: [], status: "pending", duration: 0 },
-    rekrute: { jobs: [], status: "pending", duration: 0 },
-    welcometothejungle: { jobs: [], status: "pending", duration: 0 },
-    manpower: { jobs: [], status: "pending", duration: 0 }
-  };
+async function scrapeDreamjob(keywords, location = "Maroc", userProfile = null) {
+  const jobs = [];
+  const pages = ["", "/page/2/", "/page/3/"];
+  for (const pagePath of pages) {
+    try {
+      const url = `https://www.dreamjob.ma/emploi${pagePath}`;
+      const { data } = await fetchWithRetry(url);
+      const $ = cheerio.load(data);
+      let foundOnPage = 0;
+      $("article.jeg_post, div.jeg_post, article.post").each((_, el) => {
+        const card = $(el);
+        const titleEl = card.find('h3.jeg_post_title a, h2.jeg_post_title a, .jeg_post_title a, a[href*="dreamjob.ma/"]').first();
+        const title = normalizeText(titleEl.text());
+        const href = titleEl.attr("href") || "";
+        if (!title || title.length <= 3 || !href) return;
+        const dateText = normalizeText(card.find(".jeg_meta_date, .jeg_meta_date a, time, span.date, .published").first().text());
+        let postedAt = null;
+        const dmy = dateText.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+        if (dmy) postedAt = new Date(parseInt(dmy[3]), parseInt(dmy[2]) - 1, parseInt(dmy[1]));
+        if (!postedAt || isNaN(postedAt.getTime())) postedAt = parseExactDate(dateText);
+        if (!postedAt) postedAt = /* @__PURE__ */ new Date();
+        const description = normalizeText(card.find(".jeg_post_excerpt, .jeg_post_excerpt p, .entry-content p").first().text());
+        let company = "DreamJob Maroc";
+        const chezIdx = title.search(/chez\s+/i);
+        if (chezIdx >= 0) {
+          const after = title.slice(chezIdx).replace(/^chez\s+/i, "");
+          company = after.split(/\s+(?:à|a|at)\s+/i)[0].split(/\s*[|–\-()]\s*/)[0].trim();
+        }
+        const ministryMatch = title.match(/^(?:Concours\s+de\s+)?Recrutement\s+(?:(?:du|de|d['’])\s+)?(Minist[èe]re[^(\d]*)/i);
+        if (ministryMatch) company = ministryMatch[1].trim();
+        if (company.length > 60) company = company.substring(0, 60);
+        foundOnPage++;
+        jobs.push({
+          title,
+          company,
+          location,
+          sourceUrl: href,
+          source: "dreamjob",
+          sourceId: href.split("/").filter(Boolean).pop() || "",
+          postedAt,
+          contractType: inferContractType(title, description),
+          description: description ? description.slice(0, 1500) : "",
+          sector: "",
+          keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 8)
+        });
+      });
+      if (foundOnPage === 0 && pagePath === "") break;
+      await delay(2e3 + Math.random() * 1500);
+    } catch (error) {
+      console.error("DreamJob page", pagePath, "error:", error.message);
+      if (pagePath === "") break;
+    }
+  }
+  const seen = /* @__PURE__ */ new Set();
+  const unique = jobs.filter((j) => {
+    const key = j.sourceUrl;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique.slice(0, 45).map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
+}
+async function scrapeEmploiMa(keywords, location = "Maroc", userProfile = null) {
+  const jobs = [];
+  try {
+    const searchQuery = encodeURIComponent(keywords.slice(0, 4).join(" "));
+    const url = `https://www.emploi.ma/recherche-jobs-maroc?f_1=${searchQuery}`;
+    const { data } = await fetchWithRetry(url);
+    if (/Just a moment|challenge-platform|cf-chl|__cf_chl_/i.test(data)) {
+      console.warn("emploi.ma: page prot\xE9g\xE9e par Cloudflare, scraping impossible");
+      return [];
+    }
+    const $ = cheerio.load(data);
+    const cardSelectors = [
+      ".views-row",
+      ".node-offre",
+      ".node-job",
+      ".job-format",
+      ".offer-item",
+      'div[typeof="schema:JobPosting"]',
+      "article"
+    ];
+    let found = 0;
+    for (const cardSel of cardSelectors) {
+      $(cardSel).each((_, el) => {
+        const card = $(el);
+        const linkEl = card.find('h2 a, h3 a, .title a, a[rel="bookmark"], a[href*="offre"]').first();
+        const title = normalizeText(linkEl.text());
+        const href = linkEl.attr("href") || "";
+        if (!title || title.length <= 3) return;
+        const company = normalizeText(
+          card.find(".views-field-field-entreprise, .company, .field-name-field-entreprise, .views-field-title").last().text()
+        );
+        const loc = normalizeText(
+          card.find(".views-field-field-lieux, .location, .views-field-field-ville, .field-name-field-lieux").first().text()
+        ) || location;
+        const description = normalizeText(card.find(".views-field-body, .description, .field-name-body, .views-field-description").first().text());
+        const postedAt = extractPostedDate($, card) || /* @__PURE__ */ new Date();
+        found++;
+        jobs.push({
+          title,
+          company: company || "Non sp\xE9cifi\xE9",
+          location: loc,
+          sourceUrl: href.startsWith("http") ? href : `https://www.emploi.ma${href}`,
+          source: "emplois",
+          sourceId: href.split("/").filter(Boolean).pop() || "",
+          postedAt,
+          contractType: inferContractType(title, description),
+          description: description.slice(0, 1500),
+          sector: "",
+          keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 8)
+        });
+      });
+      if (found > 0) break;
+    }
+  } catch (error) {
+    console.warn("emploi.ma scraping error:", error.message);
+  }
+  const seen = /* @__PURE__ */ new Set();
+  const unique = jobs.filter((j) => {
+    const key = `${j.title.toLowerCase()}|${j.sourceUrl}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique.slice(0, 45).map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
+}
+var CONCOURS_BASE = "https://www.emploi-public.ma";
+async function scrapeConcoursMaroc(userProfile = null) {
+  const concours = [];
+  const pages = [1, 2];
+  for (const pageNum of pages) {
+    try {
+      const url = pageNum === 1 ? `${CONCOURS_BASE}/fr/concours-liste` : `${CONCOURS_BASE}/fr/concours-liste?page=${pageNum}`;
+      const { data } = await fetchWithRetry(url);
+      if (/Just a moment|challenge-platform|cf-chl/i.test(data)) break;
+      const $ = cheerio.load(data);
+      let found = 0;
+      $('.s-item a.card, div.s-item a[href*="/concours/details/"]').each((_, el) => {
+        const card = $(el);
+        const href = $(card).attr("href") || "";
+        const uuidMatch = href.match(/details\/([a-f0-9-]{8,})/i);
+        if (!href || !href.includes("/concours/details/")) return;
+        const title = normalizeText($(card).find("h2.card-title").text());
+        if (!title || title.length <= 5) return;
+        const org = normalizeText($(card).find(".card-text").text());
+        const footerTexts = $(card).find(".card-footer div").map((_2, d) => normalizeText($(d).text())).get();
+        let nbPostes = "";
+        const postesMatch = footerTexts.find((t) => /(\d+)\s*postes?\s*$/i.test(t));
+        if (postesMatch) {
+          const m = postesMatch.match(/(\d+)\s*postes?/i);
+          nbPostes = m ? m[1] : "";
+        }
+        let depositDeadline = "";
+        const limText = footerTexts.find((t) => /Limite de d/i.test(t));
+        if (limText) depositDeadline = limText.replace(/Limite de d[^:]*:\s*/i, "").trim();
+        let examDate = "";
+        const examText = footerTexts.find((t) => /Date du concours/i.test(t));
+        if (examText) examDate = examText.replace(/Date du concours\s*:\s*/i, "").trim();
+        let deadlineDate = null;
+        if (depositDeadline) {
+          const parsed = parseExactDate(depositDeadline);
+          if (parsed && !isNaN(parsed.getTime())) deadlineDate = parsed;
+        }
+        const descriptionParts = [
+          org,
+          nbPostes ? `Nombre de postes : ${nbPostes}` : "",
+          depositDeadline ? `Limite de d\xE9p\xF4t : ${depositDeadline}` : "",
+          examDate ? `Date du concours : ${examDate}` : "",
+          "D\xE9p\xF4t du dossier de candidature : voir l'avis officiel"
+        ].filter(Boolean);
+        found++;
+        concours.push({
+          title,
+          company: org || "Administration publique marocaine",
+          location: "Maroc",
+          sourceUrl: `${CONCOURS_BASE}${href}`,
+          sourceId: uuidMatch ? uuidMatch[1] : `concours-${Date.now()}${Math.random().toString(36).slice(2, 6)}`,
+          postedAt: /* @__PURE__ */ new Date(),
+          contractType: "CDI",
+          description: descriptionParts.join(" | ").slice(0, 1200),
+          sector: "Fonction publique",
+          domain: "Concours public",
+          applicationDeadline: deadlineDate || void 0,
+          keywords: title.split(/\s+/).filter((w) => w.length > 4).slice(0, 10)
+        });
+      });
+      if (found === 0 && pageNum === 1) break;
+      await delay(1500 + Math.random() * 1e3);
+    } catch (error) {
+      console.error("Concours page", pageNum, "error:", error.message);
+      if (pageNum === 1) break;
+    }
+  }
+  const seen = /* @__PURE__ */ new Set();
+  const unique = concours.filter((c) => {
+    const key = c.sourceId;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique.slice(0, 60).map((c) => ({ ...c, relevanceScore: calculateRelevance(c, userProfile) }));
+}
+async function scrapeAllSources(keywords, location = "Maroc", enabledSources = ["linkedin", "indeed", "rekrute", "dreamjob", "concours"], userProfile = null) {
+  const results = {};
   const scrapers = {
     linkedin: () => scrapeLinkedIn(keywords, location, userProfile),
     indeed: () => scrapeIndeed(keywords, location, userProfile),
     rekrute: () => scrapeRekrute(keywords, userProfile),
     welcometothejungle: () => scrapeWTTJ(keywords, location, userProfile),
-    manpower: () => scrapeManpower(keywords, location, userProfile)
+    manpower: () => scrapeManpower(keywords, location, userProfile),
+    dreamjob: () => scrapeDreamjob(keywords, location, userProfile),
+    emplois: () => scrapeEmploiMa(keywords, location, userProfile),
+    concours: () => scrapeConcoursMaroc(userProfile)
   };
   for (const source of enabledSources) {
-    if (!scrapers[source]) continue;
+    const scraper = scrapers[source];
+    if (!scraper) continue;
+    results[source] = { jobs: [], status: "pending", duration: 0 };
     const start = Date.now();
     try {
-      const jobs = await scrapers[source]();
+      const jobs = await scraper();
       results[source] = {
         jobs,
         status: jobs.length > 0 ? "success" : "partial",
@@ -2113,6 +2367,29 @@ function calculateCandidateMatch(candidateProfile, jobOffer) {
       break;
     }
   }
+  maxScore += 8;
+  const softSkills = candidateProfile.softSkills || [];
+  let softMatches = 0;
+  for (const ss of softSkills) {
+    if (ss.toLowerCase().length > 3 && jobText.includes(ss.toLowerCase())) softMatches++;
+  }
+  score += Math.min(softMatches * 2, 8);
+  maxScore += 6;
+  const languages = candidateProfile.languages || [];
+  const langAliases = ["arabe", "fran\xE7ais", "francais", "anglais", "espagnol", "allemand", "french", "english", "arabic", "spanish", "german"];
+  let langMatch = false;
+  for (const lgRaw of languages) {
+    const lg = (typeof lgRaw === "string" ? lgRaw : lgRaw.language || "").toLowerCase();
+    if (jobText.includes(lg.split(/[(\[]/)[0].trim())) {
+      langMatch = true;
+      break;
+    }
+    if (langAliases.some((w) => lg.includes(w) && jobText.includes(w))) {
+      langMatch = true;
+      break;
+    }
+  }
+  if (langMatch) score += 6;
   maxScore += 10;
   const candidateCity = (candidateProfile.location?.city || "").toLowerCase();
   const jobLocation = (jobOffer.location || "").toLowerCase();
@@ -2374,13 +2651,26 @@ var cvSchema = new mongoose10.Schema({
   mimeType: String,
   extractedText: { type: String, default: "" },
   parsedData: {
+    fullName: { type: String, default: "" },
     skills: [String],
+    softSkills: [String],
     experience: [{ title: String, company: String, period: String, description: String }],
     education: [{ degree: String, institution: String, year: String }],
     languages: [String],
+    certifications: [{ name: String, issuer: String, year: String }],
+    projects: [{ name: String, description: String, link: String }],
     email: String,
     phone: String,
-    location: String
+    location: String,
+    contact: {
+      fullName: { type: String, default: "" },
+      address: { type: String, default: "" },
+      postalCode: { type: String, default: "" },
+      linkedin: { type: String, default: "" },
+      github: { type: String, default: "" },
+      portfolio: { type: String, default: "" },
+      website: { type: String, default: "" }
+    }
   },
   analysis: {
     score: { type: Number, default: 0 },
@@ -3013,26 +3303,69 @@ var scrapingLogSchema = new mongoose13.Schema({
 }, { timestamps: true, suppressReservedKeysWarning: true });
 var ScrapingLog_default = mongoose13.model("ScrapingLog", scrapingLogSchema);
 
+// backend/models/SearchProfile.js
+import mongoose14 from "mongoose";
+var searchProfileSchema = new mongoose14.Schema({
+  userId: { type: mongoose14.Schema.Types.ObjectId, ref: "User", required: true },
+  name: { type: String, required: true },
+  sectors: [String],
+  keywords: [String],
+  excludeKeywords: [String],
+  locations: [String],
+  contractTypes: [String],
+  salaryMin: Number,
+  salaryMax: Number,
+  sourcesConfig: {
+    linkedin: { enabled: { type: Boolean, default: true }, customKeywords: [String] },
+    indeed: { enabled: { type: Boolean, default: true }, customKeywords: [String] },
+    welcometothejungle: { enabled: { type: Boolean, default: true }, customKeywords: [String] },
+    rekrute: { enabled: { type: Boolean, default: true }, customKeywords: [String] },
+    manpower: { enabled: { type: Boolean, default: true }, customKeywords: [String] },
+    dreamjob: { enabled: { type: Boolean, default: true }, customKeywords: [String] },
+    emplois: { enabled: { type: Boolean, default: true }, customKeywords: [String] },
+    concours: { enabled: { type: Boolean, default: true }, customKeywords: [String] }
+  },
+  isActive: { type: Boolean, default: true },
+  frequency: { type: String, enum: ["quotidien", "hebdomadaire", "manuel"], default: "manuel" }
+}, { timestamps: true });
+var SearchProfile_default = mongoose14.model("SearchProfile", searchProfileSchema);
+
 // backend/routes/scraping.js
 init_User();
 var router8 = express8.Router();
 router8.post("/run", protect, async (req, res) => {
   try {
-    const { keywords, location, sources } = req.body || {};
-    const [profile, user] = await Promise.all([
+    const { keywords, location, sources, searchProfileId } = req.body || {};
+    const [profile, user, cv, searchProfiles] = await Promise.all([
       UserProfile_default.findOne({ userId: req.user._id }),
-      User_default.findById(req.user._id)
+      User_default.findById(req.user._id),
+      CV_default.findOne({ userId: req.user._id, isActive: true }),
+      SearchProfile_default.find({ userId: req.user._id, isActive: true }).sort({ updatedAt: -1 })
     ]);
-    const searchKeywords = keywords || profile?.searchKeywords || profile?.domains || profile?.skills || ["d\xE9veloppeur", "ing\xE9nieur", "chef de projet"];
-    const searchLocation = location || profile?.preferredLocations?.[0] || profile?.location?.city || "Maroc";
-    const enabledSources = sources || ["linkedin", "indeed", "rekrute"];
+    const activeProfile = searchProfileId ? searchProfiles.find((p) => p._id.toString() === searchProfileId) : searchProfiles[0] || null;
+    const profileSources = activeProfile && activeProfile.sourcesConfig ? Object.entries(activeProfile.sourcesConfig).filter(([, cfg]) => cfg && cfg.enabled).map(([src]) => src) : [];
+    const enabledSources = sources || (profileSources.length > 0 ? profileSources : null) || ["linkedin", "indeed", "rekrute", "dreamjob", "concours"];
+    const activeKeywords = activeProfile?.keywords?.length ? [...activeProfile.keywords] : [];
+    if (activeProfile?.sourcesConfig) {
+      for (const cfg of Object.values(activeProfile.sourcesConfig)) {
+        if (cfg?.customKeywords?.length) activeKeywords.push(...cfg.customKeywords);
+      }
+    }
+    const searchKeywords = keywords || (activeKeywords.length > 0 ? activeKeywords : void 0) || profile?.searchKeywords || profile?.domains || profile?.skills || ["d\xE9veloppeur", "ing\xE9nieur", "chef de projet"];
+    const searchLocation = location || activeProfile?.locations?.[0] || profile?.preferredLocations?.[0] || profile?.location?.city || "Maroc";
+    const cvSkills = cv?.parsedData?.skills || [];
+    const cvEducation = cv?.parsedData?.education || [];
+    const cvExperience = cv?.parsedData?.experience || [];
+    const cvLanguages = cv?.parsedData?.languages || [];
     const userProfile = {
-      skills: profile?.skills || [],
+      skills: profile?.skills?.length ? profile.skills : cvSkills,
+      softSkills: cv?.parsedData?.softSkills || [],
       domains: profile?.domains || [],
-      searchKeywords: profile?.searchKeywords || [],
-      education: profile?.education || [],
-      experience: profile?.experience || [],
-      title: profile?.title || user?.role || ""
+      searchKeywords,
+      education: profile?.education?.length ? profile.education : cvEducation,
+      experience: profile?.experience?.length ? profile.experience : cvExperience,
+      languages: profile?.languages?.length ? profile.languages : cvLanguages,
+      title: profile?.title || cv?.parsedData?.fullName || user?.role || ""
     };
     const log = await ScrapingLog_default.create({
       userId: req.user._id,
@@ -3122,9 +3455,9 @@ var scraping_default = router8;
 import express9 from "express";
 
 // backend/models/EmailTemplate.js
-import mongoose14 from "mongoose";
-var emailTemplateSchema = new mongoose14.Schema({
-  userId: { type: mongoose14.Schema.Types.ObjectId, ref: "User" },
+import mongoose15 from "mongoose";
+var emailTemplateSchema = new mongoose15.Schema({
+  userId: { type: mongoose15.Schema.Types.ObjectId, ref: "User" },
   name: { type: String, required: true },
   subject: { type: String, required: true },
   body: { type: String, required: true },
@@ -3133,7 +3466,7 @@ var emailTemplateSchema = new mongoose14.Schema({
   category: { type: String, enum: ["Candidature", "Relance", "Remerciement", "Suivi", "Personnalis\xE9"], default: "Candidature" },
   usageCount: { type: Number, default: 0 }
 }, { timestamps: true });
-var EmailTemplate_default = mongoose14.model("EmailTemplate", emailTemplateSchema);
+var EmailTemplate_default = mongoose15.model("EmailTemplate", emailTemplateSchema);
 
 // backend/routes/emailTemplates.js
 var router9 = express9.Router();
@@ -3235,32 +3568,6 @@ var emailTemplates_default = router9;
 
 // backend/routes/searchProfiles.js
 import express10 from "express";
-
-// backend/models/SearchProfile.js
-import mongoose15 from "mongoose";
-var searchProfileSchema = new mongoose15.Schema({
-  userId: { type: mongoose15.Schema.Types.ObjectId, ref: "User", required: true },
-  name: { type: String, required: true },
-  sectors: [String],
-  keywords: [String],
-  excludeKeywords: [String],
-  locations: [String],
-  contractTypes: [String],
-  salaryMin: Number,
-  salaryMax: Number,
-  sourcesConfig: {
-    linkedin: { enabled: { type: Boolean, default: true }, customKeywords: [String] },
-    indeed: { enabled: { type: Boolean, default: true }, customKeywords: [String] },
-    welcometothejungle: { enabled: { type: Boolean, default: true }, customKeywords: [String] },
-    rekrute: { enabled: { type: Boolean, default: true }, customKeywords: [String] },
-    manpower: { enabled: { type: Boolean, default: true }, customKeywords: [String] }
-  },
-  isActive: { type: Boolean, default: true },
-  frequency: { type: String, enum: ["quotidien", "hebdomadaire", "manuel"], default: "manuel" }
-}, { timestamps: true });
-var SearchProfile_default = mongoose15.model("SearchProfile", searchProfileSchema);
-
-// backend/routes/searchProfiles.js
 var router10 = express10.Router();
 router10.get("/", protect, async (req, res) => {
   try {
@@ -3443,7 +3750,7 @@ function analyzeCV(text, parsedData) {
   } else {
     improvements.push("Localisation absente \u2014 le recruteur doit savoir votre ville");
   }
-  const hasLinkedIn = textLower.includes("linkedin.com");
+  const hasLinkedIn = textLower.includes("linkedin.com") || !!parsedData.contact?.linkedin;
   if (hasLinkedIn) {
     coordScore += 2;
     strengths.push("Profil LinkedIn r\xE9f\xE9renc\xE9 \u2014 signe de professionnalisme");
@@ -3472,6 +3779,14 @@ function analyzeCV(text, parsedData) {
   } else {
     improvements.push("Aucune comp\xE9tence technique identifi\xE9e \u2014 c'est le point N\xB01 que les recruteurs scrutent");
     suggestions.push('Cr\xE9ez une section "Comp\xE9tences" claire avec les technologies ma\xEEtris\xE9es');
+  }
+  const softSkills = parsedData.softSkills || [];
+  if (softSkills.length > 0) {
+    const ssScore = Math.min(8, 3 + softSkills.length);
+    score += ssScore;
+    strengths.push(`${softSkills.length} soft skill(s) identifi\xE9e(s) : ${softSkills.slice(0, 4).join(", ")}`);
+  } else {
+    suggestions.push('Ajoutez une section "Soft Skills" (travail en \xE9quipe, communication, gestion du temps...)');
   }
   if (parsedData.experience.length > 0) {
     const expScore = Math.min(20, parsedData.experience.length * 6);
@@ -3503,6 +3818,20 @@ function analyzeCV(text, parsedData) {
   } else {
     improvements.push("Formation non d\xE9tect\xE9e \u2014 ajoutez dipl\xF4mes et certifications");
     suggestions.push("Placez la section Formation apr\xE8s Exp\xE9rience (sauf profil junior)");
+  }
+  const certifications = parsedData.certifications || [];
+  if (certifications.length > 0) {
+    score += 6;
+    strengths.push(`${certifications.length} certification(s) d\xE9tect\xE9e(s) : ${certifications.slice(0, 3).map((c) => c.name).join(", ")}`);
+  } else {
+    suggestions.push("Ajoutez vos certifications (AWS, PMP, TOEIC, AGILE...) \u2014 elles renforcent la cr\xE9dibilit\xE9 technique");
+  }
+  const projects = parsedData.projects || [];
+  if (projects.length > 0) {
+    score += 4;
+    strengths.push(`${projects.length} projet(s) document\xE9(s) \u2014 bonne preuve de mise en pratique`);
+  } else {
+    suggestions.push("Ajoutez vos projets personnels ou acad\xE9miques avec un lien (GitHub, portfolio...)");
   }
   if (parsedData.languages.length >= 3) {
     score += 5;
@@ -3588,6 +3917,7 @@ function generateCandidateSummary(text, parsedData, userProfile) {
   const educations = (parsedData.education || []).filter((e) => e.degree && e.degree.length > 3);
   const firstEdu = educations[0] || null;
   const skills = (parsedData.skills || []).filter((s) => s.length > 1 && s.length < 50);
+  const softSkills = (parsedData.softSkills || []).filter((s) => s.length > 1 && s.length < 50);
   const languages = (parsedData.languages || []).filter((l) => l.length > 1 && l.length < 40);
   let profileType = "unknown";
   if (stages.length > 0 && nonStages.length === 0) profileType = "student_intern";
@@ -3696,6 +4026,9 @@ function generateCandidateSummary(text, parsedData, userProfile) {
   }
   if (languages.length > 0) {
     parts.push(`Il/elle parle ${languages.slice(0, 5).join(", ")}`);
+  }
+  if (softSkills.length > 0) {
+    parts.push(`Ses soft skills incluent ${softSkills.slice(0, 6).join(", ")}`);
   }
   if (parts.length === 0) return "Resume non disponible.";
   return parts.join(". ").replace(/\.\./g, ".") + ".";
@@ -3825,115 +4158,199 @@ function splitConcatenatedHeaders(text) {
 function normalizeText2(text) {
   return text.replace(/\r/g, "").replace(/'/g, "'").replace(/'/g, "'").replace(/"/g, '"').replace(/"/g, '"');
 }
-function parseCVData(text) {
-  const normalized = normalizeText2(splitConcatenatedHeaders(text));
-  const textLower = normalized.toLowerCase();
-  const emailMatch = normalized.match(/[\w.+-]+@[\w.-]+\.\w{2,}/);
-  const phoneMatch = normalized.match(/(\+212|0)[\s.-]?[67]\d[\s.-]?\d{2}[\s.-]?\d{2}[\s.-]?\d{2}/);
-  const locationMatch = normalized.match(/(?:Casablanca|Rabat|Marrakech|Tanger|Fès|Meknès|Agadir|Oujda|Kénitra|Tétouan|Nador|Safi|Mohammedia)/i);
-  const lines = normalized.split("\n").map((l) => l.trim()).filter(Boolean);
-  const HEADER_RE = /^(?:CONTACT|EXPERIENCES?\s+PROFESSIONELLES?|ETUDE\s+ET\s+FORMATION|FORMATION|EDUCATION|ETUDES|PARCOURS\s+ACADEMIQUE|COMPETENCES?|COMPÉTENCES?|TECHNOLOGIES|STACK\s+TECHNIQUE|LANGUES?|CERTIFICATIONS?|PROJETS?\s*(?:ACADEMIQUE)?|SOFT\s+SKILLS|QUALITÉS?|COORDONNEES|LOISIRS|INTERETS|CENTRES\s+D)/i;
-  const skills = [];
-  const knownSkills = [
-    "JavaScript",
-    "TypeScript",
-    "Python",
-    "Java",
-    "PHP",
-    "C#",
-    ".NET",
-    "Ruby",
-    "Go",
-    "Rust",
-    "React",
-    "ReactJS",
-    "React JS",
-    "Angular",
-    "Vue.js",
-    "Vue",
-    "Node.js",
-    "Express.js",
-    "Django",
-    "Flask",
-    "Laravel",
-    "Spring Boot",
-    "Spring",
-    "FastAPI",
-    "Next.js",
-    "NextJS",
-    "Nuxt.js",
-    "HTML",
-    "CSS",
-    "Tailwind CSS",
-    "Tailwind",
-    "SASS",
-    "Bootstrap",
-    "Material UI",
-    "PostgreSQL",
-    "MySQL",
-    "MongoDB",
-    "Redis",
-    "SQLite",
-    "Oracle",
-    "SQL Server",
-    "Docker",
-    "Kubernetes",
-    "AWS",
-    "Azure",
-    "GCP",
-    "Git",
-    "GitHub",
-    "GitLab",
-    "Linux",
-    "Nginx",
-    "Apache",
-    "Jenkins",
-    "CI/CD",
-    "Terraform",
-    "REST API",
-    "GraphQL",
-    "Microservices",
-    "Figma",
-    "Photoshop",
-    "Illustrator",
-    "Adobe XD",
-    "Excel",
-    "Word",
-    "PowerPoint",
-    "SAP",
-    "Agile",
-    "Scrum",
-    "Jira",
-    "Trello",
-    "UML",
-    "Machine Learning",
-    "TensorFlow",
-    "PyTorch",
-    "LLM",
-    "Ollama",
-    "Flutter",
-    "React Native",
-    "Swift",
-    "Kotlin",
-    "Firebase",
-    "Supabase",
-    "Stripe",
-    "Thymeleaf",
-    "IntelliJ",
-    "VS Code",
-    "C/C++",
-    "OOP"
-  ];
-  for (const skill of knownSkills) {
-    if (textLower.includes(skill.toLowerCase())) {
-      skills.push(skill);
+var KNOWN_SOFT_SKILLS = [
+  "Leadership",
+  "Management d'\xE9quipe",
+  "Management",
+  "Communication",
+  "Travail en \xE9quipe",
+  "Esprit d'\xE9quipe",
+  "Collaboration",
+  "Gestion de projet",
+  "R\xE9solution de probl\xE8mes",
+  "Problem solving",
+  "Cr\xE9ativit\xE9",
+  "Adaptabilit\xE9",
+  "Flexibilit\xE9",
+  "Autonomie",
+  "Rigueur",
+  "Organisation",
+  "Prise de d\xE9cision",
+  "N\xE9gociation",
+  "Gestion du temps",
+  "Ponctualit\xE9",
+  "Sens du d\xE9tail",
+  "Sens de l'analyse",
+  "Esprit critique",
+  "Curiosit\xE9",
+  "Proactivit\xE9",
+  "Initiative",
+  "Pers\xE9v\xE9rance",
+  "Patience",
+  "Empathie",
+  "Relationnel",
+  "Sens du service",
+  "Polyvalence",
+  "R\xE9activit\xE9",
+  "Fiabilit\xE9",
+  "Int\xE9grit\xE9",
+  "\xC9thique",
+  "Motivation",
+  "P\xE9dagogie",
+  "Esprit de synth\xE8se",
+  "Esprit d'initiative",
+  "Sens des responsabilit\xE9s",
+  "\xC9coute active",
+  "Confiance en soi",
+  "Gestion du stress",
+  "Esprit entrepreneurial",
+  "Vision strat\xE9gique"
+];
+var KNOWN_CERTIFICATIONS = [
+  "CISSP",
+  "PMP",
+  "CSPO",
+  "CSM",
+  "CFA",
+  "CISM",
+  "CISA",
+  "CCNA",
+  "CCNP",
+  "AWS Certified",
+  "Microsoft Certified",
+  "Google Cloud",
+  "Oracle Certified",
+  "TOEIC",
+  "TOEFL",
+  "IELTS",
+  "DELF",
+  "DALF",
+  "RHCSA",
+  "CEH",
+  "OSCP",
+  "AZ-900",
+  "PSM I",
+  "PSM II",
+  "AgilePM",
+  "PRINCE2",
+  "ITIL",
+  "LPIC",
+  "CompTIA"
+];
+var SECTION_DEFS = [
+  { regex: /^(?:INFORMATIONS?\s+PERSONNELLES?|COORDONNEES|CONTACT)/i, section: "contact" },
+  { regex: /^(?:FORMATION|FORMATIONS|EDUCATION|ETUDES|PARCOURS\s+ACADEMIQUE|DIPLOMES?|ETUDE\s+ET\s+FORMATION)/i, section: "education" },
+  { regex: /^(?:EXPERIENCES?\s+PROFESSIONNELLES?|PARCOURS\s+PROFESSIONNEL|EXPERIENCES?|EMPLOIS?\s+OCCUPES?|PARCOURS|HISTORIQUE\s+PROFESSIONNEL)/i, section: "experience" },
+  { regex: /^(?:COMPETENCES?\s+COMPORTEMENTALES|SOFT\s+SKILLS|QUALITES?|SAVOIR[-\s]?(?:ETRE|ÊTRE)|APTITUDES?\s*PERSONNELLES?|ATOUTS?)/i, section: "softskills" },
+  { regex: /^(?:COMPETENCES?\s+TECHNIQUES|COMPETENCES?|COMPÉTENCES?|TECHNOLOGIES|STACK\s+TECHNIQUE|HARD\s+SKILLS|OUTILS?\s+TECHNIQUES?)/i, section: "skills" },
+  { regex: /^LANGUES?$/i, section: "languages" },
+  { regex: /^(?:CERTIFICATIONS?|CERTIFICATS?)\s*(?:PROFESSIONNELLES?)?/i, section: "certifications" },
+  { regex: /^(?:PROJETS?(?:\s+ACADEMIQUE)?|REALISATIONS?\s+DE\s+PROJET|PROJETS?\s+REALISES|PROJETS?\s+PERSONNELS?)/i, section: "projects" },
+  { regex: /^(?:LOISIRS|INTERETS?|CENTRES?\s+D['’]?INTERETS?|ACTIVITES?\s+EXTRASCOLAIRES?)/i, section: "other" }
+];
+function isSectionHeader(line) {
+  return SECTION_DEFS.some((def) => def.regex.test(line));
+}
+var HEADER_EDU_RE = /^(?:ETUDE\s+ET\s+FORMATION|FORMATION|EDUCATION|ETUDES|PARCOURS\s+ACADEMIQUE)/i;
+var KNOWN_MOROCCAN_CITIES = [
+  "Casablanca",
+  "Rabat",
+  "Marrakech",
+  "Tanger",
+  "F\xE8s",
+  "Fes",
+  "Mekn\xE8s",
+  "Meknes",
+  "Agadir",
+  "Oujda",
+  "K\xE9nitra",
+  "K\xE9nitra",
+  "T\xE9touan",
+  "Tetouan",
+  "Nador",
+  "Safi",
+  "Mohammedia",
+  "El Jadida",
+  "B\xE9ni Mellal",
+  "Beni Mellal",
+  "Errachidia",
+  "Larache",
+  "Settat",
+  "Khouribga",
+  "Ouarzazate",
+  "Al Hoceima",
+  "Essaouira",
+  "Taza",
+  "Guelmim",
+  "Dakhla",
+  "La\xE2youne",
+  "Laayoune",
+  "Berrechid",
+  "Sal\xE9",
+  "Temara",
+  "Youssoufia",
+  "Sidi Kacem",
+  "Taounate",
+  "Chefchaouen"
+];
+function splitIntoSections(lines) {
+  const sections = {};
+  let current = "header";
+  sections.header = [];
+  for (const line of lines) {
+    let matched = null;
+    for (const def of SECTION_DEFS) {
+      if (def.regex.test(line)) {
+        matched = def.section;
+        break;
+      }
     }
+    if (matched) {
+      current = matched;
+      if (!sections[current]) sections[current] = [];
+      continue;
+    }
+    if (!sections[current]) sections[current] = [];
+    sections[current].push(line);
   }
-  const dedupSkills = [...new Set(skills)];
+  return sections;
+}
+function extractProfileLinks(text) {
+  const links = { linkedin: "", github: "", portfolio: "", website: "" };
+  if (!text) return links;
+  const li = text.match(/https?:\/\/(?:[\w-]+\.)*linkedin\.com\/[^\s,;"'<>)]+/i);
+  if (li) links.linkedin = li[0].replace(/[,.;]+$/, "");
+  const gh = text.match(/https?:\/\/(?:[\w-]+\.)*github\.com\/[^\s,;"'<>)]+/i);
+  if (gh) links.github = gh[0].replace(/[,.;]+$/, "");
+  const portMatch = text.match(/https?:\/\/(?:www\.)?(?:portfolio|behance|dribbble|artstation|deviantart|profile|tableau|creuns|bravo|notion|drive|linktree|tumblr|medium|gitlab|bitbucket|stackoverflow|overleaf|wordpress)\.[a-z.]+\/?[^\s,;"'<>)]*/i);
+  if (portMatch) links.portfolio = portMatch[0].replace(/[,.;]+$/, "");
+  const stripped = text.replace(/https?:\/\/(?:[\w-]+\.)*(?:linkedin|github|facebook|twitter|instagram|tiktok|youtube|x)\.[a-z.]+/gi, " ");
+  const web = stripped.match(/https?:\/\/(?:[\w-]+\.)+[a-z]{2,}(?:\/[^\s,;"'<>)]*)?/i);
+  if (web) links.website = web[0].replace(/[,.;]+$/, "");
+  return links;
+}
+var NAME_STOP_RE = /\b(?:stagiaire|developpeur|dev(?:eloper)?|ingenieur|engineer|analyste|consultant|chef|manager|responsable|designer|architect|directeur|technicien|assistant|charge|lead|junior|senior|professeur|enseignant|etudiant|recruteur|commercial|comptable|mobile|web|front[-\s]?end|back[-\s]?end|full[--\s]?stack)\b/i;
+function detectFullName(headerBlock) {
+  if (!headerBlock || !headerBlock.length) return "";
+  for (const line of headerBlock) {
+    if (line.length < 3 || line.length > 70) continue;
+    if (/[\d@_=/<>"{}\[\]()]/.test(line)) continue;
+    if (/^(?:cv|releve|lettre|profil|resume|tel|phone|email|adresse|address|nom|name)/i.test(line)) continue;
+    if (NAME_STOP_RE.test(line)) continue;
+    const words = line.split(/\s+/).filter(Boolean);
+    if (words.length < 2 || words.length > 5) continue;
+    const allWords = words.every((w) => /^[A-Za-zÀ-üÉéèêëÈÊËîïôöûüç'’.\-]+$/.test(w));
+    if (!allWords) continue;
+    const caps = words.filter((w) => /^[A-ZÀ-ÜÉÈ][a-zéèêàâîïôùûüç'’.-]+$/u.test(w));
+    if (caps.length >= Math.min(2, words.length)) return line.substring(0, 70);
+  }
+  return "";
+}
+function parseExperience(bodyLines) {
   const experience = [];
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (HEADER_RE.test(line)) continue;
+  for (let i = 0; i < bodyLines.length; i++) {
+    const line = bodyLines[i];
+    if (isSectionHeader(line)) continue;
     const titleMatch = line.match(/^(.+?)\s*[-–—|]\s*(.+)$/);
     if (!titleMatch) continue;
     const leftSide = titleMatch[1].trim();
@@ -3949,16 +4366,16 @@ function parseCVData(text) {
     const title = leftSide;
     let company = rightSide.replace(/\|.*$/, "").replace(/\s*\d{4}.*$/, "").trim();
     let period = "";
-    const nextLine = i + 1 < lines.length ? lines[i + 1] : "";
+    const nextLine = i + 1 < bodyLines.length ? bodyLines[i + 1] : "";
     const periodFromNext = nextLine.match(/((?:Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre|Jan|Févr|Mar|Avr|Jun|Jul|Aout|Sept|Oct|Nov|Déc)\w*\s+\d{4}\s*[-–]\s*(?:(?:Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre|Jan|Févr|Mar|Avr|Jun|Jul|Aout|Sept|Oct|Nov|Déc)\w*\s+)?\d{4})/i);
     const periodFromLine = line.match(/((?:Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre|Jan|Févr|Mar|Avr|Jun|Jul|Aout|Sept|Oct|Nov|Déc)\w*\s+\d{4}\s*[-–]\s*(?:(?:Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre|Jan|Févr|Mar|Avr|Jun|Jul|Aout|Sept|Oct|Nov|Déc)\w*\s+)?\d{4})/i);
-    period = periodFromNext && !HEADER_RE.test(nextLine) ? periodFromNext[0] : periodFromLine ? periodFromLine[0] : "";
-    let descriptionLines = [];
-    for (let j = i + 2; j < Math.min(i + 12, lines.length); j++) {
-      const dl = lines[j];
+    period = periodFromNext && !isSectionHeader(nextLine) ? periodFromNext[0] : periodFromLine ? periodFromLine[0] : "";
+    const descriptionLines = [];
+    for (let j = i + 2; j < Math.min(i + 12, bodyLines.length); j++) {
+      const dl = bodyLines[j];
       if (EXP_TITLE_RE.test(dl) && dl.includes("-")) break;
       if (/^\d{4}\s*[-–]/.test(dl)) break;
-      if (HEADER_RE.test(dl)) break;
+      if (isSectionHeader(dl)) break;
       if (/^(?:Tâches?|Projet|Sujet)\s*:/i.test(dl)) continue;
       if (dl === "Stack :" || dl.startsWith("Stack")) {
         const stackLine = dl.replace(/^Stack\s*:\s*/i, "");
@@ -3976,19 +4393,21 @@ function parseCVData(text) {
       isStage
     });
   }
+  return experience;
+}
+function parseEducation(bodyLines) {
   const education = [];
-  const HEADER_EDU_RE = /^(?:ETUDE\s+ET\s+FORMATION|FORMATION|EDUCATION|ETUDES|PARCOURS\s+ACADEMIQUE)/i;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  for (let i = 0; i < bodyLines.length; i++) {
+    const line = bodyLines[i];
     if (!/^\d{4}\s*[-–]\s*\d{4}/.test(line)) continue;
-    if (HEADER_EDU_RE.test(line)) continue;
+    if (isSectionHeader(line) || HEADER_EDU_RE.test(line)) continue;
     const yearMatch = line.match(/(\d{4}\s*[-–]\s*\d{4})/);
     const year = yearMatch ? yearMatch[0] : "";
     let fullText = line.replace(/^\d{4}\s*[-–]\s*\d{4}\s*[:\-]?\s*/, "").trim();
-    for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
-      const next = lines[j];
+    for (let j = i + 1; j < Math.min(i + 5, bodyLines.length); j++) {
+      const next = bodyLines[j];
       if (/^\d{4}\s*[-–]\s*\d{4}/.test(next)) break;
-      if (HEADER_RE.test(next)) break;
+      if (isSectionHeader(next)) break;
       if (EXP_TITLE_RE.test(next) && next.includes("-")) break;
       if (/(?:Arabe|Français|Anglais|Espagnol|Allemand)\s*:/i.test(next)) break;
       if (next.length > 3) fullText += " " + next;
@@ -4018,6 +4437,199 @@ function parseCVData(text) {
       });
     }
   }
+  return education;
+}
+function parseCertifications(lines, textLower) {
+  const certs = [];
+  for (const line of lines) {
+    if (!line || line.length > 150) continue;
+    const parts = line.split(/\s*\|\s*/).map((p) => p.trim()).filter(Boolean);
+    const yearMatch = (parts.find((p) => /^\d{4}$/.test(p)) || line).match(/(\d{4})/);
+    let name = (parts[0] || "").replace(/[\[\]()]/g, "").replace(/\s*[-–,:]\s*\d{4}(?:\s*[-–|,:].*)?$/, "").trim();
+    name = name.replace(/\s{2,}/g, " ").trim();
+    let issuer = "";
+    for (let k = 1; k < parts.length; k++) {
+      if (/^\d{4}$/.test(parts[k])) continue;
+      if (!issuer && parts[k].length >= 3) issuer = parts[k];
+    }
+    if (name.length >= 3 && /^[A-Za-zÀ-ü0-9+\-# .\-’']+$/.test(name)) {
+      certs.push({ name: name.substring(0, 120), issuer: issuer.substring(0, 80), year: yearMatch ? yearMatch[1] : "" });
+    }
+  }
+  for (const c of KNOWN_CERTIFICATIONS) {
+    if (textLower.includes(c.toLowerCase()) && !certs.some((x) => x.name.toLowerCase().includes(c.toLowerCase()))) {
+      certs.push({ name: c, issuer: "", year: "" });
+    }
+  }
+  return certs.slice(0, 15);
+}
+function parseProjects(lines) {
+  const projects = [];
+  for (const line of lines) {
+    if (!line) continue;
+    const linkMatch = line.match(/https?:\/\/[^\s,;"'<>)]+/i);
+    const sep = line.match(/^(.+?)\s*(?:\|\s*|:\s+|\s[-–]\s)\s*(.+)$/);
+    let name = "";
+    let description = "";
+    if (sep) {
+      name = sep[1].trim();
+      description = sep[2].split(/\s*\|\s*/)[0].trim();
+    } else if (!linkMatch) {
+      name = line;
+    }
+    if (name.length > 2 && name.length <= 140 && !/^\d+$/.test(name)) {
+      projects.push({
+        name: name.substring(0, 140),
+        description: (description || "").replace(linkMatch ? linkMatch[0] : "", "").replace(/\s{2,}/g, " ").trim().substring(0, 300),
+        link: linkMatch ? linkMatch[0] : ""
+      });
+    }
+  }
+  return projects.slice(0, 12);
+}
+var KNOWN_CV_SKILLS = [
+  "JavaScript",
+  "TypeScript",
+  "Python",
+  "Java",
+  "PHP",
+  "C#",
+  ".NET",
+  "Ruby",
+  "Go",
+  "Rust",
+  "React",
+  "ReactJS",
+  "React JS",
+  "Angular",
+  "Vue.js",
+  "Vue",
+  "Node.js",
+  "Express.js",
+  "Django",
+  "Flask",
+  "Laravel",
+  "Spring Boot",
+  "Spring",
+  "FastAPI",
+  "Next.js",
+  "NextJS",
+  "Nuxt.js",
+  "HTML",
+  "CSS",
+  "Tailwind CSS",
+  "Tailwind",
+  "SASS",
+  "Bootstrap",
+  "Material UI",
+  "PostgreSQL",
+  "MySQL",
+  "MongoDB",
+  "Redis",
+  "SQLite",
+  "Oracle",
+  "SQL Server",
+  "Docker",
+  "Kubernetes",
+  "AWS",
+  "Azure",
+  "GCP",
+  "Git",
+  "GitHub",
+  "GitLab",
+  "Linux",
+  "Nginx",
+  "Apache",
+  "Jenkins",
+  "CI/CD",
+  "Terraform",
+  "REST API",
+  "GraphQL",
+  "Microservices",
+  "Figma",
+  "Photoshop",
+  "Illustrator",
+  "Adobe XD",
+  "Excel",
+  "Word",
+  "PowerPoint",
+  "SAP",
+  "Agile",
+  "Scrum",
+  "Jira",
+  "Trello",
+  "UML",
+  "Machine Learning",
+  "TensorFlow",
+  "PyTorch",
+  "LLM",
+  "Ollama",
+  "Flutter",
+  "React Native",
+  "Swift",
+  "Kotlin",
+  "Firebase",
+  "Supabase",
+  "Stripe",
+  "Thymeleaf",
+  "IntelliJ",
+  "VS Code",
+  "C/C++",
+  "OOP"
+];
+function textContainsSkill(text, skill) {
+  const s = skill.toLowerCase();
+  if (!text.includes(s)) return false;
+  if (s.length >= 5) return true;
+  const escaped = s.replace(/[.*+?^${}()|[\]\\+#]/g, "\\$&");
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i").test(text);
+}
+function parseCVData(text) {
+  const normalized = normalizeText2(splitConcatenatedHeaders(text));
+  const textLower = normalized.toLowerCase();
+  const lines = normalized.split("\n").map((l) => l.trim()).filter(Boolean);
+  const sections = splitIntoSections(lines);
+  const headerBlock = [...sections.header || [], ...sections.contact || []];
+  const contactBlock = headerBlock.join(" ") + " " + normalized;
+  const emailMatch = normalized.match(/[\w.+-]+@[\w.-]+\.\w{2,}/);
+  const phoneMatch = normalized.match(/(?:\+?212|00212|\+33|0)[\s.-]?(?:\()?(?:6|7|5|1|2|3|4)(?:\))?[\s.-]?\d{2}[\s.-]?\d{2}[\s.-]?\d{2}/);
+  const cityMatch = normalized.match(new RegExp(KNOWN_MOROCCAN_CITIES.join("|"), "i"));
+  const postalMatch = contactBlock.match(/\b\d{2}\s?[0-9]{3}\b/);
+  const addressMatch = contactBlock.match(/(?:Adresse\s*|Address\s*:)\s*([^\n,;]+)/i);
+  const links = extractProfileLinks(contactBlock);
+  const fullName = detectFullName(sections.header || []);
+  const location = cityMatch ? cityMatch[0] : addressMatch ? addressMatch[1].trim().substring(0, 80) : "";
+  const address = addressMatch ? addressMatch[1].trim().substring(0, 120) : "";
+  const skills = [];
+  if (sections.skills && sections.skills.length) {
+    const sectionText = sections.skills.join("\n").toLowerCase();
+    for (const skill of KNOWN_CV_SKILLS) {
+      if (textContainsSkill(sectionText, skill)) skills.push(skill);
+    }
+  }
+  if (skills.length < 2) {
+    for (const skill of KNOWN_CV_SKILLS) {
+      if (textContainsSkill(textLower, skill)) skills.push(skill);
+    }
+  }
+  const dedupSkills = [...new Set(skills)];
+  const softSkills = [];
+  if (sections.softskills && sections.softskills.length) {
+    const sectionText = (sections.softskills || []).join(" ").toLowerCase();
+    for (const ss of KNOWN_SOFT_SKILLS) {
+      if (sectionText.includes(ss.toLowerCase())) softSkills.push(ss);
+    }
+  }
+  if (softSkills.length < 2) {
+    for (const ss of KNOWN_SOFT_SKILLS) {
+      if (textLower.includes(ss.toLowerCase())) softSkills.push(ss);
+    }
+  }
+  const dedupSoftSkills = [...new Set(softSkills)];
+  const expLines = sections.experience && sections.experience.length ? sections.experience : lines;
+  const experience = parseExperience(expLines);
+  const eduLines = sections.education && sections.education.length ? sections.education : lines;
+  const education = parseEducation(eduLines);
   const languages = [];
   const knownLangs = ["Arabe", "Fran\xE7ais", "Anglais", "Espagnol", "Allemand", "Chinois", "Italien", "Portugais", "Turc", "Russe"];
   const langLevels = ["Langue maternelle", "Bilingue", "Courant", "Avanc\xE9", "Interm\xE9diaire", "Op\xE9rationnel", "Notions"];
@@ -4025,23 +4637,36 @@ function parseCVData(text) {
     if (!textLower.includes(lang.toLowerCase())) continue;
     let level = "";
     for (const lv of langLevels) {
-      if (normalized.toLowerCase().includes(lang.toLowerCase() + " : " + lv.toLowerCase()) || normalized.toLowerCase().includes(lang.toLowerCase() + ":" + lv.toLowerCase())) {
+      if (normalized.includes(lang + " : " + lv) || normalized.includes(lang + ":" + lv)) {
         level = lv;
         break;
       }
     }
     languages.push(level ? `${lang} (${level})` : lang);
   }
+  const certifications = parseCertifications(sections.certifications || [], textLower);
+  const projects = parseProjects(sections.projects || []);
   return {
+    fullName,
     skills: dedupSkills,
+    softSkills: dedupSoftSkills,
     experience,
     education,
     languages,
-    certifications: [],
-    projects: [],
+    certifications,
+    projects,
     email: emailMatch?.[0] || "",
     phone: phoneMatch?.[0] || "",
-    location: locationMatch?.[0] || ""
+    location,
+    contact: {
+      fullName,
+      address,
+      postalCode: postalMatch ? postalMatch[0].replace(/\s+/g, "") : "",
+      linkedin: links.linkedin,
+      github: links.github,
+      portfolio: links.portfolio,
+      website: links.website
+    }
   };
 }
 router12.get("/", protect, async (req, res) => {

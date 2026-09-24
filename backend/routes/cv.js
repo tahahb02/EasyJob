@@ -33,7 +33,7 @@ function analyzeCV(text, parsedData) {
   } else {
     improvements.push('Localisation absente — le recruteur doit savoir votre ville')
   }
-  const hasLinkedIn = textLower.includes('linkedin.com')
+  const hasLinkedIn = textLower.includes('linkedin.com') || !!parsedData.contact?.linkedin
   if (hasLinkedIn) {
     coordScore += 2
     strengths.push('Profil LinkedIn référencé — signe de professionnalisme')
@@ -65,6 +65,16 @@ function analyzeCV(text, parsedData) {
   } else {
     improvements.push('Aucune compétence technique identifiée — c\'est le point N°1 que les recruteurs scrutent')
     suggestions.push('Créez une section "Compétences" claire avec les technologies maîtrisées')
+  }
+
+  // === 2b. SOFT SKILLS (8 pts) ===
+  const softSkills = parsedData.softSkills || []
+  if (softSkills.length > 0) {
+    const ssScore = Math.min(8, 3 + softSkills.length)
+    score += ssScore
+    strengths.push(`${softSkills.length} soft skill(s) identifiée(s) : ${softSkills.slice(0, 4).join(', ')}`)
+  } else {
+    suggestions.push('Ajoutez une section "Soft Skills" (travail en équipe, communication, gestion du temps...)')
   }
 
   // === 3. EXPÉRIENCE PROFESSIONNELLE (25 pts) ===
@@ -101,6 +111,24 @@ function analyzeCV(text, parsedData) {
   } else {
     improvements.push('Formation non détectée — ajoutez diplômes et certifications')
     suggestions.push('Placez la section Formation après Expérience (sauf profil junior)')
+  }
+
+  // === 4b. CERTIFICATIONS (6 pts) ===
+  const certifications = parsedData.certifications || []
+  if (certifications.length > 0) {
+    score += 6
+    strengths.push(`${certifications.length} certification(s) détectée(s) : ${certifications.slice(0, 3).map(c => c.name).join(', ')}`)
+  } else {
+    suggestions.push('Ajoutez vos certifications (AWS, PMP, TOEIC, AGILE...) — elles renforcent la crédibilité technique')
+  }
+
+  // === 4c. PROJETS (4 pts) ===
+  const projects = parsedData.projects || []
+  if (projects.length > 0) {
+    score += 4
+    strengths.push(`${projects.length} projet(s) documenté(s) — bonne preuve de mise en pratique`)
+  } else {
+    suggestions.push('Ajoutez vos projets personnels ou académiques avec un lien (GitHub, portfolio...)')
   }
 
   // === 5. LANGUES (5 pts) ===
@@ -206,6 +234,7 @@ function generateCandidateSummary(text, parsedData, userProfile) {
   const educations = (parsedData.education || []).filter(e => e.degree && e.degree.length > 3)
   const firstEdu = educations[0] || null
   const skills = (parsedData.skills || []).filter(s => s.length > 1 && s.length < 50)
+  const softSkills = (parsedData.softSkills || []).filter(s => s.length > 1 && s.length < 50)
   const languages = (parsedData.languages || []).filter(l => l.length > 1 && l.length < 40)
 
   let profileType = 'unknown'
@@ -326,6 +355,10 @@ function generateCandidateSummary(text, parsedData, userProfile) {
     parts.push(`Il/elle parle ${languages.slice(0, 5).join(', ')}`)
   }
 
+  if (softSkills.length > 0) {
+    parts.push(`Ses soft skills incluent ${softSkills.slice(0, 6).join(', ')}`)
+  }
+
   if (parts.length === 0) return 'Resume non disponible.'
   return parts.join('. ').replace(/\.\./g, '.') + '.'
 }
@@ -405,49 +438,123 @@ function normalizeText(text) {
     .replace(/"/g, '"')
 }
 
-function parseCVData(text) {
-  const normalized = normalizeText(splitConcatenatedHeaders(text))
-  const textLower = normalized.toLowerCase()
+const KNOWN_SOFT_SKILLS = [
+  'Leadership', "Management d'équipe", 'Management', 'Communication',
+  'Travail en équipe', "Esprit d'équipe", 'Collaboration',
+  'Gestion de projet', 'Résolution de problèmes', 'Problem solving',
+  'Créativité', 'Adaptabilité', 'Flexibilité', 'Autonomie',
+  'Rigueur', 'Organisation', 'Prise de décision', 'Négociation',
+  'Gestion du temps', 'Ponctualité', 'Sens du détail', 'Sens de l\'analyse',
+  'Esprit critique', 'Curiosité', 'Proactivité', 'Initiative',
+  'Persévérance', 'Patience', 'Empathie', 'Relationnel', 'Sens du service',
+  'Polyvalence', 'Réactivité', 'Fiabilité', 'Intégrité', 'Éthique',
+  'Motivation', 'Pédagogie', 'Esprit de synthèse', 'Esprit d\'initiative',
+  'Sens des responsabilités', 'Écoute active', 'Confiance en soi',
+  'Gestion du stress', 'Esprit entrepreneurial', 'Vision stratégique',
+]
 
-  const emailMatch = normalized.match(/[\w.+-]+@[\w.-]+\.\w{2,}/)
-  const phoneMatch = normalized.match(/(\+212|0)[\s.-]?[67]\d[\s.-]?\d{2}[\s.-]?\d{2}[\s.-]?\d{2}/)
-  const locationMatch = normalized.match(/(?:Casablanca|Rabat|Marrakech|Tanger|Fès|Meknès|Agadir|Oujda|Kénitra|Tétouan|Nador|Safi|Mohammedia)/i)
+const KNOWN_CERTIFICATIONS = [
+  'CISSP', 'PMP', 'CSPO', 'CSM', 'CFA', 'CISM', 'CISA', 'CCNA', 'CCNP',
+  'AWS Certified', 'Microsoft Certified', 'Google Cloud', 'Oracle Certified',
+  'TOEIC', 'TOEFL', 'IELTS', 'DELF', 'DALF', 'RHCSA', 'CEH', 'OSCP', 'AZ-900',
+  'PSM I', 'PSM II', 'AgilePM', 'PRINCE2', 'ITIL', 'LPIC', 'CompTIA',
+]
 
-  const lines = normalized.split('\n').map(l => l.trim()).filter(Boolean)
+const SECTION_DEFS = [
+  { regex: /^(?:INFORMATIONS?\s+PERSONNELLES?|COORDONNEES|CONTACT)/i, section: 'contact' },
+  { regex: /^(?:FORMATION|FORMATIONS|EDUCATION|ETUDES|PARCOURS\s+ACADEMIQUE|DIPLOMES?|ETUDE\s+ET\s+FORMATION)/i, section: 'education' },
+  { regex: /^(?:EXPERIENCES?\s+PROFESSIONNELLES?|PARCOURS\s+PROFESSIONNEL|EXPERIENCES?|EMPLOIS?\s+OCCUPES?|PARCOURS|HISTORIQUE\s+PROFESSIONNEL)/i, section: 'experience' },
+  { regex: /^(?:COMPETENCES?\s+COMPORTEMENTALES|SOFT\s+SKILLS|QUALITES?|SAVOIR[-\s]?(?:ETRE|ÊTRE)|APTITUDES?\s*PERSONNELLES?|ATOUTS?)/i, section: 'softskills' },
+  { regex: /^(?:COMPETENCES?\s+TECHNIQUES|COMPETENCES?|COMPÉTENCES?|TECHNOLOGIES|STACK\s+TECHNIQUE|HARD\s+SKILLS|OUTILS?\s+TECHNIQUES?)/i, section: 'skills' },
+  { regex: /^LANGUES?$/i, section: 'languages' },
+  { regex: /^(?:CERTIFICATIONS?|CERTIFICATS?)\s*(?:PROFESSIONNELLES?)?/i, section: 'certifications' },
+  { regex: /^(?:PROJETS?(?:\s+ACADEMIQUE)?|REALISATIONS?\s+DE\s+PROJET|PROJETS?\s+REALISES|PROJETS?\s+PERSONNELS?)/i, section: 'projects' },
+  { regex: /^(?:LOISIRS|INTERETS?|CENTRES?\s+D['’]?INTERETS?|ACTIVITES?\s+EXTRASCOLAIRES?)/i, section: 'other' },
+]
 
-  const HEADER_RE = /^(?:CONTACT|EXPERIENCES?\s+PROFESSIONELLES?|ETUDE\s+ET\s+FORMATION|FORMATION|EDUCATION|ETUDES|PARCOURS\s+ACADEMIQUE|COMPETENCES?|COMPÉTENCES?|TECHNOLOGIES|STACK\s+TECHNIQUE|LANGUES?|CERTIFICATIONS?|PROJETS?\s*(?:ACADEMIQUE)?|SOFT\s+SKILLS|QUALITÉS?|COORDONNEES|LOISIRS|INTERETS|CENTRES\s+D)/i
+function isSectionHeader(line) {
+  return SECTION_DEFS.some(def => def.regex.test(line))
+}
 
-  const skills = []
-  const knownSkills = [
-    'JavaScript', 'TypeScript', 'Python', 'Java', 'PHP', 'C#', '.NET', 'Ruby', 'Go', 'Rust',
-    'React', 'ReactJS', 'React JS', 'Angular', 'Vue.js', 'Vue', 'Node.js', 'Express.js', 'Django', 'Flask',
-    'Laravel', 'Spring Boot', 'Spring', 'FastAPI', 'Next.js', 'NextJS', 'Nuxt.js',
-    'HTML', 'CSS', 'Tailwind CSS', 'Tailwind', 'SASS', 'Bootstrap', 'Material UI',
-    'PostgreSQL', 'MySQL', 'MongoDB', 'Redis', 'SQLite', 'Oracle', 'SQL Server',
-    'Docker', 'Kubernetes', 'AWS', 'Azure', 'GCP', 'Git', 'GitHub', 'GitLab',
-    'Linux', 'Nginx', 'Apache', 'Jenkins', 'CI/CD', 'Terraform',
-    'REST API', 'GraphQL', 'Microservices',
-    'Figma', 'Photoshop', 'Illustrator', 'Adobe XD',
-    'Excel', 'Word', 'PowerPoint', 'SAP',
-    'Agile', 'Scrum', 'Jira', 'Trello', 'UML',
-    'Machine Learning', 'TensorFlow', 'PyTorch', 'LLM', 'Ollama',
-    'Flutter', 'React Native', 'Swift', 'Kotlin',
-    'Firebase', 'Supabase', 'Stripe',
-    'Thymeleaf', 'IntelliJ', 'VS Code',
-    'C/C++', 'OOP',
-  ]
+const HEADER_EDU_RE = /^(?:ETUDE\s+ET\s+FORMATION|FORMATION|EDUCATION|ETUDES|PARCOURS\s+ACADEMIQUE)/i
 
-  for (const skill of knownSkills) {
-    if (textLower.includes(skill.toLowerCase())) {
-      skills.push(skill)
+const KNOWN_MOROCCAN_CITIES = [
+  'Casablanca', 'Rabat', 'Marrakech', 'Tanger', 'Fès', 'Fes', 'Meknès', 'Meknes',
+  'Agadir', 'Oujda', 'Kénitra', 'Kénitra', 'Tétouan', 'Tetouan', 'Nador',
+  'Safi', 'Mohammedia', 'El Jadida', 'Béni Mellal', 'Beni Mellal', 'Errachidia',
+  'Larache', 'Settat', 'Khouribga', 'Ouarzazate', 'Al Hoceima', 'Essaouira',
+  'Taza', 'Guelmim', 'Dakhla', 'Laâyoune', 'Laayoune', 'Berrechid', 'Salé',
+  'Temara', 'Youssoufia', 'Sidi Kacem', 'Taounate', 'Chefchaouen',
+]
+
+function splitIntoSections(lines) {
+  const sections = {}
+  let current = 'header'
+  sections.header = []
+  for (const line of lines) {
+    let matched = null
+    for (const def of SECTION_DEFS) {
+      if (def.regex.test(line)) {
+        matched = def.section
+        break
+      }
     }
+    if (matched) {
+      current = matched
+      if (!sections[current]) sections[current] = []
+      continue
+    }
+    if (!sections[current]) sections[current] = []
+    sections[current].push(line)
   }
-  const dedupSkills = [...new Set(skills)]
+  return sections
+}
 
+function extractProfileLinks(text) {
+  const links = { linkedin: '', github: '', portfolio: '', website: '' }
+  if (!text) return links
+
+  const li = text.match(/https?:\/\/(?:[\w-]+\.)*linkedin\.com\/[^\s,;"'<>)]+/i)
+  if (li) links.linkedin = li[0].replace(/[,.;]+$/, '')
+
+  const gh = text.match(/https?:\/\/(?:[\w-]+\.)*github\.com\/[^\s,;"'<>)]+/i)
+  if (gh) links.github = gh[0].replace(/[,.;]+$/, '')
+
+  const portMatch = text.match(/https?:\/\/(?:www\.)?(?:portfolio|behance|dribbble|artstation|deviantart|profile|tableau|creuns|bravo|notion|drive|linktree|tumblr|medium|gitlab|bitbucket|stackoverflow|overleaf|wordpress)\.[a-z.]+\/?[^\s,;"'<>)]*/i)
+  if (portMatch) links.portfolio = portMatch[0].replace(/[,.;]+$/, '')
+
+  const stripped = text
+    .replace(/https?:\/\/(?:[\w-]+\.)*(?:linkedin|github|facebook|twitter|instagram|tiktok|youtube|x)\.[a-z.]+/gi, ' ')
+  const web = stripped.match(/https?:\/\/(?:[\w-]+\.)+[a-z]{2,}(?:\/[^\s,;"'<>)]*)?/i)
+  if (web) links.website = web[0].replace(/[,.;]+$/, '')
+
+  return links
+}
+
+const NAME_STOP_RE = /\b(?:stagiaire|developpeur|dev(?:eloper)?|ingenieur|engineer|analyste|consultant|chef|manager|responsable|designer|architect|directeur|technicien|assistant|charge|lead|junior|senior|professeur|enseignant|etudiant|recruteur|commercial|comptable|mobile|web|front[-\s]?end|back[-\s]?end|full[--\s]?stack)\b/i
+
+function detectFullName(headerBlock) {
+  if (!headerBlock || !headerBlock.length) return ''
+  for (const line of headerBlock) {
+    if (line.length < 3 || line.length > 70) continue
+    if (/[\d@_=/<>"{}\[\]()]/.test(line)) continue
+    if (/^(?:cv|releve|lettre|profil|resume|tel|phone|email|adresse|address|nom|name)/i.test(line)) continue
+    if (NAME_STOP_RE.test(line)) continue
+    const words = line.split(/\s+/).filter(Boolean)
+    if (words.length < 2 || words.length > 5) continue
+    const allWords = words.every(w => /^[A-Za-zÀ-üÉéèêëÈÊËîïôöûüç'’.\-]+$/.test(w))
+    if (!allWords) continue
+    const caps = words.filter(w => /^[A-ZÀ-ÜÉÈ][a-zéèêàâîïôùûüç'’.-]+$/u.test(w))
+    if (caps.length >= Math.min(2, words.length)) return line.substring(0, 70)
+  }
+  return ''
+}
+
+function parseExperience(bodyLines) {
   const experience = []
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    if (HEADER_RE.test(line)) continue
+  for (let i = 0; i < bodyLines.length; i++) {
+    const line = bodyLines[i]
+    if (isSectionHeader(line)) continue
 
     const titleMatch = line.match(/^(.+?)\s*[-–—|]\s*(.+)$/)
     if (!titleMatch) continue
@@ -468,17 +575,17 @@ function parseCVData(text) {
     let company = rightSide.replace(/\|.*$/, '').replace(/\s*\d{4}.*$/, '').trim()
 
     let period = ''
-    const nextLine = i + 1 < lines.length ? lines[i + 1] : ''
+    const nextLine = i + 1 < bodyLines.length ? bodyLines[i + 1] : ''
     const periodFromNext = nextLine.match(/((?:Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre|Jan|Févr|Mar|Avr|Jun|Jul|Aout|Sept|Oct|Nov|Déc)\w*\s+\d{4}\s*[-–]\s*(?:(?:Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre|Jan|Févr|Mar|Avr|Jun|Jul|Aout|Sept|Oct|Nov|Déc)\w*\s+)?\d{4})/i)
     const periodFromLine = line.match(/((?:Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre|Jan|Févr|Mar|Avr|Jun|Jul|Aout|Sept|Oct|Nov|Déc)\w*\s+\d{4}\s*[-–]\s*(?:(?:Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre|Jan|Févr|Mar|Avr|Jun|Jul|Aout|Sept|Oct|Nov|Déc)\w*\s+)?\d{4})/i)
-    period = (periodFromNext && !HEADER_RE.test(nextLine)) ? periodFromNext[0] : (periodFromLine ? periodFromLine[0] : '')
+    period = (periodFromNext && !isSectionHeader(nextLine)) ? periodFromNext[0] : (periodFromLine ? periodFromLine[0] : '')
 
-    let descriptionLines = []
-    for (let j = i + 2; j < Math.min(i + 12, lines.length); j++) {
-      const dl = lines[j]
+    const descriptionLines = []
+    for (let j = i + 2; j < Math.min(i + 12, bodyLines.length); j++) {
+      const dl = bodyLines[j]
       if (EXP_TITLE_RE.test(dl) && dl.includes('-')) break
       if (/^\d{4}\s*[-–]/.test(dl)) break
-      if (HEADER_RE.test(dl)) break
+      if (isSectionHeader(dl)) break
       if (/^(?:Tâches?|Projet|Sujet)\s*:/i.test(dl)) continue
       if (dl === 'Stack :' || dl.startsWith('Stack')) {
         const stackLine = dl.replace(/^Stack\s*:\s*/i, '')
@@ -497,23 +604,24 @@ function parseCVData(text) {
       isStage,
     })
   }
+  return experience
+}
 
+function parseEducation(bodyLines) {
   const education = []
-  const HEADER_EDU_RE = /^(?:ETUDE\s+ET\s+FORMATION|FORMATION|EDUCATION|ETUDES|PARCOURS\s+ACADEMIQUE)/i
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
+  for (let i = 0; i < bodyLines.length; i++) {
+    const line = bodyLines[i]
     if (!/^\d{4}\s*[-–]\s*\d{4}/.test(line)) continue
-    if (HEADER_EDU_RE.test(line)) continue
+    if (isSectionHeader(line) || HEADER_EDU_RE.test(line)) continue
 
     const yearMatch = line.match(/(\d{4}\s*[-–]\s*\d{4})/)
     const year = yearMatch ? yearMatch[0] : ''
     let fullText = line.replace(/^\d{4}\s*[-–]\s*\d{4}\s*[:\-]?\s*/, '').trim()
 
-    for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
-      const next = lines[j]
+    for (let j = i + 1; j < Math.min(i + 5, bodyLines.length); j++) {
+      const next = bodyLines[j]
       if (/^\d{4}\s*[-–]\s*\d{4}/.test(next)) break
-      if (HEADER_RE.test(next)) break
+      if (isSectionHeader(next)) break
       if (EXP_TITLE_RE.test(next) && next.includes('-')) break
       if (/(?:Arabe|Français|Anglais|Espagnol|Allemand)\s*:/i.test(next)) break
       if (next.length > 3) fullText += ' ' + next
@@ -550,7 +658,144 @@ function parseCVData(text) {
       })
     }
   }
+  return education
+}
 
+function parseCertifications(lines, textLower) {
+  const certs = []
+  for (const line of lines) {
+    if (!line || line.length > 150) continue
+    const parts = line.split(/\s*\|\s*/).map(p => p.trim()).filter(Boolean)
+    const yearMatch = (parts.find(p => /^\d{4}$/.test(p)) || line).match(/(\d{4})/)
+    let name = (parts[0] || '').replace(/[\[\]()]/g, '').replace(/\s*[-–,:]\s*\d{4}(?:\s*[-–|,:].*)?$/, '').trim()
+    name = name.replace(/\s{2,}/g, ' ').trim()
+    let issuer = ''
+    for (let k = 1; k < parts.length; k++) {
+      if (/^\d{4}$/.test(parts[k])) continue
+      if (!issuer && parts[k].length >= 3) issuer = parts[k]
+    }
+    if (name.length >= 3 && /^[A-Za-zÀ-ü0-9+\-# .\-’']+$/.test(name)) {
+      certs.push({ name: name.substring(0, 120), issuer: issuer.substring(0, 80), year: yearMatch ? yearMatch[1] : '' })
+    }
+  }
+  for (const c of KNOWN_CERTIFICATIONS) {
+    if (textLower.includes(c.toLowerCase()) && !certs.some(x => x.name.toLowerCase().includes(c.toLowerCase()))) {
+      certs.push({ name: c, issuer: '', year: '' })
+    }
+  }
+  return certs.slice(0, 15)
+}
+
+function parseProjects(lines) {
+  const projects = []
+  for (const line of lines) {
+    if (!line) continue
+    const linkMatch = line.match(/https?:\/\/[^\s,;"'<>)]+/i)
+    const sep = line.match(/^(.+?)\s*(?:\|\s*|:\s+|\s[-–]\s)\s*(.+)$/)
+    let name = ''
+    let description = ''
+    if (sep) {
+      name = sep[1].trim()
+      description = sep[2].split(/\s*\|\s*/)[0].trim()
+    } else if (!linkMatch) {
+      name = line
+    }
+    if (name.length > 2 && name.length <= 140 && !/^\d+$/.test(name)) {
+      projects.push({
+        name: name.substring(0, 140),
+        description: (description || '').replace(linkMatch ? linkMatch[0] : '', '').replace(/\s{2,}/g, ' ').trim().substring(0, 300),
+        link: linkMatch ? linkMatch[0] : '',
+      })
+    }
+  }
+  return projects.slice(0, 12)
+}
+
+const KNOWN_CV_SKILLS = [
+  'JavaScript', 'TypeScript', 'Python', 'Java', 'PHP', 'C#', '.NET', 'Ruby', 'Go', 'Rust',
+  'React', 'ReactJS', 'React JS', 'Angular', 'Vue.js', 'Vue', 'Node.js', 'Express.js', 'Django', 'Flask',
+  'Laravel', 'Spring Boot', 'Spring', 'FastAPI', 'Next.js', 'NextJS', 'Nuxt.js',
+  'HTML', 'CSS', 'Tailwind CSS', 'Tailwind', 'SASS', 'Bootstrap', 'Material UI',
+  'PostgreSQL', 'MySQL', 'MongoDB', 'Redis', 'SQLite', 'Oracle', 'SQL Server',
+  'Docker', 'Kubernetes', 'AWS', 'Azure', 'GCP', 'Git', 'GitHub', 'GitLab',
+  'Linux', 'Nginx', 'Apache', 'Jenkins', 'CI/CD', 'Terraform',
+  'REST API', 'GraphQL', 'Microservices',
+  'Figma', 'Photoshop', 'Illustrator', 'Adobe XD',
+  'Excel', 'Word', 'PowerPoint', 'SAP',
+  'Agile', 'Scrum', 'Jira', 'Trello', 'UML',
+  'Machine Learning', 'TensorFlow', 'PyTorch', 'LLM', 'Ollama',
+  'Flutter', 'React Native', 'Swift', 'Kotlin',
+  'Firebase', 'Supabase', 'Stripe',
+  'Thymeleaf', 'IntelliJ', 'VS Code',
+  'C/C++', 'OOP',
+]
+
+function textContainsSkill(text, skill) {
+  const s = skill.toLowerCase()
+  if (!text.includes(s)) return false
+  if (s.length >= 5) return true
+  const escaped = s.replace(/[.*+?^${}()|[\]\\+#]/g, '\\$&')
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(text)
+}
+
+function parseCVData(text) {
+  const normalized = normalizeText(splitConcatenatedHeaders(text))
+  const textLower = normalized.toLowerCase()
+  const lines = normalized.split('\n').map(l => l.trim()).filter(Boolean)
+
+  const sections = splitIntoSections(lines)
+  const headerBlock = [...(sections.header || []), ...(sections.contact || [])]
+  const contactBlock = (headerBlock.join(' ') + ' ' + normalized)
+
+  const emailMatch = normalized.match(/[\w.+-]+@[\w.-]+\.\w{2,}/)
+  const phoneMatch = normalized.match(/(?:\+?212|00212|\+33|0)[\s.-]?(?:\()?(?:6|7|5|1|2|3|4)(?:\))?[\s.-]?\d{2}[\s.-]?\d{2}[\s.-]?\d{2}/)
+  const cityMatch = normalized.match(new RegExp(KNOWN_MOROCCAN_CITIES.join('|'), 'i'))
+  const postalMatch = contactBlock.match(/\b\d{2}\s?[0-9]{3}\b/)
+  const addressMatch = contactBlock.match(/(?:Adresse\s*|Address\s*:)\s*([^\n,;]+)/i)
+  const links = extractProfileLinks(contactBlock)
+  const fullName = detectFullName(sections.header || [])
+  const location = cityMatch ? cityMatch[0] : (addressMatch ? addressMatch[1].trim().substring(0, 80) : '')
+  const address = addressMatch ? addressMatch[1].trim().substring(0, 120) : ''
+
+  // ─── COMPÉTENCES TECHNIQUES (section dédiée puis fallback texte entier) ───
+  const skills = []
+  if (sections.skills && sections.skills.length) {
+    const sectionText = sections.skills.join('\n').toLowerCase()
+    for (const skill of KNOWN_CV_SKILLS) {
+      if (textContainsSkill(sectionText, skill)) skills.push(skill)
+    }
+  }
+  if (skills.length < 2) {
+    for (const skill of KNOWN_CV_SKILLS) {
+      if (textContainsSkill(textLower, skill)) skills.push(skill)
+    }
+  }
+  const dedupSkills = [...new Set(skills)]
+
+  // ─── SOFT SKILLS (section séparée puis fallback texte entier) ───
+  const softSkills = []
+  if (sections.softskills && sections.softskills.length) {
+    const sectionText = (sections.softskills || []).join(' ').toLowerCase()
+    for (const ss of KNOWN_SOFT_SKILLS) {
+      if (sectionText.includes(ss.toLowerCase())) softSkills.push(ss)
+    }
+  }
+  if (softSkills.length < 2) {
+    for (const ss of KNOWN_SOFT_SKILLS) {
+      if (textLower.includes(ss.toLowerCase())) softSkills.push(ss)
+    }
+  }
+  const dedupSoftSkills = [...new Set(softSkills)]
+
+  // ─── EXPÉRIENCE (section dédiée puis fallback texte entier) ───
+  const expLines = sections.experience && sections.experience.length ? sections.experience : lines
+  const experience = parseExperience(expLines)
+
+  // ─── FORMATION (section dédiée puis fallback texte entier) ───
+  const eduLines = sections.education && sections.education.length ? sections.education : lines
+  const education = parseEducation(eduLines)
+
+  // ─── LANGUES ───
   const languages = []
   const knownLangs = ['Arabe', 'Français', 'Anglais', 'Espagnol', 'Allemand', 'Chinois', 'Italien', 'Portugais', 'Turc', 'Russe']
   const langLevels = ['Langue maternelle', 'Bilingue', 'Courant', 'Avancé', 'Intermédiaire', 'Opérationnel', 'Notions']
@@ -559,8 +804,7 @@ function parseCVData(text) {
     if (!textLower.includes(lang.toLowerCase())) continue
     let level = ''
     for (const lv of langLevels) {
-      if (normalized.toLowerCase().includes(lang.toLowerCase() + ' : ' + lv.toLowerCase()) ||
-          normalized.toLowerCase().includes(lang.toLowerCase() + ':' + lv.toLowerCase())) {
+      if (normalized.includes(lang + ' : ' + lv) || normalized.includes(lang + ':' + lv)) {
         level = lv
         break
       }
@@ -568,16 +812,31 @@ function parseCVData(text) {
     languages.push(level ? `${lang} (${level})` : lang)
   }
 
+  // ─── CERTIFICATIONS & PROJETS ───
+  const certifications = parseCertifications(sections.certifications || [], textLower)
+  const projects = parseProjects(sections.projects || [])
+
   return {
+    fullName,
     skills: dedupSkills,
+    softSkills: dedupSoftSkills,
     experience,
     education,
     languages,
-    certifications: [],
-    projects: [],
+    certifications,
+    projects,
     email: emailMatch?.[0] || '',
     phone: phoneMatch?.[0] || '',
-    location: locationMatch?.[0] || '',
+    location,
+    contact: {
+      fullName,
+      address,
+      postalCode: postalMatch ? postalMatch[0].replace(/\s+/g, '') : '',
+      linkedin: links.linkedin,
+      github: links.github,
+      portfolio: links.portfolio,
+      website: links.website,
+    },
   }
 }
 
@@ -819,3 +1078,4 @@ router.post('/backfill-summaries', protect, async (req, res) => {
 })
 
 export default router
+export { parseCVData, analyzeCV, generateCandidateSummary }

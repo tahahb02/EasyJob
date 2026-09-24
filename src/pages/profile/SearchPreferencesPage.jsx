@@ -69,6 +69,10 @@ const platforms = [
   { id: "welcometothejungle", name: "Work in Tech (WTJ)", color: "bg-purple-500" },
   { id: "rekrute", name: "Rekrute", color: "bg-green-500" },
   { id: "manpower", name: "Manpower", color: "bg-red-500" },
+  { id: "dreamjob", name: "DreamJob.ma", color: "bg-amber-500" },
+  { id: "onejob", name: "OneJob.ma", color: "bg-sky-500" },
+  { id: "marocemploi", name: "MarocEmploi.net", color: "bg-lime-600" },
+  { id: "concours", name: "Concours publics", color: "bg-teal-500" },
 ];
 
 const cities = [
@@ -192,6 +196,10 @@ const emptyForm = {
     welcometothejungle: { enabled: false, customKeywords: [] },
     rekrute: { enabled: false, customKeywords: [] },
     manpower: { enabled: false, customKeywords: [] },
+    dreamjob: { enabled: true, customKeywords: [] },
+    onejob: { enabled: true, customKeywords: [] },
+    marocemploi: { enabled: true, customKeywords: [] },
+    concours: { enabled: true, customKeywords: [] },
   },
 };
 

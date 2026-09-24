@@ -1,17 +1,18 @@
 import express from 'express'
 import JobOffer from '../models/JobOffer.js'
+import PublicNews from '../models/PublicNews.js'
 import Application from '../models/Application.js'
 import UserProfile from '../models/UserProfile.js'
 import { protect } from '../middlewares/auth.js'
 import { notifyNewJobOffer, notifyNewApplicationToRecruiter } from '../services/NotificationService.js'
-import { calculateCandidateMatch } from '../services/jobScraper.js'
+import { calculateCandidateMatch, SITE_SOURCES, CONCOURS_SOURCE, PUBLIC_SOURCES } from '../services/jobScraper.js'
 import { buildCandidateInfo } from '../services/candidateInfo.js'
 
 const router = express.Router()
 
 router.get('/', protect, async (req, res) => {
   try {
-    const { search, contractType, location, source, sort, page = 1, limit = 20 } = req.query
+    const { search, contractType, location, source, group, sort, page = 1, limit = 20 } = req.query
     
     const query = { userId: req.user._id, isActive: true }
     
@@ -24,7 +25,20 @@ router.get('/', protect, async (req, res) => {
     }
     if (contractType) query.contractType = contractType
     if (location) query.location = { $regex: location, $options: 'i' }
-    if (source) query.source = source
+    // Séparation : le secteur public (source 'concours' et 'emploi-public') vit sur
+    // l'onglet « Emplois publics & Concours », les offres scrapées des sites externes
+    // sur l'onglet des offres externes ; ils ne se mélangent jamais.
+    if (source && source !== 'Toutes') {
+      query.source = source
+    } else if (group === 'sites') {
+      query.source = { $in: SITE_SOURCES }
+    } else if (group === 'public') {
+      query.source = { $in: PUBLIC_SOURCES }
+    } else if (group === 'concours') {
+      query.source = CONCOURS_SOURCE
+    } else {
+      query.source = { $ne: CONCOURS_SOURCE }
+    }
 
     let sortOption = { relevanceScore: -1, postedAt: -1, createdAt: -1 }
     if (sort === 'date') sortOption = { postedAt: -1, createdAt: -1 }
@@ -123,7 +137,7 @@ router.get('/recruiter-board', protect, async (req, res) => {
 
 router.get('/saved', protect, async (req, res) => {
   try {
-    const jobs = await JobOffer.find({ userId: req.user._id, isSaved: true, isActive: true }).sort({ updatedAt: -1 })
+    const jobs = await JobOffer.find({ userId: req.user._id, isSaved: true, isActive: true, source: { $ne: 'concours' } }).sort({ updatedAt: -1 })
     res.json({ jobs })
   } catch (error) {
     res.status(500).json({ error: 'Erreur serveur' })
@@ -135,11 +149,63 @@ router.get('/recommended', protect, async (req, res) => {
     const jobs = await JobOffer.find({ 
       userId: req.user._id, 
       isActive: true, 
+      source: { $ne: 'concours' },
       relevanceScore: { $gte: 70 } 
     }).sort({ relevanceScore: -1 }).limit(10)
     res.json({ jobs })
   } catch (error) {
     res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+// GET /api/jobs/public-sector - Offres du secteur public (concours + emplois publics)
+// ET news / infos de l'État + concours prochains, triés séparément.
+router.get('/public-sector', protect, async (req, res) => {
+  try {
+    const { search, category, page = 1, limit = 20, sort = 'date' } = req.query
+
+    const query = { userId: req.user._id, isActive: true, source: { $in: PUBLIC_SOURCES } }
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { company: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+      ]
+    }
+
+    const sortOption = sort === 'relevance'
+      ? { relevanceScore: -1, postedAt: -1, createdAt: -1 }
+      : { postedAt: -1, createdAt: -1 }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit)
+    const [jobs, total] = await Promise.all([
+      JobOffer.find(query).sort(sortOption).skip(skip).limit(parseInt(limit)),
+      JobOffer.countDocuments(query),
+    ])
+
+    const newsQuery = { userId: req.user._id }
+    if (category) newsQuery.category = category
+    const newsList = await PublicNews.find(newsQuery).sort({ postedAt: -1 }).limit(40)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    // Tri : concours prochains (date d'examen à venir, croissante) d'abord,
+    // puis infos urgentes, puis actualités (récentes d'abord).
+    const categoryRank = { 'concours-prochain': 0, info: 1, actualite: 2 }
+    const news = newsList
+      .filter(n => n.category !== 'concours-prochain' || (n.eventDate && new Date(n.eventDate) >= today))
+      .sort((a, b) => {
+        const ra = categoryRank[a.category] ?? 3
+        const rb = categoryRank[b.category] ?? 3
+        if (ra !== rb) return ra - rb
+        if (a.category === 'concours-prochain') return new Date(a.eventDate) - new Date(b.eventDate)
+        return new Date(b.postedAt) - new Date(a.postedAt)
+      })
+
+    res.json({ jobs, news, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) })
+  } catch (error) {
+    console.error('Erreur secteur public:', error)
+    res.status(500).json({ error: 'Erreur lors de la récupération du secteur public' })
   }
 })
 
