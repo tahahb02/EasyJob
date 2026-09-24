@@ -64,7 +64,7 @@ export default function HeroSection() {
               <span className="absolute inline-flex size-full animate-ping rounded-full bg-accent opacity-70" />
               <span className="relative inline-flex size-2 rounded-full bg-accent" />
             </span>
-            Nouveau · Scraping multi-plateformes
+            Nouveau · 8 plateformes scannées · Offres privées & publiques
           </Badge>
         </motion.div>
 

@@ -4,6 +4,7 @@ import SourcesMarquee from "@/components/landing/SourcesMarquee"
 import FeaturesBento from "@/components/landing/FeaturesBento"
 import HowItWorks from "@/components/landing/HowItWorks"
 import StatsSection from "@/components/landing/StatsSection"
+import PublicSectorSection from "@/components/landing/PublicSectorSection"
 import TestimonialsSection from "@/components/landing/TestimonialsSection"
 import PricingSection from "@/components/landing/PricingSection"
 import FaqSection from "@/components/landing/FaqSection"
@@ -20,6 +21,7 @@ export default function LandingPage() {
         <FeaturesBento />
         <HowItWorks />
         <StatsSection />
+        <PublicSectorSection />
         <TestimonialsSection />
         <PricingSection />
         <FaqSection />

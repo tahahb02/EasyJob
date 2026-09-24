@@ -106,11 +106,11 @@ export default function FeaturesBento() {
                 tableau de bord.
               </p>
 
-              <div className="mt-6 hidden flex-1 items-center gap-3 sm:flex">
+              <div className="mt-6 grid flex-1 grid-cols-3 gap-3">
                 {[
                   { src: "LinkedIn", n: "34 210" },
-                  { src: "Indeed", n: "8 045" },
-                  { src: "Welcome to the Jungle", n: "4 118" },
+                  { src: "Rekrute", n: "8 045" },
+                  { src: "OneJob.ma", n: "4 118" },
                 ].map((s, i) => (
                   <motion.div
                     key={s.src}

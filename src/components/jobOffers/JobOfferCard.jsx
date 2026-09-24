@@ -176,6 +176,13 @@ export default function JobOfferCard({ job, view = 'grid', onSave, onApply, appl
             {job.contractType && <span>{job.contractType}</span>}
             {salaryText && <span className="font-semibold text-accent">{salaryText}</span>}
           </div>
+          {!isApplied && (
+            <div className="mt-3 sm:hidden">
+              <Button size="sm" className="h-10 w-full" onClick={handleApplyClick}>
+                Postuler
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="hidden items-center gap-3 sm:flex">
@@ -187,14 +194,19 @@ export default function JobOfferCard({ job, view = 'grid', onSave, onApply, appl
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          <Button variant="ghost" size="icon" className="size-8" onClick={handleSave}>
-            <Bookmark className={cn('size-4 transition-colors', job.isSaved && 'fill-primary text-primary')} />
+          <Button variant="ghost" size="icon" className="size-9" onClick={handleSave} aria-label="Ajouter aux favoris">
+            <Bookmark className={cn('size-[18px] transition-colors', job.isSaved && 'fill-primary text-primary')} />
           </Button>
-          <Button variant="ghost" size="icon" className="size-8" onClick={handleShare}>
-            <Share2 className="size-4" />
+          <Button variant="ghost" size="icon" className="size-9" onClick={handleShare} aria-label="Partager">
+            <Share2 className="size-[18px]" />
           </Button>
           {hovered && !isApplied && (
-            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.15 }}>
+            <motion.div
+              className="hidden sm:block"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.15 }}
+            >
               <Button size="sm" className="h-8 px-3" onClick={handleApplyClick}>
                 Postuler
               </Button>
@@ -274,21 +286,33 @@ export default function JobOfferCard({ job, view = 'grid', onSave, onApply, appl
           <Button
             variant="ghost"
             size="icon"
-            className="size-8"
+            className="size-9"
             onClick={handleSave}
             aria-label={job.isSaved ? 'Retirer des favoris' : 'Ajouter aux favoris'}
           >
-            <Bookmark className={cn('size-4 transition-colors', job.isSaved && 'fill-primary text-primary')} />
+            <Bookmark className={cn('size-[18px] transition-colors', job.isSaved && 'fill-primary text-primary')} />
           </Button>
-          <Button variant="ghost" size="icon" className="size-8" onClick={handleShare} aria-label="Partager">
-            <Share2 className="size-4" />
+          <Button variant="ghost" size="icon" className="size-9" onClick={handleShare} aria-label="Partager">
+            <Share2 className="size-[18px]" />
           </Button>
-          {hovered && !isApplied && (
-            <motion.div initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.15 }}>
-              <Button size="sm" className="h-8 px-3" onClick={handleApplyClick}>
+          {!isApplied && (
+            <>
+              <Button size="sm" className="h-10 px-3 text-xs sm:hidden" onClick={handleApplyClick}>
                 Postuler
               </Button>
-            </motion.div>
+              {hovered && (
+                <motion.div
+                  className="hidden sm:block"
+                  initial={{ opacity: 0, x: 8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <Button size="sm" className="h-8 px-3" onClick={handleApplyClick}>
+                    Postuler
+                  </Button>
+                </motion.div>
+              )}
+            </>
           )}
         </div>
       </div>

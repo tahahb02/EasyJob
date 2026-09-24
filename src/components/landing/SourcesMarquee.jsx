@@ -6,9 +6,9 @@ const platforms = [
   "Welcome to the Jungle",
   "Rekrute",
   "Manpower",
-  "Glassdoor",
-  "Emploi.ma",
-  "Maroc Diplomatique",
+  "DreamJob.ma",
+  "OneJob.ma",
+  "MarocEmploi.net",
 ]
 
 export default function SourcesMarquee() {
@@ -17,8 +17,8 @@ export default function SourcesMarquee() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal>
           <p className="text-center text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Nous agrégeons les offres de
-          </p>
+              Nous agrégeons les offres de 8 plateformes
+            </p>
         </Reveal>
       </div>
 

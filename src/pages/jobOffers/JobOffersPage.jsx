@@ -459,9 +459,9 @@ const toggleSave = useToggleSaveJob()
       {/* Tabs */}
       <div className="flex gap-1 rounded-xl border border-border bg-muted/40 p-1">
         {[
-          { key: 'external', label: 'Offres externes', icon: Briefcase },
-          { key: 'internal', label: 'Offres internes', icon: Building2 },
-          { key: 'public', label: 'Emplois publics & Concours', icon: Landmark },
+          { key: 'external', label: 'Offres externes', short: 'Externes', icon: Briefcase },
+          { key: 'internal', label: 'Offres internes', short: 'Internes', icon: Building2 },
+          { key: 'public', label: 'Emplois publics & Concours', short: 'Publics & Concours', icon: Landmark },
         ].map((tab) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.key
@@ -469,7 +469,7 @@ const toggleSave = useToggleSaveJob()
             <button
               key={tab.key}
               onClick={() => handleTabChange(tab.key)}
-              className={`relative flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+              className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-sm font-medium transition-colors sm:gap-2 sm:px-4 sm:py-2.5 ${
                 isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -480,15 +480,16 @@ const toggleSave = useToggleSaveJob()
                   transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
                 />
               )}
-              <Icon className="relative z-10 size-4" />
-              <span className="relative z-10">{tab.label}</span>
+              <Icon className="relative z-10 size-4 shrink-0" />
+              <span className="relative z-10 hidden whitespace-nowrap sm:inline">{tab.label}</span>
+              <span className="relative z-10 whitespace-nowrap text-xs sm:hidden">{tab.short}</span>
             </button>
           )
         })}
       </div>
 
       {/* Sticky filter bar */}
-      <div className="sticky top-16 z-20 space-y-3 rounded-xl border border-border bg-background/80 p-3 backdrop-blur-sm">
+      <div className="sticky top-14 z-20 space-y-3 rounded-xl border border-border bg-background/80 p-3 backdrop-blur-sm lg:top-16">
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -724,7 +725,7 @@ const toggleSave = useToggleSaveJob()
 
       {/* Advanced filters sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="sm:max-w-md">
+        <SheetContent className="w-full! sm:max-w-md!">
           <SheetHeader>
             <SheetTitle>Filtres avancés</SheetTitle>
             <SheetDescription>Affinez votre recherche avec des filtres supplémentaires.</SheetDescription>

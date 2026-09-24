@@ -22,14 +22,22 @@ const sections = [
     id: 'services',
     title: '2. Description du service',
     content: (
-      <p>
-        EasyJob est une plateforme d'aide à la recherche d'emploi qui collecte,
-        centralise et agrège des offres d'emploi publiques provenant de diverses
-        sources. Le service inclut notamment la recherche d'offres, l'analyse
-        automatique de CV, les suggestions de correspondance (matching) et le suivi
-        des candidatures. Les offres référencées proviennent de tiers : leur contenu,
-        leur disponibilité et leur exactitude ne sont pas garantis par EasyJob.
-      </p>
+      <>
+        <p>
+          EasyJob est une plateforme d'aide à la recherche d'emploi qui collecte,
+          centralise et agrège des offres d'emploi publiques provenant de diverses
+          sources. Le service inclut notamment la recherche d'offres, l'analyse
+          automatique de CV, les suggestions de correspondance (matching) et le suivi
+          des candidatures. Les offres référencées proviennent de tiers : leur contenu,
+          leur disponibilité et leur exactitude ne sont pas garantis par EasyJob.
+        </p>
+        <p className="mt-3">
+          Le service couvre également le secteur public : regroupement des concours
+          publics, des offres d'emploi de l'État (emploi-public.ma) ainsi que des
+          actualités et informations officielles, dans un espace dédié « Emplois
+          publics & Concours ».
+        </p>
+      </>
     ),
   },
   {
@@ -87,15 +95,35 @@ const sections = [
   },
   {
     id: 'respect',
-    title: "5. Respect des sources d'offres",
+    title: "5. Sources d'offres et respect des plateformes",
     content: (
-      <p>
-        EasyJob ne collecte que des offres d'emploi publiquement accessibles, dans le
-        respect des conditions d'utilisation de chaque plateforme et des règles en
-        vigueur (notamment le droit d'auteur et la protection des bases de données).
-        En cas de demande légitime d'une source, EasyJob retirera sans délai les
-        contenus concernés.
-      </p>
+      <>
+        <p>
+          EasyJob ne collecte que des offres d'emploi publiquement accessibles, dans le
+          respect des conditions d'utilisation de chaque plateforme et des règles en
+          vigueur (notamment le droit d'auteur et la protection des bases de données).
+          En cas de demande légitime d'une source, EasyJob retirera sans délai les
+          contenus concernés. Nos robots respectent autant que possible les fichiers
+          robots.txt et limitent leur cadence afin de ne pas perturber les sources.
+        </p>
+        <p className="mt-3 font-medium">Sources actuellement agrégées :</p>
+        <ul className="mt-2 list-disc space-y-1 pl-5">
+          <li>
+            Plateformes privées : LinkedIn, Indeed, Welcome to the Jungle, Rekrute,
+            Manpower, DreamJob.ma, OneJob.ma et MarocEmploi.net.
+          </li>
+          <li>
+            Secteur public : concours publics et emplois de l'État via emploi-public.ma.
+          </li>
+          <li>
+            Actualités et communications officielles des administrations.
+          </li>
+        </ul>
+        <p className="mt-3">
+          Cette liste peut évoluer. La liste à jour est consultable dans la page
+          « Configuration du scraping » de l'application.
+        </p>
+      </>
     ),
   },
   {
@@ -201,7 +229,7 @@ export default function TermsPage() {
 
         <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/60 px-3 py-1 text-xs font-medium text-muted-foreground">
           <FileText className="size-3.5 text-primary" />
-          Document légal · Mis à jour le 23 septembre 2026
+          Document légal · Mis à jour le 24 septembre 2026
         </div>
 
         <h1 className="mt-5 text-4xl font-semibold tracking-tight">
@@ -264,7 +292,7 @@ export default function TermsPage() {
           <div className="flex items-center gap-4">
             <Link to="/terms" className="hover:text-foreground">Conditions</Link>
             <span className="text-border">·</span>
-            <Link to="/" className="hover:text-foreground">Confidentialité</Link>
+            <Link to="/terms#donnees" className="hover:text-foreground">Confidentialité</Link>
           </div>
         </div>
       </footer>

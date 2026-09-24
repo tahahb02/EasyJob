@@ -6,7 +6,7 @@ const stats = [
   { value: 50000, suffix: "+", label: "offres scrapées / mois" },
   { value: 12000, suffix: "+", label: "candidatures envoyées" },
   { value: 78, suffix: "%", label: "taux d'ouverture" },
-  { value: 5, suffix: "", label: "plateformes connectées" },
+  { value: 8, suffix: "", label: "plateformes connectées" },
 ]
 
 function Counter({ value, suffix }) {

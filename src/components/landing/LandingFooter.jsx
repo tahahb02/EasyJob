@@ -25,7 +25,7 @@ const columns = [
   {
     title: "Légal",
     links: ["Confidentialité", "Conditions d'utilisation", "Mentions légales", "Cookies"],
-    anchors: ["/terms", "/terms", "#", "#"],
+    anchors: ["/terms#donnees", "/terms", "/terms#propriete", "/terms#donnees"],
   },
 ]
 

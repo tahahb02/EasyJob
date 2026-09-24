@@ -17,7 +17,11 @@ const faqs = [
   },
   {
     q: "Quelles plateformes sont couvertes ?",
-    a: "LinkedIn, Indeed, Welcome to the Jungle, Rekrute, Manpower et de nombreuses autres sources marocaines et internationales. De nouvelles plateformes sont ajoutées régulièrement.",
+    a: "LinkedIn, Indeed, Welcome to the Jungle, Rekrute, Manpower, DreamJob.ma, OneJob.ma et MarocEmploi.net, ainsi que les concours publics et les emplois de l'État. De nouvelles sources sont ajoutées régulièrement.",
+  },
+  {
+    q: "Couvrez-vous les offres du secteur public et les concours ?",
+    a: "Oui. En plus des plateformes privées, EasyJob récupère les concours publics et les emplois de l'État (via emploi-public.ma), ainsi que les actualités et informations officielles, dans l'onglet dédié « Emplois publics & Concours ». Les concours prochains y sont mis en avant pour préparer vos candidatures à l'avance.",
   },
   {
     q: "Mes données sont-elles protégées ?",
