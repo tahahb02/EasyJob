@@ -143,13 +143,19 @@ export async function notifyNewCompany(company) {
 
 export async function notifyScrapingComplete(userId, results) {
   try {
+    const status = results.status || 'success'
+    const count = results.count || 0
+    const title = status === 'success' ? 'Scraping terminé' : status === 'partial' ? 'Scraping terminé avec avertissements' : 'Scraping échoué'
+    const message = status === 'failed'
+      ? 'La collecte n\'a produit aucune offre exploitable. Consultez le détail des sources.'
+      : `${count} nouvelle(s) offre(s) enregistrée(s).${status === 'partial' ? ' Certaines sources ont rencontré des problèmes.' : ''}`
     await createNotification({
       userId,
       type: 'scrapping',
-      title: 'Scraping terminé',
-      message: `${results.count || 0} nouvelles offres d'emploi ont été trouvées. Consultez les résultats`,
-      data: { count: results.count, source: results.source, results },
-      actionUrl: `/jobs?source=${results.source || 'scraped'}`,
+      title,
+      message,
+      data: { count, source: results.source, status, results },
+      actionUrl: '/jobs',
     })
   } catch (err) {
     console.error('Erreur notifyScrapingComplete:', err.message)

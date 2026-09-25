@@ -15,6 +15,7 @@ import {
   Settings2,
   Zap,
   Landmark,
+  AlertTriangle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -137,6 +138,51 @@ const initialPlatforms = [
   },
 ]
 
+const statusBadge = (entry) => {
+  if (entry.status === 'running') {
+    return (
+      <Badge
+        variant="secondary"
+        className="inline-flex items-center gap-1.5 rounded-full bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-600 dark:text-sky-400"
+      >
+        <Clock className="h-3 w-3" />
+        En cours
+      </Badge>
+    )
+  }
+  if (entry.status === 'partial') {
+    return (
+      <Badge
+        variant="secondary"
+        className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400"
+      >
+        <AlertTriangle className="h-3 w-3" />
+        Partiel
+      </Badge>
+    )
+  }
+  if (entry.status === 'success') {
+    return (
+      <Badge
+        variant="secondary"
+        className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold text-accent"
+      >
+        <CheckCircle2 className="h-3 w-3" />
+        Succès
+      </Badge>
+    )
+  }
+  return (
+    <Badge
+      variant="secondary"
+      className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-3 py-1 text-xs font-semibold text-destructive"
+    >
+      <XCircle className="h-3 w-3" />
+      Échec
+    </Badge>
+  )
+}
+
 export default function ScrapingConfigPage() {
   const navigate = useNavigate()
   const [platforms, setPlatforms] = useState(initialPlatforms)
@@ -149,17 +195,53 @@ export default function ScrapingConfigPage() {
   const historyEntries = logsData?.logs ?? []
 
   const handleScrape = () => {
-    const enabledSources = platforms.filter(p => p.enabled).map(p => p.id)
-    const allKeywords = platforms.filter(p => p.enabled).flatMap(p => p.keywords.split(',').map(k => k.trim()).filter(Boolean))
+    const enabled = platforms.filter(p => p.enabled)
+    const enabledSources = enabled.map(p => p.id)
+    // Chaque site reçoit SES mots-clés : sans cela la liste globale tronquée
+    // écartait les mots-clés français et les sources ne renvoyaient rien.
+    const sourceKeywords = Object.fromEntries(
+      enabled
+        .map(p => [
+          p.id,
+          p.keywords.split(',').map(k => k.trim()).filter(Boolean),
+        ])
+        .filter(([, list]) => list.length > 0),
+    )
+    const allKeywords = [...new Set(Object.values(sourceKeywords).flat())]
 
     runScraping.start(
-      { keywords: allKeywords.length > 0 ? allKeywords : undefined, sources: enabledSources.length > 0 ? enabledSources : undefined },
       {
-        onSuccess: (data) => {
-          toast.success(`Scrapping terminé ! ${data?.jobsFound ?? 0} nouvelles offres trouvées`, { duration: 4000 })
+        keywords: allKeywords.length > 0 ? allKeywords : undefined,
+        sourceKeywords: Object.keys(sourceKeywords).length > 0 ? sourceKeywords : undefined,
+        sources: enabledSources.length > 0 ? enabledSources : undefined,
+      },
+      {
+        onLaunch: (data) => {
+          toast.info(
+            data?.alreadyRunning
+              ? 'Une collecte est déjà en cours, suivi repris'
+              : `Collecte lancée sur ${enabledSources.length} source(s)…`,
+            { duration: 3000 },
+          )
+        },
+        onComplete: (log) => {
+          const found = log?.totalOffersFound ?? 0
+          const added = log?.totalNewOffers ?? 0
+          const failedSources = (log?.sources || []).filter(s => s.status === 'failed').map(s => s.source)
+          if (log?.status === 'failed') {
+            toast.error(`Collecte terminée sans résultat : ${added} offre(s) enregistrée(s) sur ${found} trouvée(s)`, { duration: 6000 })
+          } else if (log?.status === 'partial') {
+            toast.warning(
+              `Collecte partielle : ${added} nouvelle(s) offre(s) sur ${found} trouvée(s)` +
+              (failedSources.length ? ` — source(s) en échec : ${failedSources.join(', ')}` : ''),
+              { duration: 6000 },
+            )
+          } else {
+            toast.success(`Collecte terminée : ${added} nouvelle(s) offre(s) sur ${found} trouvée(s)`, { duration: 5000 })
+          }
         },
         onError: (err) => {
-          toast.error(err?.response?.data?.error || err?.message || 'Erreur lors du scrapping')
+          toast.error(err?.message || 'Erreur lors du scrapping')
         },
       }
     )
@@ -204,7 +286,8 @@ export default function ScrapingConfigPage() {
             Configuration du Scrapping
           </h1>
           <p className="mt-1 text-muted-foreground">
-            Collectez jusqu'à 100 offres d'emploi par lancement
+            Collectez jusqu'à 200 offres par source et par lancement — les offres
+            s'affichent automatiquement à la fin de la collecte
           </p>
         </div>
         <ScrapeButton
@@ -316,8 +399,17 @@ export default function ScrapingConfigPage() {
                 runScraping.start(
                   { sources: ['concours'] },
                   {
-                    onSuccess: (data) => toast.success(`Concours terminé ! ${data?.jobsFound ?? 0} concours trouvés`, { duration: 4000 }),
-                    onError: (err) => toast.error(err?.response?.data?.error || err?.message || 'Erreur lors de la collecte des concours'),
+                    onLaunch: () => toast.info('Collecte des concours lancée…', { duration: 3000 }),
+                    onComplete: (log) => {
+                      const found = log?.totalOffersFound ?? 0
+                      const added = log?.totalNewOffers ?? 0
+                      if (log?.status === 'failed') {
+                        toast.error(`Collecte des concours terminée sans résultat : ${added} enregistrement(s)`, { duration: 6000 })
+                      } else {
+                        toast.success(`Concours : ${added} nouveau(x) sur ${found} trouvé(s)`, { duration: 5000 })
+                      }
+                    },
+                    onError: (err) => toast.error(err?.message || 'Erreur lors de la collecte des concours'),
                   }
                 )
               }
@@ -397,25 +489,14 @@ export default function ScrapingConfigPage() {
                         </td>
                         <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-foreground">
                           {entry.totalOffersFound ?? entry.offersFound ?? 0}
+                          {typeof entry.totalNewOffers === 'number' && (
+                            <span className="ml-1 text-xs font-normal text-muted-foreground">
+                              (+{entry.totalNewOffers})
+                            </span>
+                          )}
                         </td>
                         <td className="whitespace-nowrap px-6 py-4">
-                          {entry.status === 'success' ? (
-                            <Badge
-                              variant="secondary"
-                              className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold text-accent"
-                            >
-                              <CheckCircle2 className="h-3 w-3" />
-                              Succès
-                            </Badge>
-                          ) : (
-                            <Badge
-                              variant="secondary"
-                              className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-3 py-1 text-xs font-semibold text-destructive"
-                            >
-                              <XCircle className="h-3 w-3" />
-                              Échec
-                            </Badge>
-                          )}
+                          {statusBadge(entry)}
                         </td>
                       </motion.tr>
                       )
@@ -453,23 +534,7 @@ export default function ScrapingConfigPage() {
                           Durée : {duration}
                         </p>
                       </div>
-                      {entry.status === 'success' ? (
-                        <Badge
-                          variant="secondary"
-                          className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-semibold text-accent"
-                        >
-                          <CheckCircle2 className="h-3 w-3" />
-                          Succès
-                        </Badge>
-                      ) : (
-                        <Badge
-                          variant="secondary"
-                          className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-semibold text-destructive"
-                        >
-                          <XCircle className="h-3 w-3" />
-                          Échec
-                        </Badge>
-                      )}
+                      {statusBadge(entry)}
                     </div>
                     <p className="mt-2 text-sm text-muted-foreground">
                       <span className="font-bold text-foreground">

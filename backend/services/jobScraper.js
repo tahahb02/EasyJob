@@ -1,7 +1,9 @@
 import axios from 'axios'
 import * as cheerio from 'cheerio'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { createHash } from 'node:crypto'
 
 const execFileAsync = promisify(execFile)
 
@@ -19,20 +21,123 @@ function getRandomUA() {
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
-async function fetchWithCurl(url, headers = {}) {
-  const args = ['-sL', '--compressed', '-A', headers['User-Agent'] || getRandomUA(), url]
+// ─── BUDGET DE COLLECTE ────────────────────────────────────────────
+// Sur Vercel chaque invocation est plafonnée (60 s par défaut) : une source
+// qui pagine pendant plusieurs minutes fait tuer la requête en cours et la
+// collecte n'avance plus jamais. Toutes les boucles de pagination consultent
+// donc `budgetExpired()` et rendent les offres déjà collectées.
+// Le budget est stocké dans un AsyncLocalStorage : deux collectes simultanées
+// (deux utilisateurs) ne peuvent pas se shorten mutuellement le délai.
+const REQUEST_BUDGET_MS = 40_000
+// Marge de sécurité : on n'engage plus une requête HTTP si le budget restant
+// est inférieur à ce seuil, sinon la requête déborde à elle seule l'invocation.
+const MIN_REQUEST_BUDGET_MS = 8_000
+
+const budgetStore = new AsyncLocalStorage()
+let progressHook = null
+
+export function withScrapeBudget(ms, fn) {
+  const budget = Number(ms) > 0 ? Number(ms) : REQUEST_BUDGET_MS
+  return budgetStore.run({ deadline: Date.now() + budget }, fn)
+}
+
+function currentDeadline() {
+  return budgetStore.getStore()?.deadline ?? Infinity
+}
+
+export function budgetLeft() {
+  return currentDeadline() - Date.now()
+}
+
+function budgetExpired() {
+  return budgetLeft() <= MIN_REQUEST_BUDGET_MS
+}
+
+export function isBudgetError(error) {
+  return error?.code === 'SCRAPE_BUDGET_EXCEEDED'
+}
+
+// Progression intra-source : permet d'affiner le pourcentage même quand une
+// seule source met plusieurs dizaines de secondes à être collectée.
+export function setSourceProgressHook(hook) {
+  progressHook = typeof hook === 'function' ? hook : null
+}
+
+function reportProgress(fraction) {
+  if (!progressHook) return
+  const clamped = Math.min(1, Math.max(0, Number(fraction) || 0))
   try {
-    const { stdout } = await execFileAsync('curl', args, { timeout: 30000, maxBuffer: 8 * 1024 * 1024 })
-    return { data: stdout, status: 200 }
+    progressHook(clamped)
+  } catch {
+    // la remontée de progression ne doit jamais interrompre la collecte
+  }
+}
+
+function budgetError() {
+  const error = new Error('Budget de collecte atteint')
+  error.code = 'SCRAPE_BUDGET_EXCEEDED'
+  return error
+}
+
+// Objectif utilisateur : 200 offres par site et par clic. Les budgets de
+// pagination ci-dessous sont dimensionnés pour l'atteindre (les pages en
+// doublon/néant sont dédupliquées après coup, d'où des marges larges).
+export const TARGET_OFFERS_PER_SOURCE = 200
+
+function stableSourceId(source, sourceUrl, fallback = '') {
+  const identity = String(sourceUrl || fallback || '').trim()
+  return `${source}-${createHash('sha1').update(`${source}|${identity}`).digest('hex')}`
+}
+
+function normalizeSearchText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function matchesAnySearchTerm(text, keywords) {
+  const normalizedText = normalizeSearchText(text)
+  const terms = (Array.isArray(keywords) ? keywords : [keywords])
+    .map(normalizeSearchText)
+    .filter(term => term.length > 2)
+  return terms.length === 0 || terms.some(term => normalizedText.includes(term))
+}
+
+// Les listes de certains sites (marocemploi.net, manpower) sont des flux
+// généralistes : le filtrage par mots-clés est utile, mais s'il ne retient
+// RIEN on renonce plutôt que de rapporter une source vide alors que la page
+// contenait des offres exploitables.
+function keepRelevantJobs(jobs, keywords, textOf) {
+  if (!jobs.length) return jobs
+  const matching = jobs.filter(job => matchesAnySearchTerm(textOf(job), keywords))
+  return matching.length > 0 ? matching : jobs
+}
+
+async function fetchWithCurl(url, headers = {}) {
+  const args = ['-sS', '-L', '--compressed', '-A', headers['User-Agent'] || getRandomUA(), '-w', '\n%{http_code}', url]
+  try {
+    const { stdout } = await execFileAsync('curl', args, { timeout: 12000, maxBuffer: 8 * 1024 * 1024 })
+    const match = String(stdout).match(/\n(\d{3})\s*$/)
+    const status = match ? Number(match[1]) : 200
+    const data = match ? String(stdout).slice(0, match.index) : String(stdout)
+    if (status >= 400) throw new Error(`HTTP ${status}`)
+    return { data, status }
   } catch (err) {
     throw new Error(`curl fallback failed for ${url}: ${err.code || err.message}`)
   }
 }
 
-async function fetchWithRetry(url, opts = {}, retries = 3) {
+async function fetchWithRetry(url, opts = {}, retries = 2) {
   for (let attempt = 1; attempt <= retries; attempt++) {
+    // Plus de budget disponible : on sort proprement plutôt que de laisser
+    // l'invocation serveur expirer en plein milieu d'une pagination.
+    if (budgetExpired()) throw budgetError()
     try {
       const method = (opts.method || 'GET').toUpperCase()
+      const remaining = budgetLeft()
       const response = await axios.request({
         url,
         method,
@@ -46,11 +151,12 @@ async function fetchWithRetry(url, opts = {}, retries = 3) {
           'Cache-Control': 'no-cache',
           ...(opts.headers || {}),
         },
-        timeout: 25000,
+        timeout: Math.max(5000, Math.min(12000, remaining)),
         maxRedirects: 5,
       })
       return response
     } catch (err) {
+      if (isBudgetError(err)) throw err
       const deadCodes = ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'ECONNRESET', 'ETIMEDOUT', 'ERR_NAME_NOT_RESOLVED']
       const hopeless = deadCodes.includes(err.code) || deadCodes.includes(err.errno)
       // 403 (Cloudflare / anti-bot) : on tente curl une fois ; si curl échoue aussi,
@@ -65,8 +171,8 @@ async function fetchWithRetry(url, opts = {}, retries = 3) {
       if (attempt === retries || hopeless) {
         throw err
       }
-      const waitMs = attempt * 1500 + Math.random() * 1000
-      await delay(waitMs)
+      const waitMs = Math.min(attempt * 1200 + Math.random() * 800, Math.max(0, budgetLeft() - 1000))
+      if (waitMs > 0) await delay(waitMs)
     }
   }
 }
@@ -87,7 +193,7 @@ function inferContractType(title, description = '') {
 }
 
 // Ramène n'importe quel libellé de contrat vers l'enum du schéma JobOffer.
-function normalizeContractType(raw) {
+export function normalizeContractType(raw) {
   if (!raw) return 'CDI'
   const t = String(raw).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
   if (!t || t === 'cdi' || /indefini|permanent|illimite|full-time|temps plein|plein/.test(t)) return 'CDI'
@@ -359,9 +465,14 @@ function calculateRelevance(job, userProfile) {
 // ─── LINKEDIN SCRAPER ───────────────────────────────────────────────
 async function scrapeLinkedIn(keywords, location = 'Morocco', userProfile = null) {
   const jobs = []
-  const pages = [0, 25, 50, 75]
+  // 25 résultats/page, f_TPR=r604800 (dernière semaine) : 10 pages ≈ 250 cartes.
+  const pages = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225]
+  let emptyPages = 0
 
-  for (const pageNum of pages) {
+  for (let index = 0; index < pages.length; index++) {
+    const pageNum = pages[index]
+    if (budgetExpired()) break
+    reportProgress(index / pages.length)
     try {
       const searchQuery = encodeURIComponent(keywords.slice(0, 5).join(' OR '))
       const url = `https://www.linkedin.com/jobs/search?keywords=${searchQuery}&location=${encodeURIComponent(location)}&trk=public_jobs_jobs-search-bar_search-submit&position=1&pageNum=${pageNum}&f_TPR=r604800&f_E=2%2C3&sortBy=DD`
@@ -421,6 +532,7 @@ async function scrapeLinkedIn(keywords, location = 'Morocco', userProfile = null
               company: cleanCompanyName(company) || 'Non spécifié',
               location: locationText || location,
               sourceUrl,
+              sourceId: stableSourceId('linkedin', sourceUrl, title),
               source: 'linkedin',
               postedAt,
               contractType: inferContractType(title, description),
@@ -435,9 +547,17 @@ async function scrapeLinkedIn(keywords, location = 'Morocco', userProfile = null
         })
       }
 
-      if (foundOnPage === 0 && pageNum === 0) break
+      if (foundOnPage === 0) {
+        emptyPages++
+        // Deux pages vides d'affilée : la pagination est arrivée au bout.
+        if (pageNum === 0 || emptyPages >= 2) break
+      } else {
+        emptyPages = 0
+      }
+      if (jobs.length >= TARGET_OFFERS_PER_SOURCE) break
       await delay(1200 + Math.random() * 1500)
     } catch (error) {
+      if (isBudgetError(error)) break
       console.error(`LinkedIn page ${pageNum} error:`, error.message)
       if (pageNum === 0) break
     }
@@ -452,7 +572,9 @@ async function scrapeLinkedIn(keywords, location = 'Morocco', userProfile = null
 // ─── INDEED SCRAPER ───────────────────────────────────────────────
 async function scrapeIndeed(keywords, location = 'Maroc', userProfile = null) {
   const jobs = []
-  const pages = ['0', '10', '20']
+  // Indeed (ma.indeed.com) renvoie 10 résultats par page : 20 pages ≈ 200 offres.
+  const pages = Array.from({ length: 20 }, (_, i) => String(i * 10))
+  let emptyPages = 0
 
   const regionByLocation = (() => {
     const loc = String(location || '').toLowerCase()
@@ -465,15 +587,35 @@ async function scrapeIndeed(keywords, location = 'Maroc', userProfile = null) {
     return 'Maroc'
   })()
 
-  for (const start of pages) {
+  let blocked = null
+
+  for (let index = 0; index < pages.length; index++) {
+    const start = pages[index]
+    if (budgetExpired()) break
+    reportProgress(index / pages.length)
     try {
       const searchQuery = encodeURIComponent(keywords.slice(0, 4).join(' '))
       const url = `https://ma.indeed.com/jobs?q=${searchQuery}&l=${encodeURIComponent(regionByLocation)}&sort=date&start=${start}&fromage=14`
 
       let data
-      const res = await fetchWithRetry(url)
-      data = typeof res === 'string' ? res : res.data
-      if (/captcha|Please verify you are a human|access denied/i.test(data)) break
+      let httpStatus = 200
+      try {
+        const res = await fetchWithRetry(url)
+        data = typeof res === 'string' ? res : res.data
+        httpStatus = typeof res === 'string' ? 200 : (res.status || 200)
+      } catch (fetchError) {
+        const httpMatch = fetchError.message.match(/HTTP (\d{3})/)
+        if (httpMatch) {
+          blocked = `Indeed a bloqué la requête (HTTP ${httpMatch[1]})`
+          break
+        }
+        throw fetchError
+      }
+
+      if (/captcha|Please verify you are a human|access denied|unusual traffic/i.test(data)) {
+        blocked = `Indeed a bloqué la requête (${httpStatus === 403 ? 'HTTP 403 / captcha' : 'protection anti-robot'})`
+        break
+      }
 
       const $ = cheerio.load(data)
 
@@ -520,7 +662,7 @@ async function scrapeIndeed(keywords, location = 'Maroc', userProfile = null) {
               company: company || 'Non spécifié',
               location: loc || regionByLocation,
               sourceUrl: `${sourceUrl}${fragment}`,
-              sourceId: jk || `indeed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+               sourceId: jk || stableSourceId('indeed', sourceUrl, title),
               source: 'indeed',
               postedAt,
               contractType: inferContractType(title, description),
@@ -535,22 +677,37 @@ async function scrapeIndeed(keywords, location = 'Maroc', userProfile = null) {
         })
       }
 
-      if (foundOnPage === 0 && start === '0') break
+      if (foundOnPage === 0) {
+        emptyPages++
+        if (start === '0' || emptyPages >= 2) break
+      } else {
+        emptyPages = 0
+      }
+      if (jobs.length >= TARGET_OFFERS_PER_SOURCE) break
       await delay(1500 + Math.random() * 1500)
-    } catch {
+    } catch (error) {
+      if (isBudgetError(error)) break
+      if (!blocked) blocked = `Indeed inaccessible (${error.message})`
       break
     }
   }
 
   const unique = dedupeJobs(jobs, j => `${j.title.toLowerCase()}|${j.company.toLowerCase()}|${j.sourceUrl}`)
 
-  return unique.map(j => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }))
+  return {
+    jobs: unique.map(j => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) })),
+    blocked,
+  }
 }
 
 // ─── REKRUTE SCRAPER ───────────────────────────────────────────────
 async function scrapeRekrute(keywords, userProfile = null) {
   const jobs = []
   const words = keywords.slice(0, 4)
+  // 10 résultats/page : 4 mots-clés × 5 pages ≈ 200 offres.
+  const pagesPerKeyword = 5
+  const totalSteps = words.length * pagesPerKeyword
+  let step = 0
 
   // /offres.html est rendu côté serveur (la page /offres-emploi est une SPA Angular sans résultats).
   // Le rendu SSR ne liste les offres que pour un mot-clé unique (une phrase multi-mots renvoie une page vide).
@@ -558,7 +715,9 @@ async function scrapeRekrute(keywords, userProfile = null) {
   // Pagination : s=1 → 10 résultats/page, p=0,1,2... (o et page fixes).
   for (const kw of words) {
     const searchQuery = encodeURIComponent(kw)
-    for (let pageIndex = 0; pageIndex < 3; pageIndex++) {
+    for (let pageIndex = 0; pageIndex < pagesPerKeyword; pageIndex++) {
+      if (budgetExpired() || jobs.length >= TARGET_OFFERS_PER_SOURCE) break
+      reportProgress(step++ / totalSteps)
       try {
         const url = `https://www.rekrute.com/offres.html?keyword=${searchQuery}&query=${searchQuery}&s=1&p=${pageIndex}&o=1&page=0`
 
@@ -615,7 +774,7 @@ async function scrapeRekrute(keywords, userProfile = null) {
             company: company || 'Non spécifié',
             location: (locRaw || 'Maroc').replace(/\s*\(Maroc\)/i, ''),
             sourceUrl,
-            sourceId: idMatch || `rekrute-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+             sourceId: idMatch || stableSourceId('rekrute', sourceUrl, title),
             source: 'rekrute',
             postedAt,
             contractType,
@@ -630,12 +789,14 @@ async function scrapeRekrute(keywords, userProfile = null) {
         }
       })
 
-      if (pageIndex < 2) await delay(1000 + Math.random() * 1200)
+      if (pageIndex < pagesPerKeyword - 1) await delay(1000 + Math.random() * 1200)
       } catch (error) {
+        if (isBudgetError(error)) break
         console.error(`Rekrute page ${pageIndex} error:`, error.message)
         break
       }
     }
+    if (budgetExpired() || jobs.length >= TARGET_OFFERS_PER_SOURCE) break
     await delay(800 + Math.random() * 1200)
   }
 
@@ -654,12 +815,17 @@ async function scrapeWTTJ(keywords, location = 'Maroc', userProfile = null) {
   const apiKey = '4bd8f6215d0cc52b26430765769e65a0'
   const filter = encodeURIComponent('office.country_code:"MA"')
 
-  for (const kw of keywords.slice(0, 4)) {
-    try {
-      const requests = [{
-        indexName: index,
-        params: `query=${encodeURIComponent(kw)}&filters=${filter}&hitsPerPage=100&page=0`,
-      }]
+  for (let kwIndex = 0; kwIndex < keywords.slice(0, 4).length; kwIndex++) {
+    if (budgetExpired() || jobs.length >= TARGET_OFFERS_PER_SOURCE) break
+    const kw = keywords[kwIndex]
+    for (let page = 0; page < 3; page++) {
+      if (budgetExpired() || jobs.length >= TARGET_OFFERS_PER_SOURCE) break
+      reportProgress((kwIndex * 3 + page) / 12)
+      try {
+        const requests = [{
+          indexName: index,
+          params: `query=${encodeURIComponent(kw)}&filters=${filter}&hitsPerPage=100&page=${page}`,
+        }]
       const res = await fetchWithRetry('https://csekhvms53-dsn.algolia.net/1/indexes/*/queries', {
         method: 'POST',
         headers: {
@@ -672,8 +838,9 @@ async function scrapeWTTJ(keywords, location = 'Maroc', userProfile = null) {
         data: JSON.stringify({ requests }),
       })
 
-      const payload = typeof res === 'string' ? JSON.parse(res) : res.data
-      const hits = (payload.results?.[0]?.hits) || []
+      const rawPayload = typeof res === 'string' ? res : res?.data
+      const payload = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload
+      const hits = (payload?.results?.[0]?.hits) || []
 
       for (const hit of hits) {
         const title = normalizeText(hit.name || '')
@@ -724,7 +891,7 @@ async function scrapeWTTJ(keywords, location = 'Maroc', userProfile = null) {
           companyLogo: hit.organization?.logo?.url || '',
           location: jobLocation,
           sourceUrl,
-          sourceId: hit.objectID || hit.reference || jobSlug || `wttj-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+           sourceId: hit.objectID || hit.reference || jobSlug || stableSourceId('welcometothejungle', sourceUrl, title),
           source: 'welcometothejungle',
           postedAt: hit.published_at ? new Date(hit.published_at) : new Date(),
           contractType,
@@ -736,8 +903,13 @@ async function scrapeWTTJ(keywords, location = 'Maroc', userProfile = null) {
           keywords: title.split(/[\s(]/).filter(w => w.length > 3).slice(0, 8),
         })
       }
+
+      // Aucun résultat sur cette page : inutile d'aller plus loin pour ce mot-clé.
+      if ((payload?.results?.[0]?.hits || []).length === 0) break
     } catch (error) {
-      console.error(`WTTJ Algolia query "${kw}" error:`, error.message)
+      if (isBudgetError(error)) break
+      console.error(`WTTJ Algolia query "${kw}" page ${page} error:`, error.message)
+    }
     }
   }
 
@@ -745,7 +917,9 @@ async function scrapeWTTJ(keywords, location = 'Maroc', userProfile = null) {
   // (doublons sur le site) : on déduppe par contenu titre+entreprise+ville.
   const unique = dedupeJobs(jobs, j => `${j.title.toLowerCase()}|${j.company.toLowerCase()}|${j.location.toLowerCase()}`)
 
-  return unique.map(j => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }))
+  return unique
+    .slice(0, TARGET_OFFERS_PER_SOURCE)
+    .map(j => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }))
 }
 
 // ─── MANPOWER SCRAPER ─────────────────────────────────────────────
@@ -754,14 +928,25 @@ async function scrapeWTTJ(keywords, location = 'Maroc', userProfile = null) {
 async function scrapeManpower(keywords, location = 'Maroc', userProfile = null) {
   const jobs = []
   const listUrl = 'https://www.manpower-maroc.com/ats/offres'
-  const maxPages = 6
+  // 10 résultats/page : 20 pages ≈ 200 offres.
+  const maxPages = 20
+  const searchTerm = (Array.isArray(keywords) ? keywords : [keywords]).map(k => String(k || '').trim()).filter(Boolean)[0] || ''
 
   for (let page = 1; page <= maxPages; page++) {
+    if (budgetExpired() || jobs.length >= TARGET_OFFERS_PER_SOURCE) break
+    reportProgress((page - 1) / maxPages)
     let data = ''
     try {
-      const { data: d } = await fetchWithRetry(`${listUrl}?page=${page}&cle=&domaine=&ville=`)
+      const params = new URLSearchParams({
+        page: String(page),
+        cle: searchTerm,
+        domaine: '',
+        ville: location && location.toLowerCase() !== 'maroc' ? location : '',
+      })
+      const { data: d } = await fetchWithRetry(`${listUrl}?${params.toString()}`)
       data = d
     } catch (error) {
+      if (isBudgetError(error)) break
       console.error(`Manpower page ${page} error:`, error.message)
       break
     }
@@ -786,10 +971,10 @@ async function scrapeManpower(keywords, location = 'Maroc', userProfile = null) 
         company: 'Manpower Maroc',
         location: loc,
         sourceUrl,
-        sourceId: idMatch[1] || sourceUrl.split('/').filter(Boolean).slice(-2, -1)[0] || sourceUrl,
-        source: 'manpower',
-        postedAt: new Date(),
-        contractType: '',
+         sourceId: idMatch[1] || stableSourceId('manpower', sourceUrl, title),
+         source: 'manpower',
+         postedAt: new Date(),
+         contractType: inferContractType(title, ''),
         description: '',
         sector,
         keywords: title.split(/[\s(]/).filter(w => w.length > 3).slice(0, 8),
@@ -801,16 +986,21 @@ async function scrapeManpower(keywords, location = 'Maroc', userProfile = null) 
   }
 
   const seen = new Set()
-  const unique = jobs.filter(j => {
+  const listed = jobs.filter(j => {
     const key = j.sourceUrl.toLowerCase()
     if (seen.has(key)) return false
     seen.add(key)
     return true
   })
+  // Filtre par mots-clés souple : s'il ne retient rien on garde la liste brute.
+  const unique = keepRelevantJobs(listed, keywords, j => `${j.title} ${j.sector || ''} ${j.location || ''}`)
 
   // Enrichissement : description, type de contrat, date d'annonce... depuis la page détail.
-  const toEnrich = unique.slice(0, 30)
-  for (const job of toEnrich) {
+  const toEnrich = unique.slice(0, TARGET_OFFERS_PER_SOURCE)
+  for (let i = 0; i < toEnrich.length; i++) {
+    if (budgetExpired()) break
+    reportProgress(0.5 + (i / Math.max(1, toEnrich.length)) * 0.5)
+    const job = toEnrich[i]
     try {
       const { data } = await fetchWithRetry(job._detailUrl)
       const $ = cheerio.load(data)
@@ -861,14 +1051,35 @@ async function scrapeManpower(keywords, location = 'Maroc', userProfile = null) 
 // ─── DREAMJOB SCRAPER (WordPress / JNews theme) ────────────────
 async function scrapeDreamjob(keywords, location = 'Maroc', userProfile = null) {
   const jobs = []
-  const pages = ['', '/page/2/']
+  const searchTerms = (Array.isArray(keywords) ? keywords : [keywords])
+    .map(normalizeText)
+    .filter(Boolean)
+    .slice(0, 6)
+  // Une recherche WordPress renvoie ~10-20 posts : 6 mots-clés ≈ 60-120 cartes.
+  // On complète avec la pagination de /emploi/ pour atteindre 200 offres.
+  const listPages = 12
+  const targetUrls = searchTerms.length > 0
+    ? [
+      ...searchTerms.map(term => `https://www.dreamjob.ma/?s=${encodeURIComponent(term)}`),
+      ...Array.from({ length: listPages }, (_, i) => (
+        i === 0 ? 'https://www.dreamjob.ma/emploi' : `https://www.dreamjob.ma/emploi/page/${i + 1}/`
+      )),
+    ]
+    : Array.from({ length: listPages }, (_, i) => (
+      i === 0 ? 'https://www.dreamjob.ma/emploi' : `https://www.dreamjob.ma/emploi/page/${i + 1}/`
+    ))
+  const totalUrls = targetUrls.length
+  let emptyListPages = 0
 
   // Posts de dreamjob qui ne sont pas des offres d'emploi à proprement parler.
-  const NON_JOB_PATTERN = /^(?:résultats?|resultats?|convocations?|listes? (?:des )?(?:admis|retenus)|avis|programme(?:s)?|communiqu[ée]s?|report|journ[ée]e(?:s)? (?:de recru|portes|d'information)?|planning|réunion)\b/i
+  const NON_JOB_PATTERN = /^(?:résultats?|resultats?|convocations?|listes? (?:des )?(?:admis|retenus)|avis|programme(?:s)?|communiqu[ée]s?|report|journ[ée]e(?:s)? (?:de recru|portes|d'information)?|planning|réunion|webinaire|stages?)\b/i
+  const isJobUrl = href => /(?:emploi|offre|job|recrutement)/i.test(href) && !/(?:concours|resultat|formation|stage|actualite)/i.test(href)
 
-  for (const pagePath of pages) {
+  for (let urlIndex = 0; urlIndex < targetUrls.length; urlIndex++) {
+    if (budgetExpired() || jobs.length >= TARGET_OFFERS_PER_SOURCE) break
+    reportProgress(urlIndex / totalUrls)
+    const url = targetUrls[urlIndex]
     try {
-      const url = `https://www.dreamjob.ma/emploi${pagePath}`
       const { data } = await fetchWithRetry(url)
 
       const $ = cheerio.load(data)
@@ -878,9 +1089,9 @@ async function scrapeDreamjob(keywords, location = 'Maroc', userProfile = null) 
         const card = $(el)
         const titleEl = card.find('h3.jeg_post_title a, h2.jeg_post_title a, .jeg_post_title a, a[href*="dreamjob.ma/"]').first()
         const title = normalizeText(titleEl.text())
-        const href = titleEl.attr('href') || ''
-        if (!title || title.length <= 3 || !href) return
-        if (NON_JOB_PATTERN.test(title)) return
+         const href = titleEl.attr('href') || ''
+         if (!title || title.length <= 3 || !href || !isJobUrl(href)) return
+         if (NON_JOB_PATTERN.test(title)) return
 
         const dateText = normalizeText(card.find('.jeg_meta_date, .jeg_meta_date a, time, span.date, .published').first().text())
         let postedAt = null
@@ -917,7 +1128,7 @@ async function scrapeDreamjob(keywords, location = 'Maroc', userProfile = null) 
           location,
           sourceUrl: href,
           source: 'dreamjob',
-          sourceId: href.split('/').filter(Boolean).pop() || '',
+           sourceId: href.split('/').filter(Boolean).pop() || stableSourceId('dreamjob', href, title),
           postedAt,
           contractType: inferContractType(title, description),
           description: description ? description.slice(0, 1500) : '',
@@ -927,15 +1138,29 @@ async function scrapeDreamjob(keywords, location = 'Maroc', userProfile = null) 
         })
       })
 
-      if (foundOnPage === 0 && pagePath === '') break
-      await delay(1500 + Math.random() * 1000)
+      if (foundOnPage === 0) {
+        // Page d'accueil de recherche vide : inutile d'insister sur ce gabarit.
+        if (url.includes('?s=')) break
+        emptyListPages++
+        if (emptyListPages >= 2) break
+      } else {
+        emptyListPages = 0
+      }
+      await delay(1200 + Math.random() * 800)
     } catch (error) {
-      console.error('DreamJob page', pagePath, 'error:', error.message)
-      if (pagePath === '') break
+      if (isBudgetError(error)) break
+      console.error('DreamJob', url, 'error:', error.message)
     }
   }
 
-  return dedupeJobs(jobs, j => j.sourceUrl).map(j => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }))
+  const matchingJobs = keepRelevantJobs(
+    jobs,
+    searchTerms.length > 0 ? searchTerms : keywords,
+    j => `${j.title} ${j.company} ${j.description} ${j.sector || ''}`,
+  )
+  return dedupeJobs(matchingJobs, j => j.sourceUrl)
+    .slice(0, TARGET_OFFERS_PER_SOURCE)
+    .map(j => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }))
 }
 
 // ─── ONEJOB.MA SCRAPER (Drupal; cartes schema.org server-rendered) ─
@@ -943,10 +1168,15 @@ async function scrapeDreamjob(keywords, location = 'Maroc', userProfile = null) 
 async function scrapeOneJob(keywords, location = 'Maroc', userProfile = null) {
   const jobs = []
   const words = keywords.slice(0, 4)
+  const pagesPerKeyword = 6
+  const totalSteps = words.length * pagesPerKeyword
+  let step = 0
 
   for (const kw of words) {
     let got = 0
-    for (let page = 1; page <= 3; page++) {
+    for (let page = 1; page <= pagesPerKeyword; page++) {
+      if (budgetExpired() || jobs.length >= TARGET_OFFERS_PER_SOURCE) break
+      reportProgress(step++ / totalSteps)
       try {
         const url = `https://www.onejob.ma/recherche?query=%2A&q=${encodeURIComponent(kw)}&page=${page}`
         const { data } = await fetchWithRetry(url)
@@ -983,16 +1213,16 @@ async function scrapeOneJob(keywords, location = 'Maroc', userProfile = null) {
             company,
             location: city || location,
             sourceUrl,
-            sourceId: (idMatch || [])[1] || `onejob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+             sourceId: (idMatch || [])[1] || stableSourceId('onejob', sourceUrl, title),
             source: 'onejob',
             postedAt,
             contractType: (typeRaw && normalizeContractType(typeRaw)) || inferContractType(title, excerpt),
             description: excerpt.slice(0, 1200),
             sector,
             isRemote: /télétravail|remote|à distance|hybride/i.test(`${title} ${excerpt}`.slice(0, 300)),
-            city: city || undefined,
-            salary: salaryText && !/^1\s?dhs\s*[-–]\s*1\s?dhs/i.test(salaryText) ? salaryText.slice(0, 60) : undefined,
-            keywords: title.split(/[\s(]/).filter(w => w.length > 3).slice(0, 8),
+             city: city || undefined,
+             salaryText: salaryText && !/^1\s?dhs\s*[-–]\s*1\s?dhs/i.test(salaryText) ? salaryText.slice(0, 60) : undefined,
+             keywords: title.split(/[\s(]/).filter(w => w.length > 3).slice(0, 8),
           })
           newOnPage++
         })
@@ -1000,12 +1230,14 @@ async function scrapeOneJob(keywords, location = 'Maroc', userProfile = null) {
         if (newOnPage === 0) break
         got += newOnPage
       } catch (error) {
+        if (isBudgetError(error)) break
         console.error(`OneJob page ${page} error:`, error.message)
         break
       }
-      if (page < 3) await delay(900 + Math.random() * 900)
+      if (page < pagesPerKeyword) await delay(900 + Math.random() * 900)
     }
     if (got === 0) continue
+    if (budgetExpired() || jobs.length >= TARGET_OFFERS_PER_SOURCE) break
   }
 
   const seen = new Set()
@@ -1016,7 +1248,9 @@ async function scrapeOneJob(keywords, location = 'Maroc', userProfile = null) {
     return true
   })
 
-  return unique.map(j => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }))
+  return unique
+    .slice(0, TARGET_OFFERS_PER_SOURCE)
+    .map(j => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }))
 }
 
 // ─── MAROCEMPLOI.NET SCRAPER (WordPress/jobsearch; cards .me-job-card) ─
@@ -1031,6 +1265,7 @@ async function scrapeMarocEmploi(keywords, location = 'Maroc', userProfile = nul
     const { data } = await fetchWithRetry(listUrl)
     const $ = cheerio.load(data)
     const cards = $('article.me-job-card')
+    reportProgress(0.5)
     if (cards.length === 0) return jobs
 
     cards.each((_, el) => {
@@ -1073,16 +1308,33 @@ async function scrapeMarocEmploi(keywords, location = 'Maroc', userProfile = nul
       })
     })
   } catch (error) {
+    if (isBudgetError(error)) return jobs
     console.error('MarocEmploi list error:', error.message)
   }
 
-  const toEnrich = jobs.slice(0, 20)
-  for (const job of toEnrich) {
+  // La liste /offre/ est un flux généraliste sans recherche par mots-clés :
+  // on ne conserve que les offres réellement en rapport avec la demande
+  // (filtre souple : s'il ne retient rien, on garde la liste brute).
+  const searchTerms = (Array.isArray(keywords) ? keywords : [keywords])
+    .map(normalizeText)
+    .filter(Boolean)
+  const matching = keepRelevantJobs(jobs, searchTerms, j => `${j.title} ${j.sector || ''}`)
+  const toEnrich = matching.slice(0, TARGET_OFFERS_PER_SOURCE)
+  for (let i = 0; i < toEnrich.length; i++) {
+    if (budgetExpired()) break
+    reportProgress(0.5 + (i / Math.max(1, toEnrich.length)) * 0.5)
+    const job = toEnrich[i]
     try {
       const { data } = await fetchWithRetry(job._detailUrl)
       const $ = cheerio.load(data)
       const ldText = $('script[type="application/ld+json"]').first().text()
-      const ld = ldText ? (JSON.parse(ldText) || null) : null
+      let ld = null
+      try {
+        ld = ldText ? (JSON.parse(ldText) || null) : null
+      } catch {
+        // JSON-LD malformé : on garde la description CSS
+        ld = null
+      }
 
       let desc = normalizeText($('.me-job-description__content').first().text())
       if (!desc && ld) desc = normalizeText(String(ld.description || ''))
@@ -1111,17 +1363,20 @@ async function scrapeMarocEmploi(keywords, location = 'Maroc', userProfile = nul
       delete job._detailUrl
     } catch (error) {
       delete job._detailUrl
+      if (isBudgetError(error)) break
       console.error('MarocEmploi detail error:', error.message)
     }
     await delay(700 + Math.random() * 600)
   }
 
-  const clean = jobs.map(j => {
+  const clean = matching.map(j => {
     const { _detailUrl, ...rest } = j
     return rest
   })
 
-  return clean.map(j => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }))
+  return clean
+    .slice(0, TARGET_OFFERS_PER_SOURCE)
+    .map(j => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }))
 }
 
 // ─── SOURCES DISPONIBLES ─────────────────────────────────────────
@@ -1145,18 +1400,27 @@ const CONCOURS_BASE = 'https://www.emploi-public.ma'
 // gabarit de cartes (#listing-switcher .s-item a.card). Seuls le chemin des
 // détails et le domaine changent.
 const PUBLIC_LIST_CATEGORIES = [
-  { key: 'concours', label: 'Concours de recrutement', path: 'concours-liste', detailsPath: '/concours/details/', source: CONCOURS_SOURCE, domain: 'Concours public', pages: 3 },
-  { key: 'emploi-sup', label: 'Emplois supérieurs', path: 'emploi-sup-liste', detailsPath: '/emploi-sup/details/', source: 'emploi-public', domain: 'Emplois supérieurs', pages: 1 },
-  { key: 'postes-respo', label: 'Postes de responsabilités', path: 'postes-respo-liste', detailsPath: '/postes-respo/details/', source: 'emploi-public', domain: 'Postes de responsabilités', pages: 1 },
-  { key: 'experts', label: 'Recrutement des experts', path: 'experts-liste', detailsPath: '/experts/details/', source: 'emploi-public', domain: 'Recrutement des experts', pages: 1 },
+  { key: 'concours', label: 'Concours de recrutement', path: 'concours-liste', detailsPath: '/concours/details/', source: CONCOURS_SOURCE, domain: 'Concours public', pages: 6 },
+  { key: 'emploi-sup', label: 'Emplois supérieurs', path: 'emploi-sup-liste', detailsPath: '/emploi-sup/details/', source: 'emploi-public', domain: 'Emplois supérieurs', pages: 3 },
+  { key: 'postes-respo', label: 'Postes de responsabilités', path: 'postes-respo-liste', detailsPath: '/postes-respo/details/', source: 'emploi-public', domain: 'Postes de responsabilités', pages: 3 },
+  { key: 'experts', label: 'Recrutement des experts', path: 'experts-liste', detailsPath: '/experts/details/', source: 'emploi-public', domain: 'Recrutement des experts', pages: 3 },
 ]
 
-async function scrapePublicList({ onlyConcours = false, userProfile = null } = {}) {
+async function scrapePublicList({ onlyConcours = false, onlyEmploiPublic = false, userProfile = null } = {}) {
   const jobs = []
-  const categories = PUBLIC_LIST_CATEGORIES.filter(c => !onlyConcours || c.source === CONCOURS_SOURCE)
+  const categories = PUBLIC_LIST_CATEGORIES.filter(c => {
+    if (onlyConcours) return c.source === CONCOURS_SOURCE
+    if (onlyEmploiPublic) return c.source !== CONCOURS_SOURCE
+    return true
+  })
+  const totalPages = categories.reduce((sum, cat) => sum + cat.pages, 0)
+  let pageIndex = 0
+  let emptyPages = 0
 
   for (const cat of categories) {
     for (let pageNum = 1; pageNum <= cat.pages; pageNum++) {
+      if (budgetExpired() || jobs.length >= TARGET_OFFERS_PER_SOURCE) break
+      reportProgress(pageIndex++ / Math.max(1, totalPages))
       try {
         const url = pageNum === 1
           ? `${CONCOURS_BASE}/fr/${cat.path}`
@@ -1243,7 +1507,7 @@ async function scrapePublicList({ onlyConcours = false, userProfile = null } = {
               company: org || 'Administration publique marocaine',
               location: 'Maroc',
               sourceUrl: `${CONCOURS_BASE}${href}`,
-              sourceId: uuidMatch ? uuidMatch[1] : `${cat.key}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+               sourceId: uuidMatch ? uuidMatch[1] : stableSourceId(cat.source, `${CONCOURS_BASE}${href}`, title),
               postedAt: new Date(),
               contractType: 'CDI',
               description: descriptionParts.join(' | ').slice(0, 1200),
@@ -1259,17 +1523,24 @@ async function scrapePublicList({ onlyConcours = false, userProfile = null } = {
           })
         }
 
-        if (found === 0 && pageNum === 1) break
+        if (found === 0) {
+          emptyPages++
+          if (emptyPages >= 2) break
+        } else {
+          emptyPages = 0
+        }
         await delay(1200 + Math.random() * 800)
       } catch (error) {
+        if (isBudgetError(error)) break
         console.error(`${cat.key} page`, pageNum, 'error:', error.message)
         if (pageNum === 1) break
       }
     }
+    if (budgetExpired() || jobs.length >= TARGET_OFFERS_PER_SOURCE) break
   }
 
   return dedupeJobs(jobs, j => j.sourceId)
-    .slice(0, 150)
+    .slice(0, TARGET_OFFERS_PER_SOURCE)
     .map(j => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }))
 }
 
@@ -1283,9 +1554,17 @@ async function scrapeConcoursMaroc(userProfile = null) {
 //  - la section « Dernière chance pour postuler » → infos urgentes,
 //  - les concours dont la date d'examen est à venir → « concours prochains ».
 // L'ensemble est retourné séparément { jobs, news } pour un affichage trié.
-export async function scrapePublicSector(userProfile = null) {
-  const jobs = await scrapePublicList({ userProfile })
+export async function scrapePublicSector(userProfile = null, requestedSources = PUBLIC_SOURCES) {
+  const wantsConcours = requestedSources.includes(CONCOURS_SOURCE)
+  const wantsEmploiPublic = requestedSources.includes('emploi-public')
+  const jobs = await scrapePublicList({
+    onlyConcours: wantsConcours && !wantsEmploiPublic,
+    onlyEmploiPublic: wantsEmploiPublic && !wantsConcours,
+    userProfile,
+  })
   const news = []
+
+  if (!wantsConcours) return { jobs, news: [] }
 
   try {
     const { data } = await fetchWithRetry(`${CONCOURS_BASE}/fr/`)
@@ -1306,7 +1585,7 @@ export async function scrapePublicSector(userProfile = null) {
           org: org || 'Administration publique marocaine',
           excerpt: 'Annonce publiée sur le portail de l\'emploi public marocain',
           sourceUrl: `${CONCOURS_BASE}${href}`,
-          sourceId: m ? `act-${m[1]}` : `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+           sourceId: m ? `act-${m[1]}` : stableSourceId('emploi-public', `${CONCOURS_BASE}${href}`, title),
           imageUrl: img ? `${CONCOURS_BASE}${img.startsWith('/') ? img : `/${img}`}` : '',
           postedAt: new Date(),
           tags: ['actualite', 'etat'],
@@ -1328,7 +1607,7 @@ export async function scrapePublicSector(userProfile = null) {
           org: org || 'Administration publique marocaine',
           excerpt: msg || 'Dernière chance pour postuler',
           sourceUrl: `${CONCOURS_BASE}${href}`,
-          sourceId: m ? `urg-${m[1]}` : `urg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+           sourceId: m ? `urg-${m[1]}` : stableSourceId('emploi-public', `${CONCOURS_BASE}${href}`, title),
           postedAt: new Date(),
           tags: ['information', 'etat', 'urgent'],
         })
@@ -1371,44 +1650,69 @@ export async function scrapePublicSector(userProfile = null) {
 // ─── MAIN SCRAPING ORCHESTRATOR ───────────────────────────────────
 export async function scrapeAllSources(keywords, location = 'Maroc', enabledSources = ['linkedin', 'indeed', 'welcometothejungle', 'rekrute', 'dreamjob'], userProfile = null, onProgress = null) {
   const results = {}
+  const normalizedKeywords = (Array.isArray(keywords) ? keywords : [keywords])
+    .map(keyword => String(keyword || '').trim())
+    .filter(Boolean)
+    .slice(0, 10)
+  const normalizedSources = Array.isArray(enabledSources) ? enabledSources.filter(Boolean) : []
 
   const scrapers = {
-    linkedin: () => scrapeLinkedIn(keywords, location, userProfile),
-    indeed: () => scrapeIndeed(keywords, location, userProfile),
-    rekrute: () => scrapeRekrute(keywords, userProfile),
-    welcometothejungle: () => scrapeWTTJ(keywords, location, userProfile),
-    manpower: () => scrapeManpower(keywords, location, userProfile),
-    dreamjob: () => scrapeDreamjob(keywords, location, userProfile),
-    onejob: () => scrapeOneJob(keywords, location, userProfile),
-    marocemploi: () => scrapeMarocEmploi(keywords, location, userProfile),
+    linkedin: () => scrapeLinkedIn(normalizedKeywords, location, userProfile),
+    indeed: () => scrapeIndeed(normalizedKeywords, location, userProfile),
+    rekrute: () => scrapeRekrute(normalizedKeywords, userProfile),
+    welcometothejungle: () => scrapeWTTJ(normalizedKeywords, location, userProfile),
+    manpower: () => scrapeManpower(normalizedKeywords, location, userProfile),
+    dreamjob: () => scrapeDreamjob(normalizedKeywords, location, userProfile),
+    onejob: () => scrapeOneJob(normalizedKeywords, location, userProfile),
+    marocemploi: () => scrapeMarocEmploi(normalizedKeywords, location, userProfile),
     concours: () => scrapeConcoursMaroc(userProfile),
+    'emploi-public': () => scrapePublicSector(userProfile, ['emploi-public']).then(r => r.jobs),
   }
 
-  for (const source of enabledSources) {
+  for (const source of normalizedSources) {
     const scraper = scrapers[source]
-    if (!scraper) continue
+    if (!scraper) {
+      results[source] = { jobs: [], status: 'failed', duration: 0, error: `Source inconnue: ${source}` }
+      continue
+    }
 
     results[source] = { jobs: [], status: 'pending', duration: 0 }
     const start = Date.now()
     try {
-      const jobs = await scraper()
+      const raw = await scraper()
+      const jobs = Array.isArray(raw) ? raw : raw?.jobs || []
+      const blocked = Array.isArray(raw) ? null : raw?.blocked || null
       results[source] = {
         jobs,
-        status: jobs.length > 0 ? 'success' : 'partial',
+        status: jobs.length > 0 ? 'success' : blocked ? 'failed' : 'partial',
         duration: Date.now() - start,
+        error: jobs.length > 0 ? undefined : blocked || 'Aucune offre trouvée',
       }
     } catch (error) {
-      results[source] = {
-        jobs: [],
-        status: 'failed',
-        duration: Date.now() - start,
-        error: error.message,
+      // Budget épuisé : la source est « partielle », pas en échec — les offres
+      // déjà collectées sont conservées.
+      if (isBudgetError(error)) {
+        results[source] = {
+          jobs: results[source].jobs || [],
+          status: results[source].jobs?.length ? 'partial' : 'failed',
+          duration: Date.now() - start,
+          error: 'Budget de collecte atteint pour cette source',
+        }
+      } else {
+        results[source] = {
+          jobs: [],
+          status: 'failed',
+          duration: Date.now() - start,
+          error: error.message,
+        }
       }
     }
     if (typeof onProgress === 'function') {
-      onProgress(source, results[source])
+      await onProgress(source, results[source])
     }
-    await delay(2000 + Math.random() * 1500)
+    if (source !== normalizedSources[normalizedSources.length - 1] && !budgetExpired()) {
+      await delay(1500 + Math.random() * 1000)
+    }
   }
 
   return results

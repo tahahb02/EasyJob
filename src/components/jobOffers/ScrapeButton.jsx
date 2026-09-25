@@ -4,8 +4,8 @@ import { cn } from '@/lib/utils'
 /**
  * Bouton de scraping avec remplissage « verre d'eau ».
  * - au clic : la pastille d'eau monte du bas vers le haut,
- * - pendant l'exécution : progression live 0→90 %,
- * - à la fin : montée vers 100 % puis retombe à 0.
+ * - pendant l'exécution : progression live 0→99 % (valeur fournie par le serveur),
+ * - à la fin : 100 % + « Terminé ! », affiché jusqu'au prochain lancement.
  */
 export default function ScrapeButton({
   progress = 0,
@@ -19,14 +19,16 @@ export default function ScrapeButton({
   children,
   ...props
 }) {
-  const pct = Math.min(Math.max(progress, 0), 100)
+  // Une collecte terminée reste visible à 100 % même si la progression
+  // animée n'a pas fini sa dernière marche.
+  const pct = done ? 100 : Math.min(Math.max(progress, 0), 100)
   const filled = active && pct > 0
-  const isDone = active && done && pct >= 100
+  const isDone = active && done
   const high = pct >= 55
   const IconEl = active && ActiveIcon ? ActiveIcon : Icon
   const buttonLabel = active
     ? isDone
-      ? 'Terminé !'
+      ? 'Scrapping terminé !'
       : `${activeLabel}${pct > 0 ? ` ${Math.round(pct)}%` : ''}`
     : label
 
@@ -38,8 +40,10 @@ export default function ScrapeButton({
       <span
         aria-hidden
         className={cn(
-          'pointer-events-none absolute inset-x-0 bottom-0 transition-[height] duration-700 ease-out',
-          filled && 'bg-gradient-to-t from-sky-800/85 via-sky-600/70 to-sky-400/60',
+          'pointer-events-none absolute inset-x-0 bottom-0 transition-[height] duration-500 ease-out',
+          isDone
+            ? 'bg-gradient-to-t from-emerald-700/85 via-emerald-600/70 to-emerald-400/60'
+            : 'bg-gradient-to-t from-sky-800/85 via-sky-600/70 to-sky-400/60',
         )}
         style={{ height: filled ? `${pct}%` : '0%' }}
       >

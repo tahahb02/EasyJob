@@ -360,11 +360,30 @@ const toggleSave = useToggleSaveJob()
   const handleScraping = () => {
     const params = activeTab === 'public' ? { sources: PUBLIC_SOURCES } : undefined
     running.start(params, {
-      onSuccess: () => {
-        refetch()
-        toast.success('Scrapping terminé avec succès', { duration: 4000 })
+      onLaunch: (data) => {
+        toast.info(
+          data?.alreadyRunning
+            ? 'Une collecte est déjà en cours, suivi en cours…'
+            : 'Scrapping lancé, les offres s’affichent automatiquement à la fin…',
+          { duration: 3000 },
+        )
       },
-      onError: (err) => toast.error(err?.response?.data?.error || err?.message || 'Erreur lors du scrapping'),
+      // Le message de fin ne part qu'une fois la collecte réellement terminée
+      // (donc à 100 %) : il était précédent envoyé dès l'accusé de réception
+      // HTTP, ce qui affichait « terminé » alors que rien n'était collecté.
+      onComplete: (log) => {
+        const found = log?.totalOffersFound ?? 0
+        const added = log?.totalNewOffers ?? 0
+        refetch()
+        if (log?.status === 'failed') {
+          toast.error(`Scrapping terminé sans résultat : ${added} nouvelle(s) offre(s) sur ${found} trouvée(s)`, { duration: 6000 })
+        } else if (added > 0) {
+          toast.success(`Scrapping terminé : ${added} nouvelle(s) offre(s) ajoutée(s) sur ${found} trouvée(s)`, { duration: 5000 })
+        } else {
+          toast.info(`Scrapping terminé : ${found} offre(s) trouvée(s), aucune nouvelle (déjà enregistrée)`, { duration: 5000 })
+        }
+      },
+      onError: (err) => toast.error(err?.message || 'Erreur lors du scrapping'),
     })
   }
   const handleApplyInternal = (jobId) => {

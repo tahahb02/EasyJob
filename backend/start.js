@@ -5,6 +5,7 @@ import http from 'http'
 import app, { connectDB, runMaintenance } from './server.js'
 import { setupSocket } from './services/socketManager.js'
 import { startNotificationCron } from './services/notificationCron.js'
+import { resumeRunningScans } from './routes/scraping.js'
 
 const PORT = process.env.PORT || 5000
 
@@ -16,6 +17,10 @@ async function start() {
   setupSocket(server)
 
   startNotificationCron()
+
+  // Filet de sécurité : si un pilote de collecte s'est arrêté (crash, redémarrage,
+  // onglet fermé au pire moment), la collecte repart sans intervention utilisateur.
+  setInterval(() => { resumeRunningScans() }, 5000)
 
   server.listen(PORT, () => {
     console.log(`🚀 Serveur EasyJob sur port ${PORT}`)

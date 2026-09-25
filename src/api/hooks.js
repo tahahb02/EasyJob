@@ -280,119 +280,172 @@ export const useRunScraping = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (params) => { const { data } = await api.post('/scraping/run', params || {}); return data },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['jobs'] }); qc.invalidateQueries({ queryKey: ['public-board'] }); qc.invalidateQueries({ queryKey: ['scraping', 'logs'] }) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['scraping', 'logs'] }) },
   })
 }
 
-// Suivi en direct du scraping : renvoie une progression 0→100% utilisable
-// par un bouton « remplissage d'eau ». Le backend répond immédiatement avec un
-// runId puis fait tourner la collecte en arrière-plan ; on sonde /scraping/status
-// (toutes les 4 s) et on calcule l'avancement à partir des sources terminées.
+/**
+ * Pilotage du scrapping côté interface.
+ *
+ * Le pourcentage vient du serveur (`log.progress`) : plus de plafond à 92 % ni
+ * de calcul local qui se figeait à 12 % quand une source ne rendait pas la main.
+ * La collecte en cours est reprise automatiquement au montage (onglet fermé puis
+ * rouvert), et le message de fin n'apparaît qu'une fois le statut réellement
+ * terminé — donc forcément à 100 %.
+ */
 export const useScrapingProgress = () => {
   const qc = useQueryClient()
   const [runId, setRunId] = useState(null)
-  const [phase, setPhase] = useState('idle') // idle | running | done
+  const [phase, setPhase] = useState('idle')
   const [target, setTarget] = useState(0)
   const [progress, setProgress] = useState(0)
   const currentRunRef = useRef(null)
-  const doneRunRef = useRef(null)
-
+  const terminalRunRef = useRef(null)
+  const callbacksRef = useRef(null)
   const mutation = useMutation({
     mutationFn: async (params) => { const { data } = await api.post('/scraping/run', params || {}); return data },
   })
 
-  const { data: status } = useScrapingStatus(runId)
+  // Sans runId en cours de notre côté, on interroge la dernière collecte connue
+  // : c'est ce qui permet de reprendre le suivi après un rechargement de page.
+  const { data: status } = useScrapingStatus(runId ?? 'latest')
 
-  // Traduit l'état du log en cible de progression
   useEffect(() => {
-    if (!runId || !status) return
-    const log = status?.log
+    if (!status) return
+    const log = status.log
     if (!log) return
 
-    // N'agit que sur le run réellement démarré par cet écran
-    if (runId !== currentRunRef.current) return
+    // Reprise d'une collecte déjà lancée (autre onglet / page rechargée).
+    if (phase === 'idle' && log.status === 'running' && log._id !== runId) {
+      currentRunRef.current = log._id
+      setRunId(log._id)
+      setPhase('running')
+      setTarget(Number(log.progress) || 0)
+      return
+    }
+
+    if (!runId || currentRunRef.current !== log._id) return
 
     if (log.status && log.status !== 'running') {
-      if (phase === 'done' && doneRunRef.current === runId) return
-      doneRunRef.current = runId
+      if (terminalRunRef.current === log._id) return
+      terminalRunRef.current = log._id
       setTarget(100)
       setProgress(100)
       setPhase('done')
-      const t = setTimeout(() => {
-        setPhase('idle')
-        setTarget(0)
-        setProgress(0)
-        setRunId(null)
-        currentRunRef.current = null
-        doneRunRef.current = null
-      }, 1400)
-      return () => clearTimeout(t)
+      qc.invalidateQueries({ queryKey: ['jobs'] })
+      qc.invalidateQueries({ queryKey: ['public-board'] })
+      qc.invalidateQueries({ queryKey: ['recruiter-jobs'] })
+      qc.invalidateQueries({ queryKey: ['scraping', 'logs'] })
+      callbacksRef.current?.onComplete?.(log)
+      return
     }
 
-    const srcs = Array.isArray(log.sources) ? log.sources : []
-    const total = srcs.length || 1
-    const done = srcs.filter(s => s && s.status && s.status !== 'running').length
-    setTarget(Math.min(92, 12 + Math.round((done / total) * 80)))
-  }, [status, runId, phase])
+    // Progression fournie par le serveur, jamais bornée avant 100 %.
+    setTarget(Math.min(99, Math.max(0, Number(log.progress) || 0)))
+  }, [status, runId, phase, qc])
 
-  // Remplissage fluide vers la cible (effet « verre d'eau »)
+  // Le serveur peut signaler une progression plus fine que le pas de 1,5 s du
+  // polling ; SocketContext relaie `scraping:progress` vers cette requête.
   useEffect(() => {
     if (phase !== 'running') return
-    const id = setInterval(() => {
-      setProgress(prev => {
-        const diff = target - prev
-        if (Math.abs(diff) < 1) return target
-        return prev + diff * 0.15
+    const interval = setInterval(() => {
+      setProgress(previous => {
+        const difference = target - previous
+        if (Math.abs(difference) < 1) return target
+        return previous + difference * 0.2
       })
     }, 130)
-    return () => clearInterval(id)
+    return () => clearInterval(interval)
   }, [phase, target])
+
+  // Plus de remise à zéro automatique : sans elle, la barre retombait à 0 % et
+  // les offresFraichement collectées disparaissaient de l'écran. L'état « terminé »
+  // reste affiché jusqu'au prochain lancement.
+  useEffect(() => {
+    if (phase !== 'done') return
+    qc.invalidateQueries({ queryKey: ['scraping', 'logs'] })
+  }, [phase, qc])
 
   const start = (params, callbacks = {}) => {
     if (phase === 'running' || mutation.isPending) return
+    callbacksRef.current = callbacks
     currentRunRef.current = null
-    doneRunRef.current = null
+    terminalRunRef.current = null
     setPhase('running')
-    setTarget(12)
+    setTarget(0)
+    setProgress(0)
     mutation.mutate(params, {
       onSuccess: (data) => {
-        if (data?.runId) {
-          setRunId(data.runId)
-          currentRunRef.current = data.runId
+        if (!data?.runId) {
+          setPhase('idle')
+          setTarget(0)
+          setProgress(0)
+          callbacksRef.current?.onError?.(new Error('La collecte n\'a pas été démarrée'))
+          callbacksRef.current = null
+          return
         }
-        qc.invalidateQueries({ queryKey: ['jobs'] })
-        qc.invalidateQueries({ queryKey: ['public-board'] })
+        setRunId(data.runId)
+        currentRunRef.current = data.runId
+        setTarget(Math.min(99, Number(data.progress) || 0))
         qc.invalidateQueries({ queryKey: ['scraping', 'logs'] })
-        callbacks?.onSuccess?.(data)
+        callbacksRef.current?.onLaunch?.(data)
       },
-      onError: (err) => {
+      onError: (error) => {
         setPhase('idle')
         setTarget(0)
         setProgress(0)
         setRunId(null)
         currentRunRef.current = null
-        doneRunRef.current = null
-        callbacks?.onError?.(err)
+        terminalRunRef.current = null
+        callbacksRef.current?.onError?.(error)
+        callbacksRef.current = null
       },
     })
   }
 
+  const reset = () => {
+    setPhase('idle')
+    setTarget(0)
+    setProgress(0)
+    setRunId(null)
+    currentRunRef.current = null
+    terminalRunRef.current = null
+    callbacksRef.current = null
+  }
+
   return {
     start,
-    progress: Math.round(progress),
+    progress: Math.round(Math.min(100, Math.max(0, progress))),
     phase,
+    // « done » est inclus pour que la barre reste remplie à 100 % avec le
+    // libellé « Terminé ! » jusqu'au prochain lancement.
     isRunning: phase === 'running' || phase === 'done' || mutation.isPending,
+    isScraping: phase === 'running' || mutation.isPending,
     isPending: mutation.isPending,
     runId,
-    reset: () => { setPhase('idle'); setTarget(0); setProgress(0); setRunId(null) },
+    status,
+    reset,
   }
 }
 
 export const useScrapingStatus = (runId, options = {}) => useQuery({
   queryKey: ['scraping', 'status', runId ?? 'latest'],
-  queryFn: async () => { const { data } = await api.get(`/scraping/status${runId ? `?runId=${runId}` : ''}`); return data },
+  queryFn: async () => {
+    const params = new URLSearchParams()
+    if (runId) params.set('runId', runId)
+    const query = params.toString()
+    // Une requête de statut peut bloquer le temps d'une collecte : on lui
+    // laisse un budget large pour ne jamais se faire couper par le client.
+    const { data } = await api.get(`/scraping/status${query ? `?${query}` : ''}`, { timeout: 300000 })
+    return data
+  },
   enabled: !!runId,
-  refetchInterval: (query) => (query.state.data?.isRunning ? 4000 : false),
+  // Tant qu'on ne sait pas que la collecte est finie, on continue d'interroger :
+  // un échec réseau temporaire ne doit plus éteindre le suivi pour de bon.
+  refetchInterval: query => (query.state.data?.isRunning === false ? false : 1500),
+  refetchIntervalInBackground: true,
+  retry: 4,
+  retryDelay: 2000,
   ...options,
 })
 
@@ -405,19 +458,23 @@ export const useScrapingRunner = () => {
   const qc = useQueryClient()
   const [runId, setRunId] = useState(null)
   const [doneEvent, setDoneEvent] = useState(null)
-
+  const handledRunRef = useRef(null)
   const mutation = useMutation({
     mutationFn: async (params) => { const { data } = await api.post('/scraping/run', params || {}); return data },
-    onSuccess: (res) => { if (res?.runId) setRunId(res.runId); qc.invalidateQueries({ queryKey: ['scraping'] }) },
+    onSuccess: (result) => { if (result?.runId) setRunId(result.runId) },
   })
-
   const { data: status } = useScrapingStatus(runId)
-
   const isRunning = mutation.isPending || !!(runId && status?.isRunning)
   const justFinished = !!runId && !!status && !status.isRunning
 
   useEffect(() => {
-    if (justFinished && status?.log) { setDoneEvent({ runId, log: status.log }); setRunId(null); qc.invalidateQueries({ queryKey: ['jobs'] }); qc.invalidateQueries({ queryKey: ['public-board'] }); qc.invalidateQueries({ queryKey: ['scraping'] }) }
+    if (!justFinished || !status?.log || handledRunRef.current === runId) return
+    handledRunRef.current = runId
+    setDoneEvent({ runId, log: status.log })
+    setRunId(null)
+    qc.invalidateQueries({ queryKey: ['jobs'] })
+    qc.invalidateQueries({ queryKey: ['public-board'] })
+    qc.invalidateQueries({ queryKey: ['scraping'] })
   }, [justFinished, status, runId, qc])
 
   return {
@@ -427,7 +484,9 @@ export const useScrapingRunner = () => {
     result: doneEvent,
     clearResult: () => setDoneEvent(null),
     refetchStatus: () => { if (runId) qc.invalidateQueries({ queryKey: ['scraping', 'status', runId] }) },
-    isRunning, runId, status,
+    isRunning,
+    runId,
+    status,
   }
 }
 
