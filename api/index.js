@@ -401,10 +401,10 @@ var dbMigration_exports = {};
 __export(dbMigration_exports, {
   fixJobOfferIndexes: () => fixJobOfferIndexes
 });
-import mongoose20 from "mongoose";
+import mongoose21 from "mongoose";
 async function fixJobOfferIndexes() {
   try {
-    const db = mongoose20.connection.db;
+    const db = mongoose21.connection.db;
     if (!db) return;
     const collection = db.collection("joboffers");
     const indexes = await collection.indexes();
@@ -413,7 +413,7 @@ async function fixJobOfferIndexes() {
       await collection.dropIndex(OLD_JOB_INDEX);
       console.log("\u{1F9F9} Ancien index unique supprim\xE9 (userId_1_source_1_sourceId_1)");
     }
-    await mongoose20.model("JobOffer").createIndexes();
+    await mongoose21.model("JobOffer").createIndexes();
   } catch (err) {
     console.error("Migration index JobOffer \xE9chou\xE9e:", err.message);
   }
@@ -430,7 +430,7 @@ import dotenv2 from "dotenv";
 
 // backend/server.js
 import express19 from "express";
-import mongoose21 from "mongoose";
+import mongoose22 from "mongoose";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -956,7 +956,7 @@ import mongoose5 from "mongoose";
 var jobOfferSchema = new mongoose5.Schema({
   userId: { type: mongoose5.Schema.Types.ObjectId, ref: "User" },
   postedBy: { type: mongoose5.Schema.Types.ObjectId, ref: "User" },
-  source: { type: String, enum: ["linkedin", "indeed", "welcometothejungle", "rekrute", "manpower", "dreamjob", "emplois", "concours", "manual", "recruiter", "autre"] },
+  source: { type: String, enum: ["linkedin", "indeed", "welcometothejungle", "rekrute", "manpower", "dreamjob", "onejob", "marocemploi", "emplois", "concours", "emploi-public", "manual", "recruiter", "autre"] },
   sourceId: String,
   sourceUrl: String,
   title: { type: String, required: true },
@@ -999,11 +999,32 @@ jobOfferSchema.index({ title: "text", company: "text", description: "text" });
 jobOfferSchema.index({ domain: 1, sector: 1, isActive: 1 });
 var JobOffer_default = mongoose5.model("JobOffer", jobOfferSchema);
 
-// backend/models/Application.js
+// backend/models/PublicNews.js
 import mongoose6 from "mongoose";
-var applicationSchema = new mongoose6.Schema({
+var publicNewsSchema = new mongoose6.Schema({
   userId: { type: mongoose6.Schema.Types.ObjectId, ref: "User", required: true },
-  jobOfferId: { type: mongoose6.Schema.Types.ObjectId, ref: "JobOffer", required: true },
+  source: { type: String, enum: ["emploi-public"], default: "emploi-public" },
+  category: { type: String, enum: ["actualite", "concours-prochain", "info"], required: true },
+  title: { type: String, required: true },
+  excerpt: { type: String, default: "" },
+  org: { type: String, default: "" },
+  sourceUrl: { type: String, default: "" },
+  sourceId: { type: String, default: "" },
+  imageUrl: { type: String, default: "" },
+  postedAt: { type: Date, default: Date.now },
+  eventDate: Date,
+  tags: [String],
+  read: { type: Boolean, default: false }
+}, { timestamps: true });
+publicNewsSchema.index({ userId: 1, source: 1, sourceId: 1 }, { unique: true, partialFilterExpression: { sourceId: { $type: "string" } } });
+publicNewsSchema.index({ userId: 1, category: 1, postedAt: -1 });
+var PublicNews_default = mongoose6.model("PublicNews", publicNewsSchema);
+
+// backend/models/Application.js
+import mongoose7 from "mongoose";
+var applicationSchema = new mongoose7.Schema({
+  userId: { type: mongoose7.Schema.Types.ObjectId, ref: "User", required: true },
+  jobOfferId: { type: mongoose7.Schema.Types.ObjectId, ref: "JobOffer", required: true },
   status: {
     type: String,
     enum: [
@@ -1075,12 +1096,12 @@ var applicationSchema = new mongoose6.Schema({
 }, { timestamps: true });
 applicationSchema.index({ userId: 1, jobOfferId: 1 }, { unique: true });
 applicationSchema.index({ jobOfferId: 1, status: 1 });
-var Application_default = mongoose6.model("Application", applicationSchema);
+var Application_default = mongoose7.model("Application", applicationSchema);
 
 // backend/models/Notification.js
-import mongoose7 from "mongoose";
-var notificationSchema = new mongoose7.Schema({
-  userId: { type: mongoose7.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose8 from "mongoose";
+var notificationSchema = new mongoose8.Schema({
+  userId: { type: mongoose8.Schema.Types.ObjectId, ref: "User", required: true },
   type: {
     type: String,
     enum: [
@@ -1100,20 +1121,20 @@ var notificationSchema = new mongoose7.Schema({
   },
   title: { type: String, required: true },
   message: { type: String, required: true },
-  data: mongoose7.Schema.Types.Mixed,
+  data: mongoose8.Schema.Types.Mixed,
   isRead: { type: Boolean, default: false },
   actionUrl: String
 }, { timestamps: true });
 notificationSchema.index({ userId: 1, createdAt: -1 });
 notificationSchema.index({ userId: 1, isRead: 1 });
-var Notification_default = mongoose7.model("Notification", notificationSchema);
+var Notification_default = mongoose8.model("Notification", notificationSchema);
 
 // backend/services/NotificationService.js
 init_User();
 
 // backend/models/CompanyEmail.js
-import mongoose8 from "mongoose";
-var companyEmailSchema = new mongoose8.Schema({
+import mongoose9 from "mongoose";
+var companyEmailSchema = new mongoose9.Schema({
   companyName: { type: String, required: true, trim: true },
   email: { type: String, required: true, lowercase: true, trim: true },
   website: { type: String, default: "" },
@@ -1138,7 +1159,7 @@ var companyEmailSchema = new mongoose8.Schema({
 companyEmailSchema.index({ companyName: "text", email: "text", sector: "text", domain: "text" });
 companyEmailSchema.index({ sector: 1, domain: 1, companyType: 1, city: 1 });
 companyEmailSchema.index({ email: 1 }, { unique: true });
-var CompanyEmail_default = mongoose8.model("CompanyEmail", companyEmailSchema);
+var CompanyEmail_default = mongoose9.model("CompanyEmail", companyEmailSchema);
 
 // backend/services/NotificationService.js
 var io = null;
@@ -1355,7 +1376,10 @@ async function fetchWithCurl(url, headers = {}) {
 async function fetchWithRetry(url, opts = {}, retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const response = await axios.get(url, {
+      const method = (opts.method || "GET").toUpperCase();
+      const response = await axios.request({
+        url,
+        method,
         ...opts,
         headers: {
           "User-Agent": getRandomUA(),
@@ -1371,14 +1395,16 @@ async function fetchWithRetry(url, opts = {}, retries = 3) {
       });
       return response;
     } catch (err) {
-      if (attempt === retries) {
-        if (err.response?.status === 403) {
-          try {
-            return await fetchWithCurl(url, opts.headers || {});
-          } catch (curlErr) {
-            throw curlErr;
-          }
+      const deadCodes = ["ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "EHOSTUNREACH", "ENETUNREACH", "ECONNRESET", "ETIMEDOUT", "ERR_NAME_NOT_RESOLVED"];
+      const hopeless = deadCodes.includes(err.code) || deadCodes.includes(err.errno);
+      if (err.response?.status === 403) {
+        try {
+          return await fetchWithCurl(url, opts.headers || {});
+        } catch (curlErr) {
+          throw curlErr;
         }
+      }
+      if (attempt === retries || hopeless) {
         throw err;
       }
       const waitMs = attempt * 1500 + Math.random() * 1e3;
@@ -1396,13 +1422,23 @@ function inferContractType(title, description = "") {
   if (t.includes("freelance") || t.includes("consultant") || t.includes("ind\xE9pendant") || t.includes("mission")) return "Freelance";
   if (t.includes("cdd") || t.includes("contract") || t.includes("temporaire") || t.includes("interim") || t.includes("int\xE9rim")) return "CDD";
   if (t.includes("temps partiel") || t.includes("part-time") || t.includes("mi-temps")) return "Temps partiel";
-  if (t.includes("alternance") || t.includes("apprentissage")) return "Alternance";
+  if (t.includes("alternance") || t.includes("apprentissage")) return "Stage";
+  return "CDI";
+}
+function normalizeContractType(raw) {
+  if (!raw) return "CDI";
+  const t = String(raw).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  if (!t || t === "cdi" || /indefini|permanent|illimite|full-time|temps plein|plein/.test(t)) return "CDI";
+  if (/cdd|determine|temporaire|fixe|contract|interim|saisonnier/.test(t)) return "CDD";
+  if (/stage|stagiaire|intern|apprenti|alternance|pfe|pfm|vae/.test(t)) return "Stage";
+  if (/freelance|consultant|independant|mission|auto-entrepreneur/.test(t)) return "Freelance";
+  if (/partiel|part-time|mi-temps/.test(t)) return "Temps partiel";
   return "CDI";
 }
 function parseRelativeDate(text) {
   if (!text) return null;
   const lower = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const now2 = /* @__PURE__ */ new Date();
+  const now = /* @__PURE__ */ new Date();
   const patterns = [
     { regex: /(\d+)\s*minute/, ms: (n) => n * 60 * 1e3 },
     { regex: /(\d+)\s*heure/, ms: (n) => n * 3600 * 1e3 },
@@ -1411,11 +1447,11 @@ function parseRelativeDate(text) {
     { regex: /(\d+)\s*mois/, ms: (n) => n * 30 * 864e5 },
     { regex: /(\d+)\s*an/, ms: (n) => n * 365 * 864e5 }
   ];
-  if (lower.includes("aujourd") || lower.includes("today") || lower.includes("maintenant")) return now2;
-  if (lower.includes("hier") || lower.includes("yesterday")) return new Date(now2 - 864e5);
+  if (lower.includes("aujourd") || lower.includes("today") || lower.includes("maintenant")) return now;
+  if (lower.includes("hier") || lower.includes("yesterday")) return new Date(now - 864e5);
   for (const { regex, ms } of patterns) {
     const match = lower.match(regex);
-    if (match) return new Date(now2 - ms(parseInt(match[1])));
+    if (match) return new Date(now - ms(parseInt(match[1])));
   }
   return null;
 }
@@ -1445,7 +1481,7 @@ function parseExactDate(text) {
   if (frMatch) {
     const day = parseInt(frMatch[1]);
     const month = frMonths[frMatch[2]];
-    const year = frMatch[3] ? parseInt(frMatch[3]) : now.getFullYear();
+    const year = frMatch[3] ? parseInt(frMatch[3]) : (/* @__PURE__ */ new Date()).getFullYear();
     if (month !== void 0) return new Date(year, month, day);
   }
   const usMatch = lower.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+(\d{1,2}),?\s*(\d{4})?/);
@@ -1457,6 +1493,54 @@ function parseExactDate(text) {
     if (month !== void 0) return new Date(year, month, day);
   }
   return null;
+}
+function cleanCompanyName(company) {
+  if (!company) return "";
+  let cleaned = normalizeText(company).replace(/\|.*$/, "").replace(/(?:emploi|recrutement|recrute|offre).*$/i, "").trim();
+  cleaned = cleaned.split(/\s+/).filter((w, i, arr) => w.toLowerCase() !== arr[i - 1]?.toLowerCase()).join(" ");
+  for (let len = Math.floor(cleaned.length / 2); len >= 3; len--) {
+    const first = cleaned.slice(0, len).trim();
+    const rest = cleaned.slice(len).trim();
+    if (first && rest === first) {
+      cleaned = first;
+      break;
+    }
+  }
+  if (cleaned.length > 3 && cleaned.length <= 60) return cleaned;
+  return company;
+}
+var SECTOR_KEYWORDS = [
+  { sector: "Informatique / IT", keywords: ["informatique", "digital", "software", "it ", "d\xE9veloppeur", "developpeur", "devops", "data", "cyber", "cloud", "engineer", "ing\xE9nieur", "ingenieur", "fullstack", "backend", "frontend", "java", "python", "php"] },
+  { sector: "Finance / Banque", keywords: ["banque", "finance", "comptable", "auditeur", "credit", "tr\xE9sorerie", "tresorerie", "assurance", "risk"] },
+  { sector: "T\xE9l\xE9communications", keywords: ["t\xE9l\xE9com", "telecom", "r\xE9seaux", "reseaux", "5g", "fibre"] },
+  { sector: "Industrie / Production", keywords: ["industrie", "manufactur", "production", "usine", "mecanique", "maintenance", "qualit\xE9", "qualite", "logistique", "chantier", "btp", "construction"] },
+  { sector: "Commercial / Vente", keywords: ["commercial", "vente", "sales", "business developer", "account manager", "distribution", "marketing"] },
+  { sector: "Ressources Humaines", keywords: ["ressources humaines", "rh ", "recrutement", "talent", "payroll", "pae", "administration du personnel"] },
+  { sector: "Sante / Pharmacie", keywords: ["pharmacie", "sant\xE9", "sante", "infirmier", "medicine", "medical", "pharmacien", "medecin"] },
+  { sector: "Education / Formation", keywords: ["professeur", "enseignant", "education", "ecole", "formation", "universit\xE9", "universite"] },
+  { sector: "Fonction publique", keywords: ["concours", "minist\xE8re", "ministere", "fonction publique", "administration publique", "collectivit\xE9", "collectivite", "d\xE9partement"] },
+  { sector: "Agriculture / Agroalimentaire", keywords: ["agriculture", "agroalimentaire", "agro", "\xE9levage", "elevage", "agronome"] },
+  { sector: "Hotellerie / Tourisme", keywords: ["h\xF4tel", "hotel", "tourisme", "restaurant", "chef de cuisine", "r\xE9ception"] },
+  { sector: "Transport / Logistique", keywords: ["transport", "logistique", "chauffeur", "conduite", "livraison", "a\xE9rien", "aeronautique"] },
+  { sector: "Energie", keywords: ["\xE9nergie", "energie", "\xE9lectrique", "electrique", "solaire", "\xE9olien", "eolien"] }
+];
+function guessSector(title, description = "") {
+  const text = `${title} ${description}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  for (const { sector, keywords } of SECTOR_KEYWORDS) {
+    for (const kw of keywords) {
+      if (text.includes(kw)) return sector;
+    }
+  }
+  return "";
+}
+function dedupeJobs(jobs, keyFn = (j) => `${j.title.toLowerCase()}|${j.company.toLowerCase()}`) {
+  const seen = /* @__PURE__ */ new Set();
+  return jobs.filter((j) => {
+    const key = keyFn(j);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 function extractPostedDate($, card) {
   const selectors = [
@@ -1626,73 +1710,94 @@ async function scrapeLinkedIn(keywords, location = "Morocco", userProfile = null
           if (!description || description.length < 20) {
             description = normalizeText(card.find("p, span.description, .entity-result__summary").text().slice(0, 500));
           }
+          const locationText = (loc || location).replace(/\s*\(Maroc\)/i, "");
+          const isRemote = /remote|télé(travail|travail)|télétravail|distanciel|hybride|à distance/i.test(`${title} ${loc} ${description}`.slice(0, 300));
           const salaryText = normalizeText(card.find(".salary, .job-search-card__salary-info").text());
           if (title && title.length > 3) {
             jobs.push({
               title,
-              company: company || "Non sp\xE9cifi\xE9",
-              location: loc || location,
+              company: cleanCompanyName(company) || "Non sp\xE9cifi\xE9",
+              location: locationText || location,
               sourceUrl,
               source: "linkedin",
               postedAt,
               contractType: inferContractType(title, description),
               description: description.slice(0, 2500),
-              sector: "",
+              sector: guessSector(title, description),
+              isRemote,
               salary: salaryText ? { min: 0, max: 0, currency: "MAD", period: "monthly" } : void 0,
-              keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 8)
+              keywords: title.split(/[\s(]/).filter((w) => w.length > 3).slice(0, 8)
             });
             foundOnPage++;
           }
         });
       }
       if (foundOnPage === 0 && pageNum === 0) break;
-      await delay(2e3 + Math.random() * 2e3);
+      await delay(1200 + Math.random() * 1500);
     } catch (error) {
       console.error(`LinkedIn page ${pageNum} error:`, error.message);
       if (pageNum === 0) break;
     }
   }
-  const seen = /* @__PURE__ */ new Set();
-  const unique = jobs.filter((j) => {
-    const key = `${j.title.toLowerCase()}|${j.company.toLowerCase()}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const unique = dedupeJobs(jobs);
   return unique.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
 }
 async function scrapeIndeed(keywords, location = "Maroc", userProfile = null) {
   const jobs = [];
-  const pages = ["0", "10", "20", "30"];
+  const pages = ["0", "10", "20"];
+  const regionByLocation = (() => {
+    const loc = String(location || "").toLowerCase();
+    const map = {
+      casablanca: "Casablanca",
+      rabat: "Rabat",
+      marrakech: "Marrakech",
+      tanger: "Tanger",
+      fes: "F\xE8s",
+      agadir: "Agadir",
+      meknes: "Mekn\xE8s",
+      oujda: "Oujda",
+      kenitra: "K\xE9nitra",
+      "el jadida": "El Jadida",
+      none: ""
+    };
+    for (const [key, val] of Object.entries(map)) if (loc.includes(key)) return val;
+    return "Maroc";
+  })();
   for (const start of pages) {
     try {
       const searchQuery = encodeURIComponent(keywords.slice(0, 4).join(" "));
-      const url = `https://ma.indeed.com/jobs?q=${searchQuery}&l=${encodeURIComponent(location)}&sort=date&start=${start}&fromage=14`;
-      const { data } = await fetchWithRetry(url);
+      const url = `https://ma.indeed.com/jobs?q=${searchQuery}&l=${encodeURIComponent(regionByLocation)}&sort=date&start=${start}&fromage=14`;
+      let data;
+      const res = await fetchWithRetry(url);
+      data = typeof res === "string" ? res : res.data;
+      if (/captcha|Please verify you are a human|access denied/i.test(data)) break;
       const $ = cheerio.load(data);
       const cardSelectors = [
+        "div.slider_item",
         "div.job_seen_beacon",
         "div.jobsearch-ResultsList div.result",
         "td.resultContent",
         ".resultContent",
         ".jobsearch-SerpJobCard",
         ".result",
-        'div[data-testid="slider_item"]'
+        "div[data-jk]"
       ];
       let foundOnPage = 0;
       for (const cardSel of cardSelectors) {
         $(cardSel).each((_, el) => {
           const card = $(el);
-          const titleEl = card.find("h2.jobTitle a, a.jcs-JobTitle, h2 a, a[data-jk], .jobTitle a");
+          const titleEl = card.find("h2.jobTitle a, a.jcs-JobTitle, h2 a, a[data-jk]").first();
           const title = normalizeText(titleEl.text());
-          const company = normalizeText(
-            card.find('span[data-testid="company-name"], .companyName, .company, span.company, [data-testid="company-name"]').text()
+          const company = cleanCompanyName(
+            card.find('span[data-testid="company-name"], .companyName, .company, span.company').text()
           );
           const loc = normalizeText(
-            card.find('div[data-testid="text-location"], .companyLocation, .location, [data-testid="text-location"]').text()
+            card.find('div[data-testid="text-location"], .companyLocation, .location').text()
           );
           const href = titleEl.attr("href") || "";
+          const jk = (href.match(/[?&]jk=([^&]+)/) || [])[1] || (card.attr("data-jk") || "").split("?")[0];
           const sourceUrl = href.startsWith("http") ? href.split("&")[0] : `https://ma.indeed.com${href.split("&")[0]}`;
+          const fragment = href.startsWith("http") ? `?jk=${jk}` : `?jk=${jk}`;
           const postedAt = extractPostedDate($, card) || /* @__PURE__ */ new Date();
           const description = normalizeText(
             card.find(".job-snippet, .jobCardShelfContainer, .jobsearch-jobDescriptionText, .jobCardShelf .job-snippet").text()
@@ -1702,218 +1807,285 @@ async function scrapeIndeed(keywords, location = "Maroc", userProfile = null) {
             jobs.push({
               title,
               company: company || "Non sp\xE9cifi\xE9",
-              location: loc || location,
-              sourceUrl,
+              location: loc || regionByLocation,
+              sourceUrl: `${sourceUrl}${fragment}`,
+              sourceId: jk || `indeed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
               source: "indeed",
               postedAt,
               contractType: inferContractType(title, description),
               description: description.slice(0, 2500),
-              sector: "",
+              sector: guessSector(title, description),
+              isRemote: /remote|télétravail|télétravail|à distance/i.test(`${title} ${description}`.slice(0, 300)),
               salary: salaryText ? { min: 0, max: 0, currency: "MAD", period: "monthly" } : void 0,
-              keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 8)
+              keywords: title.split(/[\s(]/).filter((w) => w.length > 3).slice(0, 8)
             });
             foundOnPage++;
           }
         });
       }
       if (foundOnPage === 0 && start === "0") break;
-      await delay(2500 + Math.random() * 2e3);
-    } catch (error) {
-      console.error(`Indeed page ${start} error:`, error.message);
-      if (start === "0") break;
+      await delay(1500 + Math.random() * 1500);
+    } catch {
+      break;
     }
   }
-  const seen = /* @__PURE__ */ new Set();
-  const unique = jobs.filter((j) => {
-    const key = `${j.title.toLowerCase()}|${j.company.toLowerCase()}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const unique = dedupeJobs(jobs, (j) => `${j.title.toLowerCase()}|${j.company.toLowerCase()}|${j.sourceUrl}`);
   return unique.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
 }
 async function scrapeRekrute(keywords, userProfile = null) {
   const jobs = [];
-  try {
-    const searchQuery = encodeURIComponent(keywords.slice(0, 4).join(" "));
-    const url = `https://www.rekrute.com/offres-emploi?mots-cles=${searchQuery}&tri=date&datePublication=semaine`;
-    const { data } = await fetchWithRetry(url);
-    const $ = cheerio.load(data);
-    const cardSelectors = [
-      "div.offre-item",
-      "li.offre",
-      "div.job-item",
-      "article.offre",
-      ".offre-list-item",
-      ".offre-block",
-      'div[class*="offre"]'
-    ];
-    for (const cardSel of cardSelectors) {
-      $(cardSel).each((_, el) => {
-        const card = $(el);
-        const titleEl = card.find("h2 a, h3 a, a.job-title, a.offre-title, a[title]");
-        const title = normalizeText(titleEl.text()) || normalizeText(titleEl.attr("title") || "");
-        const company = normalizeText(
-          card.find("span.company, div.company-name, p.company, .offre-company, a.company").text()
-        );
-        const loc = normalizeText(
-          card.find("span.location, div.location, span.ville, .offre-location, .city").text()
-        );
-        const href = titleEl.attr("href") || "";
-        const sourceUrl = href.startsWith("http") ? href : `https://www.rekrute.com${href}`;
-        const postedAt = extractPostedDate($, card) || /* @__PURE__ */ new Date();
-        const description = normalizeText(
-          card.find(".offre-description, .description, .job-description, p.short-description, .offre-text").first().text()
-        );
-        const salaryText = normalizeText(card.find(".salary, .salaire, .offre-salaire").text());
-        if (title && title.length > 3) {
-          jobs.push({
-            title,
-            company: company || "Non sp\xE9cifi\xE9",
-            location: loc || "Maroc",
-            sourceUrl,
-            source: "rekrute",
-            postedAt,
-            contractType: inferContractType(title, description),
-            description: description.slice(0, 2500),
-            sector: "",
-            salary: salaryText ? { min: 0, max: 0, currency: "MAD", period: "monthly" } : void 0,
-            keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 8)
+  const words = keywords.slice(0, 4);
+  for (const kw of words) {
+    const searchQuery = encodeURIComponent(kw);
+    for (let pageIndex = 0; pageIndex < 3; pageIndex++) {
+      try {
+        const url = `https://www.rekrute.com/offres.html?keyword=${searchQuery}&query=${searchQuery}&s=1&p=${pageIndex}&o=1&page=0`;
+        const { data } = await fetchWithRetry(url);
+        const $ = cheerio.load(data);
+        const rows = $("li.post-id");
+        if (rows.length === 0) break;
+        rows.each((_, el) => {
+          const row = $(el);
+          const href = row.find("a.titreJob").attr("href") || "";
+          const idMatch = row.attr("id") || (href.match(/(\d+)\.html/) || [])[1];
+          const sourceUrl = href.startsWith("http") ? href : `https://www.rekrute.com${href}`;
+          const titleRaw = normalizeText(row.find("a.titreJob").text());
+          const parts = titleRaw.split("|").map((s) => s.trim());
+          const title = parts[0];
+          const locRaw = parts.slice(1).join(" ");
+          const company = cleanCompanyName(row.find("img.photo").attr("alt") || row.find("img.photo").attr("title") || "");
+          const blurb = normalizeText(row.find(".holder div.info").first().find("span").last().text());
+          const dateSpan = row.find("em.date span").first().text().trim();
+          const dm = dateSpan.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+          const postedAt = dm ? new Date(+dm[3], +dm[2] - 1, +dm[1]) : /* @__PURE__ */ new Date();
+          const infoItems = [];
+          row.find(".holder div.info ul li").each((_2, li) => {
+            const liText = normalizeText($(li).text()).replace(/\s*:\s*$/, "");
+            if (liText) infoItems.push(liText);
           });
-        }
-      });
+          const sector = (infoItems.find((t) => /^Secteur/i.test(t)) || "").replace(/^Secteur d'activité\s*:/i, "").split(",")[0].trim();
+          const experience = (infoItems.find((t) => /^Expérience/i.test(t)) || "").replace(/^Expérience requise:\s*/i, "").trim();
+          const studyLevel = (infoItems.find((t) => /^Niveau/i.test(t)) || "").replace(/^Niveau d'étude demandé:\s*/i, "").trim();
+          const contractRaw = infoItems.find((t) => /^Type de contrat/i.test(t)) || "";
+          const rawContract = (contractRaw.match(/:\s*([A-ZÉÈÀÂ]{1,8}\s*\w*)/i) || [])[1] || "";
+          const contractType = normalizeContractType(rawContract) || inferContractType(title, blurb);
+          const isRemote = /Télétravail\s*:\s*Oui/i.test(contractRaw) || /télétravail|remote|à distance/i.test(`${title} ${blurb}`.slice(0, 300));
+          const postesMatch = row.find("em.date").text().match(/Postes proposés\s*:\s*(\d+)/i);
+          const description = [
+            blurb,
+            infoItems.join(" | "),
+            postesMatch ? `Nombre de postes : ${postesMatch[1]}` : ""
+          ].filter(Boolean).join("\n");
+          if (title && title.length > 3) {
+            jobs.push({
+              title,
+              company: company || "Non sp\xE9cifi\xE9",
+              location: (locRaw || "Maroc").replace(/\s*\(Maroc\)/i, ""),
+              sourceUrl,
+              sourceId: idMatch || `rekrute-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              source: "rekrute",
+              postedAt,
+              contractType,
+              description: description.slice(0, 2500),
+              sector,
+              isRemote,
+              city: (locRaw || "").replace(/\s*\(Maroc\)/i, ""),
+              experience: experience || void 0,
+              requirements: [experience, studyLevel].filter(Boolean),
+              keywords: title.split(/[\s(]/).filter((w) => w.length > 3).slice(0, 8)
+            });
+          }
+        });
+        if (pageIndex < 2) await delay(1e3 + Math.random() * 1200);
+      } catch (error) {
+        console.error(`Rekrute page ${pageIndex} error:`, error.message);
+        break;
+      }
     }
-  } catch (error) {
-    console.error("Rekrute scraping error:", error.message);
+    await delay(800 + Math.random() * 1200);
   }
-  const seen = /* @__PURE__ */ new Set();
-  const unique = jobs.filter((j) => {
-    const key = `${j.title.toLowerCase()}|${j.company.toLowerCase()}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const unique = dedupeJobs(jobs, (j) => j.sourceUrl || `${j.title.toLowerCase()}|${j.company.toLowerCase()}`);
   return unique.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
 }
 async function scrapeWTTJ(keywords, location = "Maroc", userProfile = null) {
   const jobs = [];
-  try {
-    const searchQuery = encodeURIComponent(keywords.slice(0, 4).join(" "));
-    const url = `https://www.welcometothejungle.com/fr/jobs?query=${searchQuery}&refinementList[locations][0]=Maroc&sortBy=mostRecent`;
-    const { data } = await fetchWithRetry(url);
-    const $ = cheerio.load(data);
-    const cardSelectors = [
-      "article",
-      ".card-job",
-      '[data-testid="job-card"]',
-      ".ais-Hits-item",
-      ".ais-InfiniteHits-item",
-      '[class*="JobCard"]',
-      'a[href*="/fr/companies/"]'
-    ];
-    for (const cardSel of cardSelectors) {
-      $(cardSel).each((_, el) => {
-        const card = $(el);
-        const title = normalizeText(
-          card.find('h2, h3, .job-title, [data-testid="job-title"], .title, [class*="Title"]').text()
-        );
-        const company = normalizeText(
-          card.find('.company-name, .job-company, [data-testid="company-name"], .company, [class*="Company"]').text()
-        );
-        const loc = normalizeText(
-          card.find('.job-location, .location, [data-testid="location"], .city, [class*="Location"]').text()
-        );
-        const href = card.find("a").first().attr("href") || card.find('a[href*="/jobs/"]').attr("href") || "";
-        const sourceUrl = href.startsWith("http") ? href : `https://www.welcometothejungle.com${href}`;
-        const description = normalizeText(
-          card.find('.job-description, .description, p, [class*="Description"]').text()
-        );
-        const postedAt = extractPostedDate($, card) || /* @__PURE__ */ new Date();
-        if (title && title.length > 3) {
-          jobs.push({
-            title,
-            company: company || "Non sp\xE9cifi\xE9",
-            location: loc || location,
-            sourceUrl,
-            source: "welcometothejungle",
-            postedAt,
-            contractType: inferContractType(title, description),
-            description: description.slice(0, 2500),
-            sector: "",
-            keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 8)
-          });
-        }
+  const index = "wk_cms_jobs_production_published_at_desc";
+  const appId = "CSEKHVMS53";
+  const apiKey = "4bd8f6215d0cc52b26430765769e65a0";
+  const filter = encodeURIComponent('office.country_code:"MA"');
+  for (const kw of keywords.slice(0, 4)) {
+    try {
+      const requests = [{
+        indexName: index,
+        params: `query=${encodeURIComponent(kw)}&filters=${filter}&hitsPerPage=100&page=0`
+      }];
+      const res = await fetchWithRetry("https://csekhvms53-dsn.algolia.net/1/indexes/*/queries", {
+        method: "POST",
+        headers: {
+          "x-algolia-application-id": appId,
+          "x-algolia-api-key": apiKey,
+          "content-type": "application/json",
+          "Referer": "https://www.welcometothejungle.com/",
+          "Origin": "https://www.welcometothejungle.com"
+        },
+        data: JSON.stringify({ requests })
       });
+      const payload = typeof res === "string" ? JSON.parse(res) : res.data;
+      const hits = payload.results?.[0]?.hits || [];
+      for (const hit of hits) {
+        const title = normalizeText(hit.name || "");
+        if (!title || title.length < 3) continue;
+        const orgSlug = hit.organization?.slug;
+        const jobSlug = hit.slug;
+        const company = cleanCompanyName(hit.organization?.name || "");
+        const city = hit.office?.city || "";
+        const state = hit.office?.state || "";
+        const country = hit.office?.country === "Morocco" ? "Maroc" : hit.office?.country || "";
+        const jobLocation = `${city}${state && state !== city ? `, ${state}` : ""}${country ? `, ${country}` : ""}`.replace(/^,\s*/, "") || location;
+        const sourceUrl = orgSlug && jobSlug ? `https://www.welcometothejungle.com/fr/companies/${orgSlug}/jobs/${jobSlug}` : `https://www.welcometothejungle.com/fr/jobs?query=${encodeURIComponent(kw)}`;
+        const profile = hit.profile ? normalizeText(String(hit.profile)).replace(/\\-/g, "-") : "";
+        const sector = hit.sectors?.[0]?.name?.fr || (Array.isArray(hit.sectors_name?.fr) ? Object.values(hit.sectors_name.fr[0] || {})[0] : "") || "";
+        const remoteRaw = String(hit.remote || "");
+        const isRemote = /full|partial|always|hybrid|remote/i.test(remoteRaw);
+        const remoteLabels = { full: "complet", always: "complet", partial: "partiel", punctual: "ponctuel", hybrid: "hybride", remote: "\xE0 distance" };
+        const remoteLabel = remoteLabels[remoteRaw] || remoteRaw;
+        let salary;
+        if (hit.salary_minimum || hit.salary_maximum) {
+          salary = {
+            min: hit.salary_minimum || hit.salary_maximum || 0,
+            max: hit.salary_maximum || hit.salary_minimum || 0,
+            currency: hit.salary_currency || "MAD",
+            period: hit.salary_period === "yearly" ? "yearly" : "monthly"
+          };
+        }
+        const experience = hit.has_experience_level_minimum ? `${hit.experience_level_minimum}+ ans` : "";
+        const education = hit.education_level ? hit.education_level === "BAC_5" ? "Bac +5" : `Bac +${hit.education_level.replace(/\D/g, "")}` : "";
+        const contractType = normalizeContractType(hit.contract_type_names?.fr || hit.contract_type || inferContractType(title, profile)) || "CDI";
+        const description = [
+          profile,
+          contractType ? `Contrat : ${contractType}` : "",
+          remoteLabel ? `T\xE9l\xE9travail : ${remoteLabel}` : ""
+        ].filter(Boolean).join("\n");
+        jobs.push({
+          title,
+          company: company || "Non sp\xE9cifi\xE9",
+          companyLogo: hit.organization?.logo?.url || "",
+          location: jobLocation,
+          sourceUrl,
+          sourceId: hit.objectID || hit.reference || jobSlug || `wttj-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          source: "welcometothejungle",
+          postedAt: hit.published_at ? new Date(hit.published_at) : /* @__PURE__ */ new Date(),
+          contractType,
+          description: description.slice(0, 2500),
+          sector,
+          isRemote,
+          salary,
+          requirements: [education, experience].filter(Boolean),
+          keywords: title.split(/[\s(]/).filter((w) => w.length > 3).slice(0, 8)
+        });
+      }
+    } catch (error) {
+      console.error(`WTTJ Algolia query "${kw}" error:`, error.message);
     }
-  } catch (error) {
-    console.error("WTTJ scraping error:", error.message);
   }
-  const seen = /* @__PURE__ */ new Set();
-  const unique = jobs.filter((j) => {
-    const key = `${j.title.toLowerCase()}|${j.company.toLowerCase()}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const unique = dedupeJobs(jobs, (j) => `${j.title.toLowerCase()}|${j.company.toLowerCase()}|${j.location.toLowerCase()}`);
   return unique.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
 }
 async function scrapeManpower(keywords, location = "Maroc", userProfile = null) {
   const jobs = [];
-  try {
-    const searchQuery = encodeURIComponent(keywords.slice(0, 4).join(" "));
-    const url = `https://www.manpower.ma/fr/recherche-d-emploi?keywords=${searchQuery}`;
-    const { data } = await fetchWithRetry(url);
-    const $ = cheerio.load(data);
-    const cardSelectors = [
-      "article",
-      ".job-offer",
-      ".offer-item",
-      ".card-job",
-      ".result-item",
-      'div[class*="offer"]',
-      'div[class*="job"]'
-    ];
-    for (const cardSel of cardSelectors) {
-      $(cardSel).each((_, el) => {
-        const card = $(el);
-        const title = normalizeText(card.find("h2, h3, .job-title, a").first().text());
-        const company = normalizeText(card.find(".company, .company-name, .employer").text());
-        const loc = normalizeText(card.find(".location, .job-location, .city").text());
-        const href = card.find("a").first().attr("href") || "";
-        const sourceUrl = href.startsWith("http") ? href : `https://www.manpower.ma${href}`;
-        const description = normalizeText(card.find(".description, p, .job-desc").text());
-        const postedAt = extractPostedDate($, card) || /* @__PURE__ */ new Date();
-        if (title && title.length > 3) {
-          jobs.push({
-            title,
-            company: company || "Manpower Maroc",
-            location: loc || location,
-            sourceUrl,
-            source: "manpower",
-            postedAt,
-            contractType: inferContractType(title, description),
-            description: description.slice(0, 2500),
-            sector: "",
-            keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 8)
-          });
-        }
-      });
+  const listUrl = "https://www.manpower-maroc.com/ats/offres";
+  const maxPages = 6;
+  for (let page = 1; page <= maxPages; page++) {
+    let data = "";
+    try {
+      const { data: d } = await fetchWithRetry(`${listUrl}?page=${page}&cle=&domaine=&ville=`);
+      data = d;
+    } catch (error) {
+      console.error(`Manpower page ${page} error:`, error.message);
+      break;
     }
-  } catch (error) {
-    console.error("Manpower scraping error:", error.message);
+    const $ = cheerio.load(data);
+    const rows = $("ul.jobslist li:has(.jobint)");
+    if (rows.length === 0) break;
+    rows.each((_, el) => {
+      const row = $(el);
+      const link = row.find("h4 a").first();
+      const title = normalizeText(link.text());
+      const href = link.attr("href") || "";
+      if (!title || title.length <= 3 || !href) return;
+      const sourceUrl = href.startsWith("http") ? href : `https://www.manpower-maroc.com${href}`;
+      const idMatch = sourceUrl.match(/\/(\d+)\/?$/) || [];
+      const sector = normalizeText(row.find(".company a").first().text());
+      const loc = normalizeText(row.find(".jobloc span").first().text()) || location;
+      jobs.push({
+        title,
+        company: "Manpower Maroc",
+        location: loc,
+        sourceUrl,
+        sourceId: idMatch[1] || sourceUrl.split("/").filter(Boolean).slice(-2, -1)[0] || sourceUrl,
+        source: "manpower",
+        postedAt: /* @__PURE__ */ new Date(),
+        contractType: "",
+        description: "",
+        sector,
+        keywords: title.split(/[\s(]/).filter((w) => w.length > 3).slice(0, 8),
+        _detailUrl: sourceUrl
+      });
+    });
+    if (page < maxPages) await delay(900 + Math.random() * 900);
   }
   const seen = /* @__PURE__ */ new Set();
   const unique = jobs.filter((j) => {
-    const key = `${j.title.toLowerCase()}|${j.company.toLowerCase()}`;
+    const key = j.sourceUrl.toLowerCase();
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
-  return unique.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
+  const toEnrich = unique.slice(0, 30);
+  for (const job of toEnrich) {
+    try {
+      const { data } = await fetchWithRetry(job._detailUrl);
+      const $ = cheerio.load(data);
+      const description = normalizeText($(".contentbox").first().text()).replace(/^Offre d'emploi\s*:/i, "").slice(0, 2500);
+      job.description = description;
+      job.contractType = inferContractType(job.title, description);
+      const dateTxt = normalizeText($(".ptext").first().text());
+      job.postedAt = parseExactDate(dateTxt) || job.postedAt;
+      const detail = {};
+      $(".jobdetail ul.jbdetail li").each((_, li) => {
+        const $li = $(li);
+        const key = normalizeText($li.find(".text-left").first().text()).replace(/[:\s]*$/, "").toLowerCase();
+        const val = normalizeText($li.find("span").first().text());
+        if (key && val) detail[key] = val;
+      });
+      if (detail.type) {
+        const contract = normalizeContractType(detail.type) || job.contractType;
+        if (contract) job.contractType = contract;
+      }
+      if (detail["domaine"] && !job.sector) job.sector = detail["domaine"];
+      if (detail["lieu"]) job.location = detail["lieu"];
+      if (detail["r\xE9f\xE9rence"]) job.reference = detail["r\xE9f\xE9rence"];
+      const studyLevel = detail["niveau d'\xE9tude"];
+      const experience = detail["niveau d'exp\xE9rience"];
+      job.requirements = [experience, studyLevel].filter(Boolean);
+      if (experience) job.experience = experience;
+      delete job._detailUrl;
+    } catch (error) {
+      delete job._detailUrl;
+      console.error("Manpower detail error:", error.message);
+    }
+    await delay(600 + Math.random() * 700);
+  }
+  const clean = unique.map((j) => {
+    const { _detailUrl, ...rest } = j;
+    return rest;
+  });
+  return clean.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
 }
 async function scrapeDreamjob(keywords, location = "Maroc", userProfile = null) {
   const jobs = [];
-  const pages = ["", "/page/2/", "/page/3/"];
+  const pages = ["", "/page/2/"];
+  const NON_JOB_PATTERN = /^(?:résultats?|resultats?|convocations?|listes? (?:des )?(?:admis|retenus)|avis|programme(?:s)?|communiqu[ée]s?|report|journ[ée]e(?:s)? (?:de recru|portes|d'information)?|planning|réunion)\b/i;
   for (const pagePath of pages) {
     try {
       const url = `https://www.dreamjob.ma/emploi${pagePath}`;
@@ -1926,6 +2098,7 @@ async function scrapeDreamjob(keywords, location = "Maroc", userProfile = null) 
         const title = normalizeText(titleEl.text());
         const href = titleEl.attr("href") || "";
         if (!title || title.length <= 3 || !href) return;
+        if (NON_JOB_PATTERN.test(title)) return;
         const dateText = normalizeText(card.find(".jeg_meta_date, .jeg_meta_date a, time, span.date, .published").first().text());
         let postedAt = null;
         const dmy = dateText.match(/(\d{2})\/(\d{2})\/(\d{4})/);
@@ -1941,6 +2114,11 @@ async function scrapeDreamjob(keywords, location = "Maroc", userProfile = null) 
         }
         const ministryMatch = title.match(/^(?:Concours\s+de\s+)?Recrutement\s+(?:(?:du|de|d['’])\s+)?(Minist[èe]re[^(\d]*)/i);
         if (ministryMatch) company = ministryMatch[1].trim();
+        if (company === "DreamJob Maroc") {
+          const imgAlt = card.find("img.jeg_logo_img, img.wp-post-image").attr("alt");
+          const cleaned = cleanCompanyName(imgAlt || "");
+          if (cleaned && !/dcouverture|premium|publireportage/i.test(cleaned)) company = cleaned;
+        }
         if (company.length > 60) company = company.substring(0, 60);
         foundOnPage++;
         jobs.push({
@@ -1953,168 +2131,363 @@ async function scrapeDreamjob(keywords, location = "Maroc", userProfile = null) 
           postedAt,
           contractType: inferContractType(title, description),
           description: description ? description.slice(0, 1500) : "",
-          sector: "",
-          keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 8)
+          sector: guessSector(title, description),
+          isRemote: /télétravail|remote|télé-travail|à distance/i.test(`${title} ${description}`.slice(0, 300)),
+          keywords: title.split(/[\s(]/).filter((w) => w.length > 3).slice(0, 8)
         });
       });
       if (foundOnPage === 0 && pagePath === "") break;
-      await delay(2e3 + Math.random() * 1500);
+      await delay(1500 + Math.random() * 1e3);
     } catch (error) {
       console.error("DreamJob page", pagePath, "error:", error.message);
       if (pagePath === "") break;
     }
   }
-  const seen = /* @__PURE__ */ new Set();
-  const unique = jobs.filter((j) => {
-    const key = j.sourceUrl;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  return unique.slice(0, 45).map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
+  return dedupeJobs(jobs, (j) => j.sourceUrl).map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
 }
-async function scrapeEmploiMa(keywords, location = "Maroc", userProfile = null) {
+async function scrapeOneJob(keywords, location = "Maroc", userProfile = null) {
   const jobs = [];
-  try {
-    const searchQuery = encodeURIComponent(keywords.slice(0, 4).join(" "));
-    const url = `https://www.emploi.ma/recherche-jobs-maroc?f_1=${searchQuery}`;
-    const { data } = await fetchWithRetry(url);
-    if (/Just a moment|challenge-platform|cf-chl|__cf_chl_/i.test(data)) {
-      console.warn("emploi.ma: page prot\xE9g\xE9e par Cloudflare, scraping impossible");
-      return [];
-    }
-    const $ = cheerio.load(data);
-    const cardSelectors = [
-      ".views-row",
-      ".node-offre",
-      ".node-job",
-      ".job-format",
-      ".offer-item",
-      'div[typeof="schema:JobPosting"]',
-      "article"
-    ];
-    let found = 0;
-    for (const cardSel of cardSelectors) {
-      $(cardSel).each((_, el) => {
-        const card = $(el);
-        const linkEl = card.find('h2 a, h3 a, .title a, a[rel="bookmark"], a[href*="offre"]').first();
-        const title = normalizeText(linkEl.text());
-        const href = linkEl.attr("href") || "";
-        if (!title || title.length <= 3) return;
-        const company = normalizeText(
-          card.find(".views-field-field-entreprise, .company, .field-name-field-entreprise, .views-field-title").last().text()
-        );
-        const loc = normalizeText(
-          card.find(".views-field-field-lieux, .location, .views-field-field-ville, .field-name-field-lieux").first().text()
-        ) || location;
-        const description = normalizeText(card.find(".views-field-body, .description, .field-name-body, .views-field-description").first().text());
-        const postedAt = extractPostedDate($, card) || /* @__PURE__ */ new Date();
-        found++;
-        jobs.push({
-          title,
-          company: company || "Non sp\xE9cifi\xE9",
-          location: loc,
-          sourceUrl: href.startsWith("http") ? href : `https://www.emploi.ma${href}`,
-          source: "emplois",
-          sourceId: href.split("/").filter(Boolean).pop() || "",
-          postedAt,
-          contractType: inferContractType(title, description),
-          description: description.slice(0, 1500),
-          sector: "",
-          keywords: title.split(/\s+/).filter((w) => w.length > 3).slice(0, 8)
+  const words = keywords.slice(0, 4);
+  for (const kw of words) {
+    let got = 0;
+    for (let page = 1; page <= 3; page++) {
+      try {
+        const url = `https://www.onejob.ma/recherche?query=%2A&q=${encodeURIComponent(kw)}&page=${page}`;
+        const { data } = await fetchWithRetry(url);
+        const $ = cheerio.load(data);
+        const cards = $("article.oj-job-card");
+        if (cards.length === 0) break;
+        let newOnPage = 0;
+        cards.each((_, el) => {
+          const card = $(el);
+          const link = card.find(".oj-job-title a").first();
+          const title = normalizeText(link.text());
+          const href = link.attr("href") || "";
+          if (!title || title.length <= 3 || !href) return;
+          const sourceUrl = href.startsWith("http") ? href : `https://www.onejob.ma${href}`;
+          const company = normalizeText(card.find(".oj-company-name span").first().text()) || "Non sp\xE9cifi\xE9";
+          const city = normalizeText(card.find('[itemprop="jobLocation"] [itemprop="address"]').first().text());
+          const sector = normalizeText(card.find(".oj-job-meta span").filter((_2, s) => $(s).find("i.la-briefcase").length).first().text());
+          const typeRaw = normalizeText(card.find(".oj-job-type").first().text());
+          const excerpt = normalizeText(card.find(".oj-job-excerpt").first().text());
+          const salaryText = normalizeText(card.find(".oj-job-meta span").filter((_2, s) => $(s).find("i.la-credit-card").length).first().text());
+          const datePosted = card.find('meta[itemprop="datePosted"]').attr("content");
+          let postedAt = /* @__PURE__ */ new Date();
+          if (datePosted) {
+            const d = new Date(datePosted);
+            if (!isNaN(d.getTime())) postedAt = d;
+          }
+          const idMatch = sourceUrl.match(/\/(\d+)\//);
+          jobs.push({
+            title,
+            company,
+            location: city || location,
+            sourceUrl,
+            sourceId: (idMatch || [])[1] || `onejob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            source: "onejob",
+            postedAt,
+            contractType: typeRaw && normalizeContractType(typeRaw) || inferContractType(title, excerpt),
+            description: excerpt.slice(0, 1200),
+            sector,
+            isRemote: /télétravail|remote|à distance|hybride/i.test(`${title} ${excerpt}`.slice(0, 300)),
+            city: city || void 0,
+            salary: salaryText && !/^1\s?dhs\s*[-–]\s*1\s?dhs/i.test(salaryText) ? salaryText.slice(0, 60) : void 0,
+            keywords: title.split(/[\s(]/).filter((w) => w.length > 3).slice(0, 8)
+          });
+          newOnPage++;
         });
-      });
-      if (found > 0) break;
+        if (newOnPage === 0) break;
+        got += newOnPage;
+      } catch (error) {
+        console.error(`OneJob page ${page} error:`, error.message);
+        break;
+      }
+      if (page < 3) await delay(900 + Math.random() * 900);
     }
-  } catch (error) {
-    console.warn("emploi.ma scraping error:", error.message);
+    if (got === 0) continue;
   }
   const seen = /* @__PURE__ */ new Set();
   const unique = jobs.filter((j) => {
-    const key = `${j.title.toLowerCase()}|${j.sourceUrl}`;
+    const key = j.sourceUrl.toLowerCase();
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
-  return unique.slice(0, 45).map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
+  return unique.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
 }
-var CONCOURS_BASE = "https://www.emploi-public.ma";
-async function scrapeConcoursMaroc(userProfile = null) {
-  const concours = [];
-  const pages = [1, 2];
-  for (const pageNum of pages) {
+async function scrapeMarocEmploi(keywords, location = "Maroc", userProfile = null) {
+  const jobs = [];
+  const seenCards = /* @__PURE__ */ new Set();
+  const listUrl = "https://marocemploi.net/offre/";
+  try {
+    const { data } = await fetchWithRetry(listUrl);
+    const $ = cheerio.load(data);
+    const cards = $("article.me-job-card");
+    if (cards.length === 0) return jobs;
+    cards.each((_, el) => {
+      const card = $(el);
+      const link = card.find(".me-job-card__title-row h3 a").first();
+      const title = normalizeText(link.text());
+      const href = link.attr("href") || "";
+      if (!title || title.length <= 3 || !href) return;
+      const sourceUrl = href.startsWith("http") ? href : `https://marocemploi.net${href}`;
+      if (seenCards.has(sourceUrl)) return;
+      seenCards.add(sourceUrl);
+      const company = normalizeText(card.find(".me-job-card__company").first().text()) || "Non sp\xE9cifi\xE9";
+      const city = normalizeText(card.find(".me-meta li").not(".me-job-card__company").first().text());
+      const sector = normalizeText(card.find(".me-job-card__secondary").first().text());
+      const contractRaw = normalizeText(card.find(".me-job-card__action .me-badge").first().text());
+      const datetime = card.find("time").attr("datetime");
+      let postedAt = /* @__PURE__ */ new Date();
+      if (datetime) {
+        const d = new Date(datetime);
+        if (!isNaN(d.getTime())) postedAt = d;
+      }
+      jobs.push({
+        title,
+        company,
+        location: city || location,
+        sourceUrl,
+        sourceId: sourceUrl.split("/").filter(Boolean).pop() || sourceUrl,
+        source: "marocemploi",
+        postedAt,
+        contractType: contractRaw && normalizeContractType(contractRaw) || inferContractType(title, sector),
+        description: "",
+        sector,
+        isRemote: /télétravail|remote|à distance|hybride/i.test(`${title} ${sector}`.slice(0, 300)),
+        city: city || void 0,
+        keywords: title.split(/[\s(]/).filter((w) => w.length > 3).slice(0, 8),
+        _detailUrl: sourceUrl
+      });
+    });
+  } catch (error) {
+    console.error("MarocEmploi list error:", error.message);
+  }
+  const toEnrich = jobs.slice(0, 20);
+  for (const job of toEnrich) {
     try {
-      const url = pageNum === 1 ? `${CONCOURS_BASE}/fr/concours-liste` : `${CONCOURS_BASE}/fr/concours-liste?page=${pageNum}`;
-      const { data } = await fetchWithRetry(url);
-      if (/Just a moment|challenge-platform|cf-chl/i.test(data)) break;
+      const { data } = await fetchWithRetry(job._detailUrl);
       const $ = cheerio.load(data);
-      let found = 0;
-      $('.s-item a.card, div.s-item a[href*="/concours/details/"]').each((_, el) => {
+      const ldText = $('script[type="application/ld+json"]').first().text();
+      const ld = ldText ? JSON.parse(ldText) || null : null;
+      let desc = normalizeText($(".me-job-description__content").first().text());
+      if (!desc && ld) desc = normalizeText(String(ld.description || ""));
+      if (!desc) desc = normalizeText($('meta[name="description"]').attr("content") || "");
+      job.description = desc.slice(0, 2500);
+      if (ld) {
+        if (!job.city && ld.jobLocation?.address?.addressLocality) {
+          const c = normalizeText(String(ld.jobLocation.address.addressLocality));
+          if (c) {
+            job.city = c;
+            job.location = c;
+          }
+        }
+        if (!job.company && ld.hiringOrganization?.name) {
+          const n = normalizeText(String(ld.hiringOrganization.name));
+          if (n) job.company = n;
+        }
+        if (ld.datePosted) {
+          const d = new Date(ld.datePosted);
+          if (!isNaN(d.getTime())) job.postedAt = d;
+        }
+        if (ld.employmentType) {
+          const et = Array.isArray(ld.employmentType) ? ld.employmentType.join(" ") : ld.employmentType;
+          const ct = normalizeContractType(et);
+          if (ct && String(ct) !== "CDI") job.contractType = ct;
+        }
+      }
+      delete job._detailUrl;
+    } catch (error) {
+      delete job._detailUrl;
+      console.error("MarocEmploi detail error:", error.message);
+    }
+    await delay(700 + Math.random() * 600);
+  }
+  const clean = jobs.map((j) => {
+    const { _detailUrl, ...rest } = j;
+    return rest;
+  });
+  return clean.map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
+}
+var SITE_SOURCES = ["linkedin", "indeed", "welcometothejungle", "rekrute", "manpower", "dreamjob", "onejob", "marocemploi"];
+var CONCOURS_SOURCE = "concours";
+var PUBLIC_SOURCES = ["concours", "emploi-public"];
+var CONCOURS_BASE = "https://www.emploi-public.ma";
+var PUBLIC_LIST_CATEGORIES = [
+  { key: "concours", label: "Concours de recrutement", path: "concours-liste", detailsPath: "/concours/details/", source: CONCOURS_SOURCE, domain: "Concours public", pages: 3 },
+  { key: "emploi-sup", label: "Emplois sup\xE9rieurs", path: "emploi-sup-liste", detailsPath: "/emploi-sup/details/", source: "emploi-public", domain: "Emplois sup\xE9rieurs", pages: 1 },
+  { key: "postes-respo", label: "Postes de responsabilit\xE9s", path: "postes-respo-liste", detailsPath: "/postes-respo/details/", source: "emploi-public", domain: "Postes de responsabilit\xE9s", pages: 1 },
+  { key: "experts", label: "Recrutement des experts", path: "experts-liste", detailsPath: "/experts/details/", source: "emploi-public", domain: "Recrutement des experts", pages: 1 }
+];
+async function scrapePublicList({ onlyConcours = false, userProfile = null } = {}) {
+  const jobs = [];
+  const categories = PUBLIC_LIST_CATEGORIES.filter((c) => !onlyConcours || c.source === CONCOURS_SOURCE);
+  for (const cat of categories) {
+    for (let pageNum = 1; pageNum <= cat.pages; pageNum++) {
+      try {
+        const url = pageNum === 1 ? `${CONCOURS_BASE}/fr/${cat.path}` : `${CONCOURS_BASE}/fr/${cat.path}?page=${pageNum}`;
+        const { data } = await fetchWithRetry(url);
+        if (/Just a moment|challenge-platform|cf-chl/i.test(data)) break;
+        const $ = cheerio.load(data);
+        const mainSelector = `#listing-switcher .s-item a.card[href*="${cat.detailsPath}"]`;
+        const selectors = pageNum === 1 ? [mainSelector, `.c-wrapper a.card[href*="${cat.detailsPath}"]`] : [mainSelector];
+        let found = 0;
+        for (const selector of selectors) {
+          $(selector).each((_, el) => {
+            const card = $(el);
+            const href = $(card).attr("href") || "";
+            const uuidMatch = href.match(/details\/([a-f0-9-]{8,})/i);
+            if (!href || !href.includes(cat.detailsPath)) return;
+            const title = normalizeText($(card).find("h2.card-title, h3.card-title").first().text());
+            if (!title || title.length <= 5) return;
+            const org = normalizeText($(card).find(".card-text").text()).replace(/^Ministère/i, "Minist\xE8re");
+            const msgText = normalizeText($(card).find(".card-msg").text());
+            let daysLeft = 0;
+            const daysMatch = msgText.match(/(\d+)\s+jours?\s+restants?/i);
+            if (daysMatch) daysLeft = parseInt(daysMatch[1]);
+            const footerTexts = $(card).find(".card-footer div").map((_2, d) => normalizeText($(d).text())).get();
+            let nbPostes = "";
+            const postesMatch = footerTexts.find((t) => /(\d+)\s*postes?\s*$/i.test(t));
+            if (postesMatch) {
+              const m = postesMatch.match(/(\d+)\s*postes?/i);
+              nbPostes = m ? m[1] : "";
+            }
+            let depositDeadline = "";
+            const limText = footerTexts.find((t) => /Limite de d/i.test(t));
+            if (limText) depositDeadline = limText.replace(/Limite de d[^:]*:\s*/i, "").replace(/-\s*\d{2}:\d{2}$/, "").trim();
+            let examDateRaw = "";
+            const examText = footerTexts.find((t) => /Date du concours/i.test(t));
+            if (examText) examDateRaw = examText.replace(/Date du concours\s*:\s*/i, "").trim();
+            let deadlineDate = null;
+            if (depositDeadline) {
+              const parsed = parseExactDate(depositDeadline);
+              if (parsed && !isNaN(parsed.getTime())) deadlineDate = parsed;
+            } else if (daysLeft > 0) {
+              deadlineDate = new Date(Date.now() + daysLeft * 864e5);
+            }
+            let examDate = null;
+            if (examDateRaw) {
+              const parsed = parseExactDate(examDateRaw);
+              if (parsed && !isNaN(parsed.getTime())) examDate = parsed;
+            }
+            const online = $(card).find(".card--btn .btn-danger").length > 0;
+            const avancement = normalizeText($(card).find(".card--btn .card-type").text());
+            const descriptionParts = [
+              org,
+              nbPostes ? `Nombre de postes : ${nbPostes}` : "",
+              depositDeadline ? `Limite de d\xE9p\xF4t : ${depositDeadline}` : daysLeft ? `Limite de d\xE9p\xF4t : ${daysLeft} jours restants` : "",
+              examDateRaw ? `Date du concours : ${examDateRaw}` : "",
+              avancement ? `Avancement : ${avancement}` : "",
+              online ? "D\xE9p\xF4t en ligne : Oui" : "D\xE9p\xF4t du dossier de candidature : voir l'avis officiel"
+            ].filter(Boolean);
+            found++;
+            jobs.push({
+              source: cat.source,
+              title,
+              company: org || "Administration publique marocaine",
+              location: "Maroc",
+              sourceUrl: `${CONCOURS_BASE}${href}`,
+              sourceId: uuidMatch ? uuidMatch[1] : `${cat.key}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              postedAt: /* @__PURE__ */ new Date(),
+              contractType: "CDI",
+              description: descriptionParts.join(" | ").slice(0, 1200),
+              sector: "Fonction publique",
+              domain: cat.domain,
+              applicationDeadline: deadlineDate || void 0,
+              nbPostes: nbPostes ? parseInt(nbPostes) : void 0,
+              keywords: title.split(/\s+/).filter((w) => w.length > 4).slice(0, 10),
+              examDate: examDate || void 0,
+              depositDeadlineText: depositDeadline || void 0,
+              examDateText: examDateRaw || void 0
+            });
+          });
+        }
+        if (found === 0 && pageNum === 1) break;
+        await delay(1200 + Math.random() * 800);
+      } catch (error) {
+        console.error(`${cat.key} page`, pageNum, "error:", error.message);
+        if (pageNum === 1) break;
+      }
+    }
+  }
+  return dedupeJobs(jobs, (j) => j.sourceId).slice(0, 150).map((j) => ({ ...j, relevanceScore: calculateRelevance(j, userProfile) }));
+}
+async function scrapeConcoursMaroc(userProfile = null) {
+  return scrapePublicList({ onlyConcours: true, userProfile });
+}
+async function scrapePublicSector(userProfile = null) {
+  const jobs = await scrapePublicList({ userProfile });
+  const news = [];
+  try {
+    const { data } = await fetchWithRetry(`${CONCOURS_BASE}/fr/`);
+    if (!/Just a moment|challenge-platform|cf-chl/i.test(data)) {
+      const $ = cheerio.load(data);
+      $('.container.c-wrapper a.card[href*="/concours/details/"]').slice(0, 8).each((_, el) => {
         const card = $(el);
         const href = $(card).attr("href") || "";
-        const uuidMatch = href.match(/details\/([a-f0-9-]{8,})/i);
-        if (!href || !href.includes("/concours/details/")) return;
-        const title = normalizeText($(card).find("h2.card-title").text());
+        const m = href.match(/details\/([a-f0-9-]{8,})/i);
+        const title = normalizeText($(card).find("h2.card-title, h3.card-title").first().text());
         if (!title || title.length <= 5) return;
         const org = normalizeText($(card).find(".card-text").text());
-        const footerTexts = $(card).find(".card-footer div").map((_2, d) => normalizeText($(d).text())).get();
-        let nbPostes = "";
-        const postesMatch = footerTexts.find((t) => /(\d+)\s*postes?\s*$/i.test(t));
-        if (postesMatch) {
-          const m = postesMatch.match(/(\d+)\s*postes?/i);
-          nbPostes = m ? m[1] : "";
-        }
-        let depositDeadline = "";
-        const limText = footerTexts.find((t) => /Limite de d/i.test(t));
-        if (limText) depositDeadline = limText.replace(/Limite de d[^:]*:\s*/i, "").trim();
-        let examDate = "";
-        const examText = footerTexts.find((t) => /Date du concours/i.test(t));
-        if (examText) examDate = examText.replace(/Date du concours\s*:\s*/i, "").trim();
-        let deadlineDate = null;
-        if (depositDeadline) {
-          const parsed = parseExactDate(depositDeadline);
-          if (parsed && !isNaN(parsed.getTime())) deadlineDate = parsed;
-        }
-        const descriptionParts = [
-          org,
-          nbPostes ? `Nombre de postes : ${nbPostes}` : "",
-          depositDeadline ? `Limite de d\xE9p\xF4t : ${depositDeadline}` : "",
-          examDate ? `Date du concours : ${examDate}` : "",
-          "D\xE9p\xF4t du dossier de candidature : voir l'avis officiel"
-        ].filter(Boolean);
-        found++;
-        concours.push({
+        const img = $(card).find("img").attr("src") || "";
+        news.push({
+          category: "actualite",
           title,
-          company: org || "Administration publique marocaine",
-          location: "Maroc",
+          org: org || "Administration publique marocaine",
+          excerpt: "Annonce publi\xE9e sur le portail de l'emploi public marocain",
           sourceUrl: `${CONCOURS_BASE}${href}`,
-          sourceId: uuidMatch ? uuidMatch[1] : `concours-${Date.now()}${Math.random().toString(36).slice(2, 6)}`,
+          sourceId: m ? `act-${m[1]}` : `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          imageUrl: img ? `${CONCOURS_BASE}${img.startsWith("/") ? img : `/${img}`}` : "",
           postedAt: /* @__PURE__ */ new Date(),
-          contractType: "CDI",
-          description: descriptionParts.join(" | ").slice(0, 1200),
-          sector: "Fonction publique",
-          domain: "Concours public",
-          applicationDeadline: deadlineDate || void 0,
-          keywords: title.split(/\s+/).filter((w) => w.length > 4).slice(0, 10)
+          tags: ["actualite", "etat"]
         });
       });
-      if (found === 0 && pageNum === 1) break;
-      await delay(1500 + Math.random() * 1e3);
-    } catch (error) {
-      console.error("Concours page", pageNum, "error:", error.message);
-      if (pageNum === 1) break;
+      $('.c-wrapper.bg-blue a.card[href*="/concours/details/"]').slice(0, 6).each((_, el) => {
+        const card = $(el);
+        const href = $(card).attr("href") || "";
+        const m = href.match(/details\/([a-f0-9-]{8,})/i);
+        const title = normalizeText($(card).find("h2.card-title, h3.card-title").first().text());
+        if (!title || title.length <= 5) return;
+        const org = normalizeText($(card).find(".card-text").text());
+        const msg = normalizeText($(card).find(".card-msg").text());
+        news.push({
+          category: "info",
+          title,
+          org: org || "Administration publique marocaine",
+          excerpt: msg || "Derni\xE8re chance pour postuler",
+          sourceUrl: `${CONCOURS_BASE}${href}`,
+          sourceId: m ? `urg-${m[1]}` : `urg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          postedAt: /* @__PURE__ */ new Date(),
+          tags: ["information", "etat", "urgent"]
+        });
+      });
     }
+  } catch (error) {
+    console.error("News emploi-public (accueil) error:", error.message);
   }
-  const seen = /* @__PURE__ */ new Set();
-  const unique = concours.filter((c) => {
-    const key = c.sourceId;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  return unique.slice(0, 60).map((c) => ({ ...c, relevanceScore: calculateRelevance(c, userProfile) }));
+  const today = /* @__PURE__ */ new Date();
+  today.setHours(0, 0, 0, 0);
+  const upcoming = jobs.filter((j) => j.source === CONCOURS_SOURCE && j.examDate && new Date(j.examDate) >= today).sort((a, b) => new Date(a.examDate) - new Date(b.examDate)).slice(0, 8).map((j) => ({
+    category: "concours-prochain",
+    title: j.title.replace(/^Avis de concours de recrutement de\s*/i, ""),
+    org: j.company || "Administration publique marocaine",
+    excerpt: [
+      j.examDateText ? `Date du concours : ${j.examDateText}` : "",
+      j.depositDeadlineText ? `Limite de d\xE9p\xF4t : ${j.depositDeadlineText}` : ""
+    ].filter(Boolean).join(" \u2014 ") || "Concours dont la date d'examen est \xE0 venir",
+    sourceUrl: j.sourceUrl,
+    sourceId: `up-${j.sourceId}`,
+    eventDate: new Date(j.examDate),
+    postedAt: /* @__PURE__ */ new Date(),
+    tags: ["concours prochain"]
+  }));
+  news.push(...upcoming);
+  return {
+    jobs,
+    news: dedupeJobs(news, (n) => n.sourceId)
+  };
 }
-async function scrapeAllSources(keywords, location = "Maroc", enabledSources = ["linkedin", "indeed", "rekrute", "dreamjob", "concours"], userProfile = null) {
+async function scrapeAllSources(keywords, location = "Maroc", enabledSources = ["linkedin", "indeed", "welcometothejungle", "rekrute", "dreamjob"], userProfile = null, onProgress = null) {
   const results = {};
   const scrapers = {
     linkedin: () => scrapeLinkedIn(keywords, location, userProfile),
@@ -2123,7 +2496,8 @@ async function scrapeAllSources(keywords, location = "Maroc", enabledSources = [
     welcometothejungle: () => scrapeWTTJ(keywords, location, userProfile),
     manpower: () => scrapeManpower(keywords, location, userProfile),
     dreamjob: () => scrapeDreamjob(keywords, location, userProfile),
-    emplois: () => scrapeEmploiMa(keywords, location, userProfile),
+    onejob: () => scrapeOneJob(keywords, location, userProfile),
+    marocemploi: () => scrapeMarocEmploi(keywords, location, userProfile),
     concours: () => scrapeConcoursMaroc(userProfile)
   };
   for (const source of enabledSources) {
@@ -2145,6 +2519,9 @@ async function scrapeAllSources(keywords, location = "Maroc", enabledSources = [
         duration: Date.now() - start,
         error: error.message
       };
+    }
+    if (typeof onProgress === "function") {
+      onProgress(source, results[source]);
     }
     await delay(2e3 + Math.random() * 1500);
   }
@@ -2403,13 +2780,13 @@ function calculateCandidateMatch(candidateProfile, jobOffer) {
 
 // backend/services/candidateInfo.js
 init_User();
-import mongoose9 from "mongoose";
+import mongoose10 from "mongoose";
 async function buildCandidateInfo(userId, jobOffer) {
   const [user, profile] = await Promise.all([
     User_default.findById(userId),
     UserProfile_default.findOne({ userId })
   ]);
-  const CV = mongoose9.models.CV;
+  const CV = mongoose10.models.CV;
   const cv = CV ? await CV.findOne({ userId, isActive: true }) : null;
   const cvSkills = cv?.parsedData?.skills || [];
   const profileSkills = profile?.skills || [];
@@ -2464,7 +2841,7 @@ async function buildCandidateInfo(userId, jobOffer) {
 var router3 = express3.Router();
 router3.get("/", protect, async (req, res) => {
   try {
-    const { search, contractType, location, source, sort, page = 1, limit = 20 } = req.query;
+    const { search, contractType, location, source, group, sort, page = 1, limit = 20 } = req.query;
     const query = { userId: req.user._id, isActive: true };
     if (search) {
       query.$or = [
@@ -2475,7 +2852,17 @@ router3.get("/", protect, async (req, res) => {
     }
     if (contractType) query.contractType = contractType;
     if (location) query.location = { $regex: location, $options: "i" };
-    if (source) query.source = source;
+    if (source && source !== "Toutes") {
+      query.source = source;
+    } else if (group === "sites") {
+      query.source = { $in: SITE_SOURCES };
+    } else if (group === "public") {
+      query.source = { $in: PUBLIC_SOURCES };
+    } else if (group === "concours") {
+      query.source = CONCOURS_SOURCE;
+    } else {
+      query.source = { $ne: CONCOURS_SOURCE };
+    }
     let sortOption = { relevanceScore: -1, postedAt: -1, createdAt: -1 };
     if (sort === "date") sortOption = { postedAt: -1, createdAt: -1 };
     else if (sort === "salary") sortOption = { "salary.max": -1, postedAt: -1, createdAt: -1 };
@@ -2546,7 +2933,7 @@ router3.get("/recruiter-board", protect, async (req, res) => {
 });
 router3.get("/saved", protect, async (req, res) => {
   try {
-    const jobs = await JobOffer_default.find({ userId: req.user._id, isSaved: true, isActive: true }).sort({ updatedAt: -1 });
+    const jobs = await JobOffer_default.find({ userId: req.user._id, isSaved: true, isActive: true, source: { $ne: "concours" } }).sort({ updatedAt: -1 });
     res.json({ jobs });
   } catch (error) {
     res.status(500).json({ error: "Erreur serveur" });
@@ -2557,11 +2944,48 @@ router3.get("/recommended", protect, async (req, res) => {
     const jobs = await JobOffer_default.find({
       userId: req.user._id,
       isActive: true,
+      source: { $ne: "concours" },
       relevanceScore: { $gte: 70 }
     }).sort({ relevanceScore: -1 }).limit(10);
     res.json({ jobs });
   } catch (error) {
     res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router3.get("/public-sector", protect, async (req, res) => {
+  try {
+    const { search, category, page = 1, limit = 20, sort = "date" } = req.query;
+    const query = { userId: req.user._id, isActive: true, source: { $in: PUBLIC_SOURCES } };
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { company: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } }
+      ];
+    }
+    const sortOption = sort === "relevance" ? { relevanceScore: -1, postedAt: -1, createdAt: -1 } : { postedAt: -1, createdAt: -1 };
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [jobs, total] = await Promise.all([
+      JobOffer_default.find(query).sort(sortOption).skip(skip).limit(parseInt(limit)),
+      JobOffer_default.countDocuments(query)
+    ]);
+    const newsQuery = { userId: req.user._id };
+    if (category) newsQuery.category = category;
+    const newsList = await PublicNews_default.find(newsQuery).sort({ postedAt: -1 }).limit(40);
+    const today = /* @__PURE__ */ new Date();
+    today.setHours(0, 0, 0, 0);
+    const categoryRank = { "concours-prochain": 0, info: 1, actualite: 2 };
+    const news = newsList.filter((n) => n.category !== "concours-prochain" || n.eventDate && new Date(n.eventDate) >= today).sort((a, b) => {
+      const ra = categoryRank[a.category] ?? 3;
+      const rb = categoryRank[b.category] ?? 3;
+      if (ra !== rb) return ra - rb;
+      if (a.category === "concours-prochain") return new Date(a.eventDate) - new Date(b.eventDate);
+      return new Date(b.postedAt) - new Date(a.postedAt);
+    });
+    res.json({ jobs, news, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) });
+  } catch (error) {
+    console.error("Erreur secteur public:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration du secteur public" });
   }
 });
 router3.get("/:id", protect, async (req, res) => {
@@ -2641,9 +3065,9 @@ import express4 from "express";
 init_User();
 
 // backend/models/CV.js
-import mongoose10 from "mongoose";
-var cvSchema = new mongoose10.Schema({
-  userId: { type: mongoose10.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose11 from "mongoose";
+var cvSchema = new mongoose11.Schema({
+  userId: { type: mongoose11.Schema.Types.ObjectId, ref: "User", required: true },
   fileName: String,
   originalName: String,
   fileData: String,
@@ -2683,18 +3107,18 @@ var cvSchema = new mongoose10.Schema({
   isActive: { type: Boolean, default: true },
   version: { type: Number, default: 1 }
 }, { timestamps: true });
-var CV_default = mongoose10.models.CV || mongoose10.model("CV", cvSchema);
+var CV_default = mongoose11.models.CV || mongoose11.model("CV", cvSchema);
 
 // backend/routes/applications.js
 init_sendEmail();
 
 // backend/models/Email.js
-import mongoose11 from "mongoose";
-var emailSchema = new mongoose11.Schema({
-  userId: { type: mongoose11.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose12 from "mongoose";
+var emailSchema = new mongoose12.Schema({
+  userId: { type: mongoose12.Schema.Types.ObjectId, ref: "User", required: true },
   direction: { type: String, enum: ["sent", "received"], required: true, index: true },
-  fromUser: { type: mongoose11.Schema.Types.ObjectId, ref: "User", default: null },
-  toUser: { type: mongoose11.Schema.Types.ObjectId, ref: "User", default: null },
+  fromUser: { type: mongoose12.Schema.Types.ObjectId, ref: "User", default: null },
+  toUser: { type: mongoose12.Schema.Types.ObjectId, ref: "User", default: null },
   fromName: { type: String, default: "" },
   toName: { type: String, default: "" },
   fromEmail: { type: String, default: "" },
@@ -2703,15 +3127,15 @@ var emailSchema = new mongoose11.Schema({
   body: { type: String, default: "" },
   companyName: { type: String, default: "" },
   campaignType: { type: String, default: "" },
-  applicationId: { type: mongoose11.Schema.Types.ObjectId, ref: "Application", default: null },
-  jobOfferId: { type: mongoose11.Schema.Types.ObjectId, ref: "JobOffer", default: null },
+  applicationId: { type: mongoose12.Schema.Types.ObjectId, ref: "Application", default: null },
+  jobOfferId: { type: mongoose12.Schema.Types.ObjectId, ref: "JobOffer", default: null },
   messageId: { type: String, default: "" },
   isRead: { type: Boolean, default: false },
   readAt: Date
 }, { timestamps: true });
 emailSchema.index({ userId: 1, createdAt: -1 });
 emailSchema.index({ userId: 1, direction: 1, createdAt: -1 });
-var Email_default = mongoose11.model("Email", emailSchema);
+var Email_default = mongoose12.model("Email", emailSchema);
 
 // backend/services/MailService.js
 async function recordExchange({ senderUser, recipientUser, subject, body, fromName, toName, toEmail, companyName, campaignType = "", applicationId = null, jobOfferId = null, messageId = "" }) {
@@ -2992,9 +3416,9 @@ var applications_default = router4;
 import express5 from "express";
 
 // backend/models/Recruiter.js
-import mongoose12 from "mongoose";
-var recruiterSchema = new mongoose12.Schema({
-  userId: { type: mongoose12.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose13 from "mongoose";
+var recruiterSchema = new mongoose13.Schema({
+  userId: { type: mongoose13.Schema.Types.ObjectId, ref: "User", required: true },
   firstName: { type: String, required: true },
   lastName: { type: String, required: true },
   title: String,
@@ -3012,7 +3436,7 @@ var recruiterSchema = new mongoose12.Schema({
   lastContactedAt: Date,
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
-var Recruiter_default = mongoose12.model("Recruiter", recruiterSchema);
+var Recruiter_default = mongoose13.model("Recruiter", recruiterSchema);
 
 // backend/routes/recruiters.js
 var router5 = express5.Router();
@@ -3283,9 +3707,9 @@ var notifications_default = router7;
 import express8 from "express";
 
 // backend/models/ScrapingLog.js
-import mongoose13 from "mongoose";
-var scrapingLogSchema = new mongoose13.Schema({
-  userId: { type: mongoose13.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose14 from "mongoose";
+var scrapingLogSchema = new mongoose14.Schema({
+  userId: { type: mongoose14.Schema.Types.ObjectId, ref: "User", required: true },
   status: { type: String, enum: ["running", "success", "partial", "failed"], default: "running" },
   sources: [{
     source: String,
@@ -3301,12 +3725,12 @@ var scrapingLogSchema = new mongoose13.Schema({
   startedAt: { type: Date, default: Date.now },
   completedAt: Date
 }, { timestamps: true, suppressReservedKeysWarning: true });
-var ScrapingLog_default = mongoose13.model("ScrapingLog", scrapingLogSchema);
+var ScrapingLog_default = mongoose14.model("ScrapingLog", scrapingLogSchema);
 
 // backend/models/SearchProfile.js
-import mongoose14 from "mongoose";
-var searchProfileSchema = new mongoose14.Schema({
-  userId: { type: mongoose14.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose15 from "mongoose";
+var searchProfileSchema = new mongoose15.Schema({
+  userId: { type: mongoose15.Schema.Types.ObjectId, ref: "User", required: true },
   name: { type: String, required: true },
   sectors: [String],
   keywords: [String],
@@ -3322,19 +3746,209 @@ var searchProfileSchema = new mongoose14.Schema({
     rekrute: { enabled: { type: Boolean, default: true }, customKeywords: [String] },
     manpower: { enabled: { type: Boolean, default: true }, customKeywords: [String] },
     dreamjob: { enabled: { type: Boolean, default: true }, customKeywords: [String] },
-    emplois: { enabled: { type: Boolean, default: true }, customKeywords: [String] },
+    onejob: { enabled: { type: Boolean, default: true }, customKeywords: [String] },
+    marocemploi: { enabled: { type: Boolean, default: true }, customKeywords: [String] },
     concours: { enabled: { type: Boolean, default: true }, customKeywords: [String] }
   },
   isActive: { type: Boolean, default: true },
   frequency: { type: String, enum: ["quotidien", "hebdomadaire", "manuel"], default: "manuel" }
 }, { timestamps: true });
-var SearchProfile_default = mongoose14.model("SearchProfile", searchProfileSchema);
+var SearchProfile_default = mongoose15.model("SearchProfile", searchProfileSchema);
 
 // backend/routes/scraping.js
 init_User();
+
+// backend/services/socketManager.js
+init_User();
+import { Server } from "socket.io";
+import jwt4 from "jsonwebtoken";
+var io2 = null;
+function getIO() {
+  return io2;
+}
+
+// backend/routes/scraping.js
 var router8 = express8.Router();
+function emitToUser2(userId, event, payload) {
+  const io3 = getIO();
+  if (io3) {
+    io3.to(`user:${userId}`).emit(event, payload);
+  }
+}
+async function runScrapingJob(userId, logId, keywords, location, enabledSources, userProfile) {
+  try {
+    const results = {};
+    let publicNews = [];
+    const startOverall = Date.now();
+    const siteSources = enabledSources.filter((s) => !PUBLIC_SOURCES.includes(s));
+    const wantsPublic = enabledSources.some((s) => PUBLIC_SOURCES.includes(s));
+    if (wantsPublic) {
+      try {
+        const { jobs, news } = await scrapePublicSector(userProfile);
+        publicNews = news || [];
+        for (const src of PUBLIC_SOURCES) {
+          const srcJobs = (jobs || []).filter((j) => j.source === src);
+          results[src] = {
+            jobs: srcJobs,
+            status: srcJobs.length > 0 ? "success" : "partial",
+            duration: Date.now() - startOverall
+          };
+          const stats = {
+            source: src,
+            status: results[src].status,
+            offersFound: srcJobs.length,
+            newOffers: 0,
+            duplicatesSkipped: 0,
+            duration: results[src].duration,
+            errors: []
+          };
+          await ScrapingLog_default.updateOne(
+            { _id: logId, "sources.source": src },
+            { $set: { "sources.$": stats } }
+          );
+          emitToUser2(userId, "scraping:update", { runId: logId, ...stats });
+        }
+      } catch (error) {
+        console.error("Secteur public scraping error:", error.message);
+        const src = "emploi-public";
+        results[src] = { jobs: [], status: "failed", duration: Date.now() - startOverall, error: error.message };
+        const stats = {
+          source: src,
+          status: "failed",
+          offersFound: 0,
+          newOffers: 0,
+          duplicatesSkipped: 0,
+          duration: Date.now() - startOverall,
+          errors: [error.message]
+        };
+        await ScrapingLog_default.updateOne(
+          { _id: logId, "sources.source": src },
+          { $set: { "sources.$": stats } }
+        );
+        emitToUser2(userId, "scraping:update", { runId: logId, ...stats });
+      }
+    }
+    if (siteSources.length) {
+      const siteResults = await scrapeAllSources(keywords, location, siteSources, userProfile, async (source, result) => {
+        const stats = {
+          source,
+          status: result.status,
+          offersFound: (result.jobs || []).length,
+          newOffers: 0,
+          duplicatesSkipped: 0,
+          duration: result.duration,
+          errors: result.error ? [result.error] : []
+        };
+        await ScrapingLog_default.updateOne(
+          { _id: logId, "sources.source": source },
+          { $set: { "sources.$": stats } }
+        );
+        emitToUser2(userId, "scraping:update", { runId: logId, ...stats });
+      });
+      Object.assign(results, siteResults);
+    }
+    const createdJobs = [];
+    const sourceStats = [];
+    for (const [sourceName, result] of Object.entries(results)) {
+      if (!enabledSources.includes(sourceName)) continue;
+      let newOffers = 0;
+      for (const jobData of result.jobs) {
+        try {
+          const existing = await JobOffer_default.findOne({
+            userId,
+            source: jobData.source,
+            title: jobData.title,
+            company: jobData.company
+          });
+          if (!existing) {
+            const job = await JobOffer_default.create({
+              ...jobData,
+              userId,
+              scrapedAt: /* @__PURE__ */ new Date(),
+              sourceId: jobData.sourceId || `scrape-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              postedAt: jobData.postedAt || /* @__PURE__ */ new Date()
+            });
+            createdJobs.push(job);
+            newOffers++;
+          }
+        } catch (e) {
+        }
+      }
+      sourceStats.push({
+        source: sourceName,
+        status: result.status,
+        offersFound: result.jobs.length,
+        newOffers,
+        duplicatesSkipped: result.jobs.length - newOffers,
+        duration: result.duration,
+        errors: result.error ? [result.error] : []
+      });
+    }
+    let newNews = 0;
+    for (const item of publicNews) {
+      try {
+        const existing = await PublicNews_default.findOne({ userId, sourceId: item.sourceId });
+        if (!existing) {
+          await PublicNews_default.create({ ...item, userId });
+          newNews++;
+        }
+      } catch (e) {
+      }
+    }
+    const log = await ScrapingLog_default.findById(logId);
+    if (!log) return;
+    log.status = "success";
+    log.sources = sourceStats;
+    log.totalOffersFound = sourceStats.reduce((sum, s) => sum + s.offersFound, 0);
+    log.totalNewOffers = createdJobs.length;
+    log.completedAt = /* @__PURE__ */ new Date();
+    await log.save();
+    notifyScrapingComplete(userId, {
+      count: createdJobs.length,
+      source: enabledSources.join(", "),
+      jobs: createdJobs
+    });
+    emitToUser2(userId, "scraping:done", {
+      runId: logId,
+      status: "success",
+      totalOffersFound: log.totalOffersFound,
+      totalNewOffers: createdJobs.length,
+      newNews,
+      sources: sourceStats
+    });
+  } catch (error) {
+    console.error("Erreur scraping:", error);
+    try {
+      const log = await ScrapingLog_default.findById(logId);
+      if (log) {
+        log.status = "failed";
+        log.sources = (log.sources || []).map((s) => ({
+          ...s.toObject ? s.toObject() : s,
+          status: s.status === "running" ? "failed" : s.status
+        }));
+        log.completedAt = /* @__PURE__ */ new Date();
+        await log.save();
+      }
+    } catch (_) {
+    }
+    emitToUser2(userId, "scraping:done", {
+      runId: logId,
+      status: "failed",
+      error: error.message
+    });
+  }
+}
 router8.post("/run", protect, async (req, res) => {
   try {
+    const existingRunning = await ScrapingLog_default.findOne({ userId: req.user._id, status: "running" });
+    if (existingRunning) {
+      return res.status(200).json({
+        runId: existingRunning._id,
+        status: "running",
+        alreadyRunning: true,
+        message: "Une collecte est d\xE9j\xE0 en cours"
+      });
+    }
     const { keywords, location, sources, searchProfileId } = req.body || {};
     const [profile, user, cv, searchProfiles] = await Promise.all([
       UserProfile_default.findOne({ userId: req.user._id }),
@@ -3344,7 +3958,10 @@ router8.post("/run", protect, async (req, res) => {
     ]);
     const activeProfile = searchProfileId ? searchProfiles.find((p) => p._id.toString() === searchProfileId) : searchProfiles[0] || null;
     const profileSources = activeProfile && activeProfile.sourcesConfig ? Object.entries(activeProfile.sourcesConfig).filter(([, cfg]) => cfg && cfg.enabled).map(([src]) => src) : [];
-    const enabledSources = sources || (profileSources.length > 0 ? profileSources : null) || ["linkedin", "indeed", "rekrute", "dreamjob", "concours"];
+    const enabledSources = Array.isArray(sources) ? sources : (profileSources.length > 0 ? profileSources : SITE_SOURCES).filter((s) => s !== CONCOURS_SOURCE);
+    if (!enabledSources.length) {
+      return res.status(400).json({ error: "Aucune source de scraping s\xE9lectionn\xE9e" });
+    }
     const activeKeywords = activeProfile?.keywords?.length ? [...activeProfile.keywords] : [];
     if (activeProfile?.sourcesConfig) {
       for (const cfg of Object.values(activeProfile.sourcesConfig)) {
@@ -3373,64 +3990,15 @@ router8.post("/run", protect, async (req, res) => {
       startedAt: /* @__PURE__ */ new Date(),
       sources: enabledSources.map((s) => ({ source: s, status: "running" }))
     });
-    const results = await scrapeAllSources(searchKeywords, searchLocation, enabledSources, userProfile);
-    const createdJobs = [];
-    const sourceStats = [];
-    for (const [sourceName, result] of Object.entries(results)) {
-      if (!enabledSources.includes(sourceName)) continue;
-      let newOffers = 0;
-      for (const jobData of result.jobs) {
-        try {
-          const existing = await JobOffer_default.findOne({
-            userId: req.user._id,
-            source: jobData.source,
-            title: jobData.title,
-            company: jobData.company
-          });
-          if (!existing) {
-            const job = await JobOffer_default.create({
-              ...jobData,
-              userId: req.user._id,
-              scrapedAt: /* @__PURE__ */ new Date(),
-              sourceId: jobData.sourceId || `scrape-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-              postedAt: jobData.postedAt || /* @__PURE__ */ new Date()
-            });
-            createdJobs.push(job);
-            newOffers++;
-          }
-        } catch (e) {
-        }
-      }
-      sourceStats.push({
-        source: sourceName,
-        status: result.status,
-        offersFound: result.jobs.length,
-        newOffers,
-        duplicatesSkipped: result.jobs.length - newOffers,
-        duration: result.duration,
-        errors: result.error ? [result.error] : []
-      });
-    }
-    log.status = "success";
-    log.sources = sourceStats;
-    log.totalOffersFound = sourceStats.reduce((sum, s) => sum + s.offersFound, 0);
-    log.totalNewOffers = createdJobs.length;
-    log.completedAt = /* @__PURE__ */ new Date();
-    await log.save();
-    notifyScrapingComplete(req.user._id, {
-      count: createdJobs.length,
-      source: enabledSources.join(", "),
-      jobs: createdJobs
-    });
     res.json({
-      message: `${createdJobs.length} nouvelles offres trouv\xE9es`,
-      log,
-      jobsFound: createdJobs.length,
-      newJobs: createdJobs.length
+      runId: log._id,
+      status: "running",
+      message: "Collecte lanc\xE9e en arri\xE8re-plan"
     });
+    runScrapingJob(req.user._id, log._id, searchKeywords, searchLocation, enabledSources, userProfile);
   } catch (error) {
     console.error("Erreur scraping:", error);
-    res.status(500).json({ error: "Erreur lors du scrapping" });
+    res.status(500).json({ error: "Erreur lors du lancement du scrapping" });
   }
 });
 router8.get("/logs", protect, async (req, res) => {
@@ -3443,8 +4011,14 @@ router8.get("/logs", protect, async (req, res) => {
 });
 router8.get("/status", protect, async (req, res) => {
   try {
-    const log = await ScrapingLog_default.findOne({ userId: req.user._id, status: "running" });
-    res.json({ isRunning: !!log, log });
+    const { runId } = req.query;
+    let log = null;
+    if (runId) {
+      log = await ScrapingLog_default.findOne({ userId: req.user._id, _id: runId });
+    } else {
+      log = await ScrapingLog_default.findOne({ userId: req.user._id, status: "running" }) || await ScrapingLog_default.findOne({ userId: req.user._id }).sort({ createdAt: -1 });
+    }
+    res.json({ isRunning: !!(log && log.status === "running"), log });
   } catch (error) {
     res.status(500).json({ error: "Erreur serveur" });
   }
@@ -3455,9 +4029,9 @@ var scraping_default = router8;
 import express9 from "express";
 
 // backend/models/EmailTemplate.js
-import mongoose15 from "mongoose";
-var emailTemplateSchema = new mongoose15.Schema({
-  userId: { type: mongoose15.Schema.Types.ObjectId, ref: "User" },
+import mongoose16 from "mongoose";
+var emailTemplateSchema = new mongoose16.Schema({
+  userId: { type: mongoose16.Schema.Types.ObjectId, ref: "User" },
   name: { type: String, required: true },
   subject: { type: String, required: true },
   body: { type: String, required: true },
@@ -3466,7 +4040,7 @@ var emailTemplateSchema = new mongoose15.Schema({
   category: { type: String, enum: ["Candidature", "Relance", "Remerciement", "Suivi", "Personnalis\xE9"], default: "Candidature" },
   usageCount: { type: Number, default: 0 }
 }, { timestamps: true });
-var EmailTemplate_default = mongoose15.model("EmailTemplate", emailTemplateSchema);
+var EmailTemplate_default = mongoose16.model("EmailTemplate", emailTemplateSchema);
 
 // backend/routes/emailTemplates.js
 var router9 = express9.Router();
@@ -3723,7 +4297,7 @@ var analytics_default = router11;
 
 // backend/routes/cv.js
 import express12 from "express";
-import mongoose16 from "mongoose";
+import mongoose17 from "mongoose";
 var router12 = express12.Router();
 function analyzeCV(text, parsedData) {
   let score = 0;
@@ -4739,7 +5313,7 @@ router12.post("/match-jobs", protect, async (req, res) => {
     const { keywords } = req.body || {};
     const cv = await CV_default.findOne({ userId: req.user._id, isActive: true });
     if (!cv) return res.status(404).json({ error: "Aucun CV trouv\xE9" });
-    const JobOffer = mongoose16.model("JobOffer");
+    const JobOffer = mongoose17.model("JobOffer");
     const query = { userId: req.user._id, isActive: true };
     const allJobs = await JobOffer.find(query);
     const cvSkills = (cv.parsedData?.skills || []).map((s) => s.toLowerCase());
@@ -4862,10 +5436,10 @@ var cv_default = router12;
 
 // backend/routes/portfolio.js
 import express13 from "express";
-import mongoose17 from "mongoose";
+import mongoose18 from "mongoose";
 var router13 = express13.Router();
-var portfolioSchema = new mongoose17.Schema({
-  userId: { type: mongoose17.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
+var portfolioSchema = new mongoose18.Schema({
+  userId: { type: mongoose18.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
   url: { type: String, default: "" },
   description: { type: String, default: "" },
   projects: [{
@@ -4876,7 +5450,7 @@ var portfolioSchema = new mongoose17.Schema({
     technologies: [String]
   }]
 }, { timestamps: true });
-var Portfolio = mongoose17.models.Portfolio || mongoose17.model("Portfolio", portfolioSchema);
+var Portfolio = mongoose18.models.Portfolio || mongoose18.model("Portfolio", portfolioSchema);
 router13.get("/", protect, async (req, res) => {
   try {
     let portfolio = await Portfolio.findOne({ userId: req.user._id });
@@ -4904,7 +5478,7 @@ var portfolio_default = router13;
 
 // backend/routes/recruiterSpace.js
 import express14 from "express";
-import mongoose18 from "mongoose";
+import mongoose19 from "mongoose";
 init_User();
 init_sendEmail();
 var router14 = express14.Router();
@@ -5358,7 +5932,7 @@ router14.get("/candidates", protect, authorize("recruiter"), async (req, res) =>
 router14.get("/candidates/:userId", protect, authorize("recruiter"), async (req, res) => {
   try {
     const { userId } = req.params;
-    if (!mongoose18.Types.ObjectId.isValid(userId)) {
+    if (!mongoose19.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ error: "ID invalide" });
     }
     const profile = await UserProfile_default.findOne({ userId }).populate("userId", "firstName lastName email avatar jobSearchStatus lastLogin");
@@ -5374,7 +5948,7 @@ router14.get("/candidates/:userId", protect, authorize("recruiter"), async (req,
 });
 router14.get("/candidates/:userId/cv/download", protect, authorize("recruiter"), async (req, res) => {
   try {
-    if (!mongoose18.Types.ObjectId.isValid(req.params.userId)) {
+    if (!mongoose19.Types.ObjectId.isValid(req.params.userId)) {
       return res.status(400).json({ error: "ID invalide" });
     }
     const cv = await CV_default.findOne({ userId: req.params.userId, isActive: true });
@@ -5393,7 +5967,7 @@ router14.get("/candidates/:userId/cv/download", protect, authorize("recruiter"),
 });
 router14.get("/candidates/:userId/cv/preview", protect, authorize("recruiter"), async (req, res) => {
   try {
-    if (!mongoose18.Types.ObjectId.isValid(req.params.userId)) {
+    if (!mongoose19.Types.ObjectId.isValid(req.params.userId)) {
       return res.status(400).json({ error: "ID invalide" });
     }
     const cv = await CV_default.findOne({ userId: req.params.userId, isActive: true }).select("fileData fileSize mimeType originalName");
@@ -6076,7 +6650,7 @@ var seed_default = router17;
 // backend/routes/admin.js
 init_User();
 import express18 from "express";
-import mongoose19 from "mongoose";
+import mongoose20 from "mongoose";
 import crypto2 from "crypto";
 var router18 = express18.Router();
 router18.use(protect, authorize("admin"));
@@ -6106,11 +6680,11 @@ async function countRegistrations(from, to, roles) {
 }
 router18.get("/overview", async (req, res) => {
   try {
-    const now2 = /* @__PURE__ */ new Date();
-    const todayStart = startOfDay(now2);
-    const weekStart = startOfWeek(now2);
-    const monthStart = startOfMonth(now2);
-    const yearStart = startOfYear(now2);
+    const now = /* @__PURE__ */ new Date();
+    const todayStart = startOfDay(now);
+    const weekStart = startOfWeek(now);
+    const monthStart = startOfMonth(now);
+    const yearStart = startOfYear(now);
     const [
       totalUsers,
       totalCandidates,
@@ -6550,7 +7124,7 @@ router18.post("/users", async (req, res) => {
 router18.put("/users/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose19.Types.ObjectId.isValid(id)) {
+    if (!mongoose20.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: "ID invalide" });
     }
     const user = await User_default.findById(id);
@@ -6594,7 +7168,7 @@ router18.put("/users/:id", async (req, res) => {
 router18.delete("/users/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose19.Types.ObjectId.isValid(id)) {
+    if (!mongoose20.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: "ID invalide" });
     }
     if (id === req.user._id.toString()) {
@@ -6623,8 +7197,8 @@ router18.delete("/users/:id", async (req, res) => {
 var admin_default = router18;
 
 // backend/server.js
-mongoose21.set("toJSON", { virtuals: true, versionKey: false });
-mongoose21.set("toObject", { virtuals: true, versionKey: false });
+mongoose22.set("toJSON", { virtuals: true, versionKey: false });
+mongoose22.set("toObject", { virtuals: true, versionKey: false });
 var app = express19();
 app.use(helmet({ contentSecurityPolicy: false }));
 var allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:5173").split(",").map((o) => o.trim()).filter(Boolean);
@@ -6670,22 +7244,41 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || "Erreur serveur interne" });
 });
 async function connectDB() {
-  if (mongoose21.connection.readyState === 1) return;
+  if (mongoose22.connection.readyState === 1) return;
   const uri = process.env.MONGODB_URI;
   if (!uri) {
     console.error("\u274C MONGODB_URI non d\xE9fini");
     throw new Error("MONGODB_URI non d\xE9fini");
   }
   try {
-    await mongoose21.connect(uri);
+    await mongoose22.connect(uri, {
+      serverSelectionTimeoutMS: 2e4,
+      connectTimeoutMS: 25e3,
+      socketTimeoutMS: 6e4,
+      bufferCommands: false,
+      autoIndex: false,
+      maxPoolSize: 5,
+      minPoolSize: 0
+    });
     console.log("\u2705 MongoDB connect\xE9");
-    const { fixJobOfferIndexes: fixJobOfferIndexes2 } = await Promise.resolve().then(() => (init_dbMigration(), dbMigration_exports));
-    await fixJobOfferIndexes2();
-    await ensureAdminAccount();
   } catch (err) {
     console.error("\u274C MongoDB connection failed:", err.message);
     throw err;
   }
+}
+async function runMaintenance() {
+  try {
+    const { fixJobOfferIndexes: fixJobOfferIndexes2 } = await Promise.resolve().then(() => (init_dbMigration(), dbMigration_exports));
+    await fixJobOfferIndexes2();
+    const models = Object.values(mongoose22.models);
+    await Promise.all(
+      models.map((model) => model.createIndexes().catch(() => {
+      }))
+    );
+  } catch (err) {
+    console.error("\u26A0\uFE0F Maintenance index MongoDB:", err.message);
+  }
+  await ensureAdminAccount();
 }
 async function ensureAdminAccount() {
   try {
@@ -6720,13 +7313,40 @@ var server_default = app;
 
 // backend/handler.js
 dotenv2.config({ path: new URL("../.env", import.meta.url) });
-var isConnected = false;
-async function handler(req, res) {
-  if (!isConnected) {
-    await connectDB();
-    isConnected = true;
+var dbPromise = null;
+var maintenancePromise = null;
+function respond500(res) {
+  try {
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Erreur serveur" });
+    }
+  } catch (err) {
   }
-  return server_default(req, res);
+}
+async function handler(req, res) {
+  try {
+    if (!dbPromise) {
+      dbPromise = connectDB().catch((err) => {
+        dbPromise = null;
+        throw err;
+      });
+    }
+    await dbPromise;
+  } catch (err) {
+    console.error("\u274C Handler DB connect error:", err?.message);
+    respond500(res);
+    return;
+  }
+  if (!maintenancePromise) {
+    maintenancePromise = runMaintenance();
+  }
+  try {
+    return server_default(req, res);
+  } catch (err) {
+    console.error("\u274C Handler app error:", err?.message);
+    respond500(res);
+    return void 0;
+  }
 }
 export {
   handler as default

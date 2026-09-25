@@ -170,7 +170,7 @@ export default function JobOfferCard({ job, view = 'grid', onSave, onApply, appl
               </Badge>
             )}
           </div>
-          <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span className="font-medium">{job.company}</span>
             <span className="flex items-center gap-1"><MapPin className="size-3" />{job.location}</span>
             {job.contractType && <span>{job.contractType}</span>}

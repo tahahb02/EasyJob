@@ -433,7 +433,7 @@ const toggleSave = useToggleSaveJob()
                 : 'Concours et emplois publics, actualités de l\'État et concours prochains'}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button asChild variant="outline" size="sm">
             <Link to="/applications">
               <Inbox className="mr-2 size-4" />

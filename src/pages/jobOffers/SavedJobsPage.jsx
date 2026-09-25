@@ -22,6 +22,14 @@ const sourceLabels = {
   welcometothejungle: 'Welcome to the Jungle',
   rekrute: 'Rekrute',
   manpower: 'Manpower',
+  dreamjob: 'DreamJob.ma',
+  onejob: 'OneJob.ma',
+  marocemploi: 'MarocEmploi.net',
+  emplois: 'Emploi.ma',
+  concours: 'Concours',
+  'emploi-public': 'Emploi public',
+  recruiter: 'Interne',
+  autre: 'Autre',
 }
 
 const sourceColors = {
@@ -30,6 +38,14 @@ const sourceColors = {
   welcometothejungle: 'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400',
   rekrute: 'bg-warning/10 text-warning',
   manpower: 'bg-destructive/10 text-destructive',
+  dreamjob: 'bg-amber-500/10 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400',
+  onejob: 'bg-sky-500/10 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400',
+  marocemploi: 'bg-lime-600/10 text-lime-700 dark:bg-lime-600/15 dark:text-lime-400',
+  emplois: 'bg-orange-500/10 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400',
+  concours: 'bg-teal-500/10 text-teal-600 dark:bg-teal-500/15 dark:text-teal-400',
+  'emploi-public': 'bg-green-600/10 text-green-700 dark:bg-green-600/15 dark:text-green-400',
+  recruiter: 'bg-violet-500/10 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400',
+  autre: 'bg-muted text-muted-foreground',
 }
 
 function RelevanceCircle({ score }) {
@@ -203,9 +219,11 @@ export default function SavedJobsPage() {
                     >
                       {sourceLabels[job.source] || job.source}
                     </Badge>
-                    <Badge variant="secondary">
-                      {job.contractType}
-                    </Badge>
+                    {job.contractType && (
+                      <Badge variant="secondary">
+                        {job.contractType}
+                      </Badge>
+                    )}
                   </div>
 
                   <h3 className="text-lg font-bold text-foreground group-hover:text-primary">
@@ -245,7 +263,7 @@ export default function SavedJobsPage() {
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center gap-3 border-t border-border pt-4">
+              <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-border pt-4">
                 {job.sourceUrl && (
                   <Button asChild variant="outline" size="sm">
                     <a

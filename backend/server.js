@@ -91,15 +91,37 @@ async function connectDB() {
   }
 
   try {
-    await mongoose.connect(uri)
+    await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 20000,
+      connectTimeoutMS: 25000,
+      socketTimeoutMS: 60000,
+      bufferCommands: false,
+      autoIndex: false,
+      maxPoolSize: 5,
+      minPoolSize: 0,
+    })
     console.log('✅ MongoDB connecté')
-    const { fixJobOfferIndexes } = await import('./services/dbMigration.js')
-    await fixJobOfferIndexes()
-    await ensureAdminAccount()
   } catch (err) {
     console.error('❌ MongoDB connection failed:', err.message)
     throw err
   }
+}
+
+// Tâches post-connection (indexes, compte admin). Non bloquant : appelé en
+// arrière-plan sur le chemin de requête ou au démarrage, pour ne jamais
+// retarder une réponse.
+async function runMaintenance() {
+  try {
+    const { fixJobOfferIndexes } = await import('./services/dbMigration.js')
+    await fixJobOfferIndexes()
+    const models = Object.values(mongoose.models)
+    await Promise.all(
+      models.map((model) => model.createIndexes().catch(() => {}))
+    )
+  } catch (err) {
+    console.error('⚠️ Maintenance index MongoDB:', err.message)
+  }
+  await ensureAdminAccount()
 }
 
 async function ensureAdminAccount() {
@@ -134,5 +156,5 @@ async function ensureAdminAccount() {
   }
 }
 
-export { connectDB }
+export { connectDB, runMaintenance }
 export default app

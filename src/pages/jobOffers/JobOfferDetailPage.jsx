@@ -33,6 +33,12 @@ const sourceLabels = {
   welcometothejungle: 'WTTJ',
   rekrute: 'Rekrute',
   manpower: 'Manpower',
+  dreamjob: 'DreamJob.ma',
+  onejob: 'OneJob.ma',
+  marocemploi: 'MarocEmploi.net',
+  emplois: 'Emploi.ma',
+  concours: 'Concours',
+  'emploi-public': 'Emploi public',
   recruiter: 'Interne',
   autre: 'Autre',
 }
@@ -43,6 +49,12 @@ const sourceColors = {
   welcometothejungle: 'bg-[#FF6B35]/10 text-[#FF6B35] dark:bg-[#FF6B35]/15 dark:text-[#FF9A6C]',
   rekrute: 'bg-[#E65100]/10 text-[#E65100] dark:bg-[#E65100]/15 dark:text-[#F4845F]',
   manpower: 'bg-[#D32F2F]/10 text-[#D32F2F] dark:bg-[#D32F2F]/15 dark:text-[#EF6C6C]',
+  dreamjob: 'bg-amber-500/10 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400',
+  onejob: 'bg-sky-500/10 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400',
+  marocemploi: 'bg-lime-600/10 text-lime-700 dark:bg-lime-600/15 dark:text-lime-400',
+  emplois: 'bg-orange-500/10 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400',
+  concours: 'bg-teal-500/10 text-teal-600 dark:bg-teal-500/15 dark:text-teal-400',
+  'emploi-public': 'bg-green-600/10 text-green-700 dark:bg-green-600/15 dark:text-green-400',
   recruiter: 'bg-accent/10 text-accent',
   autre: 'bg-muted text-muted-foreground',
 }
@@ -201,7 +213,7 @@ export default function JobOfferDetailPage() {
       variants={container}
       initial="hidden"
       animate="show"
-      className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8"
+className="mx-auto max-w-7xl space-y-6 px-4 pb-44 pt-8 sm:px-6 lg:px-8 lg:pb-8"
     >
       {/* Back Button */}
       <motion.div variants={item}>
@@ -461,6 +473,31 @@ export default function JobOfferDetailPage() {
               )}
             </div>
           </motion.div>
+        </div>
+      </div>
+
+      {/* Mobile sticky action bar */}
+      <div className="fixed inset-x-0 bottom-20 z-30 border-t border-border bg-card/95 px-4 py-3 backdrop-blur-xl lg:hidden">
+        <div className="mx-auto flex max-w-7xl items-center gap-2">
+          <button
+            type="button"
+            onClick={() => toggleSave.mutate(jobId)}
+            className="inline-flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors active:bg-muted"
+          >
+            <Bookmark className={`size-4 shrink-0 ${job.isSaved ? 'fill-primary text-primary' : 'text-muted-foreground'}`} />
+            <span className="truncate">{job.isSaved ? 'Sauvegardé' : 'Sauvegarder'}</span>
+          </button>
+          {job.sourceUrl && (
+            <a
+              href={job.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-12 min-w-0 flex-[1.4] items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+            >
+              <ExternalLink className="size-4 shrink-0" />
+              <span className="truncate">Postuler</span>
+            </a>
+          )}
         </div>
       </div>
     </motion.div>

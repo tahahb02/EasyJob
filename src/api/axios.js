@@ -9,7 +9,7 @@ function isAccountDisabled(message) {
 const api = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 30000,
+  timeout: 60000,
 })
 
 // Request interceptor - attach token
