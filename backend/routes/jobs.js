@@ -37,7 +37,9 @@ router.get('/', protect, async (req, res) => {
     } else if (group === 'concours') {
       query.source = CONCOURS_SOURCE
     } else {
-      query.source = { $ne: CONCOURS_SOURCE }
+      // Vue par défaut (offres externes) : exclure TOUT le secteur public
+      // (concours ET emplois publics), jamais mélangés avec les sites externes.
+      query.source = { $nin: PUBLIC_SOURCES }
     }
 
     let sortOption = { relevanceScore: -1, postedAt: -1, createdAt: -1 }

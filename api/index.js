@@ -2861,7 +2861,7 @@ router3.get("/", protect, async (req, res) => {
     } else if (group === "concours") {
       query.source = CONCOURS_SOURCE;
     } else {
-      query.source = { $ne: CONCOURS_SOURCE };
+      query.source = { $nin: PUBLIC_SOURCES };
     }
     let sortOption = { relevanceScore: -1, postedAt: -1, createdAt: -1 };
     if (sort === "date") sortOption = { postedAt: -1, createdAt: -1 };
