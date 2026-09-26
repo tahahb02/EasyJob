@@ -124,8 +124,8 @@ function SidebarNav({ collapsed, onNav }) {
                           <div className="relative flex shrink-0 items-center justify-center">
                             <item.icon className="size-4" />
                             {showBadge && (
-                              <span className="absolute -right-1.5 -top-1.5 flex size-3.5 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground">
-                                {unreadCount > 99 ? '99' : ''}
+                              <span className="absolute -right-1.5 -top-1.5 flex min-w-3.5 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-3.5 text-destructive-foreground">
+                                {unreadCount > 99 ? '99+' : unreadCount}
                               </span>
                             )}
                           </div>
@@ -166,7 +166,10 @@ function UserMenu({ collapsed }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex w-full items-center gap-3 rounded-md p-1.5 text-left transition-colors hover:bg-sidebar-accent">
+        <button
+          className="flex w-full items-center gap-3 rounded-md p-1.5 text-left transition-colors hover:bg-sidebar-accent"
+          aria-label="Menu du compte"
+        >
           <Avatar className="size-8">
             {user?.avatar ? (
               <img src={user.avatar} alt="" className="size-full rounded-full object-cover" />

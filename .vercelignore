@@ -3,3 +3,15 @@
 node_modules/
 *.log
 test_cv.pdf
+
+# Documents de travail et données personnelles : rien de tout cela n'a vocation
+# à être publié. `public/` ne contient plus que les vrais assets statiques.
+docs/
+private/
+prompt
+note
+DesignFront
+
+# Artefacts de build / débogage générés localement.
+.esbuild_check_out/
+.probe_inside/

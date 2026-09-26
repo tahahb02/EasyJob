@@ -160,7 +160,10 @@ function HeaderUserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary transition-colors hover:bg-primary/20">
+        <button
+          className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary transition-colors hover:bg-primary/20"
+          aria-label="Menu du compte"
+        >
           {user?.avatar ? (
             <img src={user.avatar} alt="" className="size-full rounded-full object-cover" />
           ) : (
@@ -192,7 +195,10 @@ function CommandMenu({ open, setOpen }) {
 
   useEffect(() => {
     const down = (e) => {
-      if ((e.key === 'k' && (e.metaKey || e.ctrlKey)) || e.key === 'Meta') {
+      // ⌘K / Ctrl+K uniquement. La condition précédente (`|| e.key === 'Meta'`)
+      // ouvrait la palette dès qu'on pressait la touche Windows, au clavier
+      // comme à la souris : la commande se déclenchait sans raison.
+      if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         setOpen((v) => !v)
       }

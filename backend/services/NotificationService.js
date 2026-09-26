@@ -124,18 +124,31 @@ export async function notifyApplicationStatusChange(application, oldStatus, newS
 
 export async function notifyNewCompany(company) {
   try {
-    const candidates = await User.find({ role: 'candidat' })
+    // Écrit en série, un document par candidat : à 10 000 candidats, une
+    // nouvelle entreprise créait 10 000 notifications et saturationnait la
+    // collection (et la mémoire du serverless). On écrête par lots, avec un
+    // garde-fou explicite, et on journalise si le plafond est atteint.
+    const MAX_RECIPIENTS = 500
+    const candidates = await User.find({ role: 'candidat', isActive: true })
+      .select('_id')
+      .limit(MAX_RECIPIENTS)
+      .lean()
 
-    for (const user of candidates) {
-      await createNotification({
-        userId: user._id,
-        type: 'nouvelle_entreprise',
-        title: 'Nouvelle entreprise disponible',
-        message: `${company.companyName} a rejoint notre plateforme - ${company.sector} à ${company.city}`,
-        data: { companyEmailId: company._id, companyName: company.companyName },
-        actionUrl: `/company-emails`,
-      })
-    }
+    if (candidates.length === 0) return
+
+    const now = new Date()
+    const rows = candidates.map(user => ({
+      userId: user._id,
+      type: 'nouvelle_entreprise',
+      title: 'Nouvelle entreprise disponible',
+      message: `${company.companyName} a rejoint notre plateforme - ${company.sector} à ${company.city}`,
+      data: { companyEmailId: company._id, companyName: company.companyName },
+      actionUrl: '/company-emails',
+      createdAt: now,
+      updatedAt: now,
+    }))
+
+    await Notification.insertMany(rows, { ordered: false })
   } catch (err) {
     console.error('Erreur notifyNewCompany:', err.message)
   }

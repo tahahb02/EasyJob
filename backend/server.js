@@ -98,6 +98,44 @@ const scrapingStatusLimiter = rateLimit({
 app.use('/api/scraping/status', scrapingStatusLimiter)
 app.use('/api/', apiLimiter)
 
+// ─── LIMITES DÉDIÉES AUX ENDPOINTS SENSIBLES ────────────────────────
+// Le plafond global de 1000/15 min laisse passer, sur la même fenêtre : 1000
+// créations de compte, 1000 demandes de code de vérification ou 1000 envois
+// d'email. Ces endpoints ont leur propre compteur, calé sur leur coût réel.
+const authLimiter = (limit, windowMs, message) => rateLimit({
+  windowMs,
+  limit,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  // Un 429 sur ces routes doit toujours rester lisible par le frontend.
+  handler: (req, res) => res.status(429).json({ error: message, retryAfterSeconds: Math.ceil(windowMs / 1000) }),
+})
+
+const REGISTER_LIMIT = authLimiter(5, 60 * 60 * 1000, 'Trop de créations de compte. Réessayez plus tard.')
+const LOGIN_LIMIT = authLimiter(20, 15 * 60 * 1000, 'Trop de tentatives de connexion. Réessayez dans quelques minutes.')
+const EMAIL_ROUTE_LIMIT = authLimiter(5, 60 * 60 * 1000, 'Trop de demandes. Vérifiez votre boîte mail ou réessayez plus tard.')
+const WRITE_LIMIT = authLimiter(30, 15 * 60 * 1000, 'Trop de requêtes. Merci de patienter quelques minutes.')
+
+app.use('/api/auth/register', REGISTER_LIMIT)
+app.use('/api/auth/login', LOGIN_LIMIT)
+app.use('/api/auth/refresh-token', LOGIN_LIMIT)
+app.use('/api/auth/verify-email', EMAIL_ROUTE_LIMIT)
+app.use('/api/auth/resend-verification', EMAIL_ROUTE_LIMIT)
+app.use('/api/auth/forgot-password', EMAIL_ROUTE_LIMIT)
+app.use('/api/auth/reset-password', EMAIL_ROUTE_LIMIT)
+
+// Upload de fichiers : quelques envoi par heure suffisent, ces routes sont
+// coûteuses (stockage base64 + analyse PDF côté serveur).
+const UPLOAD_LIMIT = authLimiter(10, 60 * 60 * 1000, 'Trop d\'envois de fichiers. Réessayez plus tard.')
+app.use('/api/profile/cv', UPLOAD_LIMIT)
+app.use('/api/profile/avatar', UPLOAD_LIMIT)
+
+// Lancement de scrapping : coûteux (appels réseau externes), réservé aux
+// rôles qui en ont besoin et plafonné.
+const SCRAPE_LIMIT = authLimiter(5, 60 * 60 * 1000, 'Trop de lancements de recherche. Réessayez dans une heure.')
+app.use('/api/recruiters/scrape', SCRAPE_LIMIT)
+app.use('/api/scraping', SCRAPE_LIMIT)
+
 app.use('/api/auth', authRoutes)
 app.use('/api/profile/cv', cvRoutes)
 app.use('/api/profile/portfolio', portfolioRoutes)
@@ -123,7 +161,35 @@ app.use('/api', (req, res) => {
   res.status(404).json({ error: `Route non trouvée: ${req.method} ${req.originalUrl}` })
 })
 
+// Le gestionnaire d'erreurs global renvoyait 500 pour toute erreur de typage
+// Mongoose. Un ObjectId mal formé (`/api/jobs/abc`) ou une valeur de type
+// incorrect (ex. `languages: "x"` au lieu d'un tableau) sont des erreurs de
+// requête, pas des pannes serveur : on les expose en 400 avec un message
+// exploitable par le frontend, et on masque les détails techniques.
 app.use((err, req, res, next) => {
+  if (err.name === 'CastError') {
+    return res.status(400).json({
+      error: `Identifiant invalide pour le champ « ${err.path} »`,
+      field: err.path,
+    })
+  }
+  if (err.name === 'ValidationError') {
+    const details = Object.values(err.errors || {}).map(e => e.message)
+    return res.status(400).json({
+      error: details.length ? details.join(', ') : 'Données invalides',
+      fields: details.length ? Object.keys(err.errors || {}) : undefined,
+    })
+  }
+  if (err.type === 'entity.too.large' || err.status === 413) {
+    return res.status(413).json({ error: 'Fichier ou requête trop volumineux' })
+  }
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'Corps de requête JSON invalide' })
+  }
+  if (err.name === 'MongoServerError' && err.code === 11000) {
+    return res.status(400).json({ error: 'Cette donnée existe déjà' })
+  }
+
   console.error(err.stack)
   res.status(err.status || 500).json({ error: err.message || 'Erreur serveur interne' })
 })
@@ -172,9 +238,30 @@ async function runMaintenance() {
 }
 
 async function ensureAdminAccount() {
+  const email = (process.env.ADMIN_EMAIL || '').trim().toLowerCase()
+  const password = process.env.ADMIN_PASSWORD || ''
+  const isProduction = process.env.NODE_ENV === 'production'
+
+  // En production on n'invente aucun identifiant par défaut. Sans couple
+  // ADMIN_EMAIL + ADMIN_PASSWORD explicite, on n'expose ni ne promeut personne :
+  // le comportement précédent créait `admin@gmail.com` / `admin123` et
+  // promouvait en administrateur n'importe quel compte portant cet email.
+  if (!email || !password) {
+    if (isProduction) {
+      console.warn('⚠️ ADMIN_EMAIL / ADMIN_PASSWORD non définis : aucun compte administrateur créé (sécurité). Définissez-les dans Vercel pour créer l\'admin.')
+      return
+    }
+    console.warn('⚠️ ADMIN_EMAIL / ADMIN_PASSWORD non définis : aucun compte administrateur créé.')
+    return
+  }
+
+  if (password.length < 12) {
+    console.error('❌ ADMIN_PASSWORD doit faire au moins 12 caractères : aucun compte administrateur créé.')
+    return
+  }
+
   try {
     const User = (await import('./models/User.js')).default
-    const email = (process.env.ADMIN_EMAIL || 'admin@gmail.com').toLowerCase()
     const existing = await User.findOne({ email })
 
     if (existing) {
@@ -190,7 +277,7 @@ async function ensureAdminAccount() {
       firstName: process.env.ADMIN_FIRST_NAME || 'Directeur',
       lastName: process.env.ADMIN_LAST_NAME || 'EasyJob',
       email,
-      password: process.env.ADMIN_PASSWORD || 'admin123',
+      password,
       phone: '',
       role: 'admin',
       isEmailVerified: true,

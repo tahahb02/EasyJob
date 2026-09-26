@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { session } from '@/lib/session'
 
 const API_URL = import.meta.env.VITE_API_URL || '/api'
 
@@ -15,7 +16,7 @@ const api = axios.create({
 // Request interceptor - attach token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('easyjob_access_token')
+    const token = session.accessToken
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -25,11 +26,9 @@ api.interceptors.request.use(
 )
 
 function forceLogout(storeMessage) {
-  localStorage.removeItem('easyjob_access_token')
-  localStorage.removeItem('easyjob_refresh_token')
-  localStorage.removeItem('easyjob_user')
+  session.clear()
   if (storeMessage) {
-    localStorage.setItem('easyjob_login_message', storeMessage)
+    session.setLoginMessage(storeMessage)
   }
   window.dispatchEvent(new CustomEvent('easyjob:force-logout'))
 }
@@ -48,13 +47,15 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401 && error.response?.data?.expired && !originalRequest._retry) {
       originalRequest._retry = true
-      const refreshToken = localStorage.getItem('easyjob_refresh_token')
+      const refreshToken = session.refreshToken
 
       if (refreshToken) {
         try {
           const { data } = await axios.post('/api/auth/refresh-token', { refreshToken })
-          localStorage.setItem('easyjob_access_token', data.accessToken)
-          localStorage.setItem('easyjob_refresh_token', data.refreshToken)
+          // On conserve le mode de persistance d'origine : un onglet privé ne
+          // doit pas faire passer la session en localStorage.
+          const remember = !!localStorage.getItem('easyjob_access_token')
+          session.save({ accessToken: data.accessToken, refreshToken: data.refreshToken, user: session.user }, remember)
           originalRequest.headers.Authorization = `Bearer ${data.accessToken}`
           return api(originalRequest)
         } catch (refreshError) {

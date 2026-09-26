@@ -7,24 +7,54 @@ import { protect } from '../middlewares/auth.js'
 import { notifyNewJobOffer, notifyNewApplicationToRecruiter } from '../services/NotificationService.js'
 import { calculateCandidateMatch, SITE_SOURCES, CONCOURS_SOURCE, PUBLIC_SOURCES } from '../services/jobScraper.js'
 import { buildCandidateInfo } from '../services/candidateInfo.js'
+import { escapeRegExp, clampInt, isValidObjectId, pick } from '../utils/validation.js'
+
+// Champs qu'un candidat peut fournir à `POST /api/jobs`. Tout le reste (y
+// compris `userId`, `source`, `viewsCount`, `applicationsCount`) est ignoré.
+const JOB_CREATION_FIELDS = [
+  'title',
+  'company',
+  'companyLogo',
+  'companyUrl',
+  'location',
+  'isRemote',
+  'contractType',
+  'description',
+  'requirements',
+  'responsibilities',
+  'salary',
+  'salaryText',
+  'city',
+  'experience',
+  'education',
+  'reference',
+  'nbPostes',
+  'applicationDeadline',
+  'sector',
+  'domain',
+  'keywords',
+]
 
 const router = express.Router()
 
 router.get('/', protect, async (req, res) => {
   try {
-    const { search, contractType, location, source, group, sort, page = 1, limit = 20 } = req.query
-    
+    const { search, contractType, location, source, group, sort, page, limit } = req.query
+
     const query = { userId: req.user._id, isActive: true }
-    
+
     if (search) {
+      // Regex échappée : `search` était injecté tel quel dans `$regex`, ce qui
+      // laisse l'utilisateur déclencher un ReDoS avec un motif catastrophique.
+      const safe = new RegExp(escapeRegExp(search), 'i')
       query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { company: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
+        { title: safe },
+        { company: safe },
+        { description: safe },
       ]
     }
     if (contractType) query.contractType = contractType
-    if (location) query.location = { $regex: location, $options: 'i' }
+    if (location) query.location = new RegExp(escapeRegExp(location), 'i')
     // Séparation : le secteur public (source 'concours' et 'emploi-public') vit sur
     // l'onglet « Emplois publics & Concours », les offres scrapées des sites externes
     // sur l'onglet des offres externes ; ils ne se mélangent jamais.
@@ -46,13 +76,16 @@ router.get('/', protect, async (req, res) => {
     if (sort === 'date') sortOption = { postedAt: -1, createdAt: -1 }
     else if (sort === 'salary') sortOption = { 'salary.max': -1, postedAt: -1, createdAt: -1 }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit)
+    // Pagination bornée : `?limit=1000000` était passé tel quel à `.limit()`.
+    const currentPage = clampInt(page, { min: 1, max: 10000, fallback: 1 })
+    const perPage = clampInt(limit, { min: 1, max: 100, fallback: 20 })
+    const skip = (currentPage - 1) * perPage
     const [jobs, total] = await Promise.all([
-      JobOffer.find(query).sort(sortOption).skip(skip).limit(parseInt(limit)),
+      JobOffer.find(query).sort(sortOption).skip(skip).limit(perPage),
       JobOffer.countDocuments(query),
     ])
 
-    res.json({ jobs, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) })
+    res.json({ jobs, total, page: currentPage, pages: Math.ceil(total / perPage) })
   } catch (error) {
     console.error('Erreur jobs list:', error)
     res.status(500).json({ error: 'Erreur lors de la récupération des offres' })
@@ -62,17 +95,18 @@ router.get('/', protect, async (req, res) => {
 // GET /api/jobs/recruiter-board - Public board of recruiter-posted jobs
 router.get('/recruiter-board', protect, async (req, res) => {
   try {
-    const { domain, contractType, location, search, sort, matched, page = 1, limit = 20 } = req.query
+    const { domain, contractType, location, search, sort, matched, page, limit } = req.query
     const query = { source: 'recruiter', isActive: true }
 
     if (domain) query.domain = domain
     if (contractType) query.contractType = contractType
-    if (location) query.location = { $regex: location, $options: 'i' }
+    if (location) query.location = new RegExp(escapeRegExp(location), 'i')
     if (search) {
+      const safe = new RegExp(escapeRegExp(search), 'i')
       query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { company: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
+        { title: safe },
+        { company: safe },
+        { description: safe },
       ]
     }
 
@@ -120,16 +154,18 @@ router.get('/recruiter-board', protect, async (req, res) => {
     }
 
     const total = visibleJobs.length
-    const skip = (parseInt(page) - 1) * parseInt(limit)
-    const paginatedJobs = visibleJobs.slice(skip, skip + parseInt(limit))
+    const currentPage = clampInt(page, { min: 1, max: 10000, fallback: 1 })
+    const perPage = clampInt(limit, { min: 1, max: 100, fallback: 20 })
+    const skip = (currentPage - 1) * perPage
+    const paginatedJobs = visibleJobs.slice(skip, skip + perPage)
 
     res.json({
       jobs: paginatedJobs,
       total,
       totalUnfiltered,
       profileMatched: !!(profile && hasProfile),
-      page: parseInt(page),
-      pages: Math.max(1, Math.ceil(total / parseInt(limit))),
+      page: currentPage,
+      pages: Math.max(1, Math.ceil(total / perPage)),
     })
   } catch (error) {
     console.error('Recruiter board error:', error)
@@ -164,14 +200,15 @@ router.get('/recommended', protect, async (req, res) => {
 // ET news / infos de l'État + concours prochains, triés séparément.
 router.get('/public-sector', protect, async (req, res) => {
   try {
-    const { search, category, page = 1, limit = 20, sort = 'date' } = req.query
+    const { search, category, page, limit, sort = 'date' } = req.query
 
     const query = { userId: req.user._id, isActive: true, source: { $in: PUBLIC_SOURCES } }
     if (search) {
+      const safe = new RegExp(escapeRegExp(search), 'i')
       query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { company: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
+        { title: safe },
+        { company: safe },
+        { description: safe },
       ]
     }
 
@@ -179,9 +216,11 @@ router.get('/public-sector', protect, async (req, res) => {
       ? { relevanceScore: -1, postedAt: -1, createdAt: -1 }
       : { postedAt: -1, createdAt: -1 }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit)
+    const currentPage = clampInt(page, { min: 1, max: 10000, fallback: 1 })
+    const perPage = clampInt(limit, { min: 1, max: 100, fallback: 20 })
+    const skip = (currentPage - 1) * perPage
     const [jobs, total] = await Promise.all([
-      JobOffer.find(query).sort(sortOption).skip(skip).limit(parseInt(limit)),
+      JobOffer.find(query).sort(sortOption).skip(skip).limit(perPage),
       JobOffer.countDocuments(query),
     ])
 
@@ -204,7 +243,7 @@ router.get('/public-sector', protect, async (req, res) => {
         return new Date(b.postedAt) - new Date(a.postedAt)
       })
 
-    res.json({ jobs, news, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) })
+    res.json({ jobs, news, total, page: currentPage, pages: Math.ceil(total / perPage) })
   } catch (error) {
     console.error('Erreur secteur public:', error)
     res.status(500).json({ error: 'Erreur lors de la récupération du secteur public' })
@@ -213,6 +252,9 @@ router.get('/public-sector', protect, async (req, res) => {
 
 router.get('/:id', protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identifiant d\'offre invalide' })
+    }
     const job = await JobOffer.findOne({
       _id: req.params.id,
       $or: [
@@ -232,18 +274,31 @@ router.get('/:id', protect, async (req, res) => {
 
 router.post('/', protect, async (req, res) => {
   try {
-    const job = await JobOffer.create({ ...req.body, userId: req.user._id, source: 'manual' })
+    // `source` et `userId` sont forcés : le corps ne pouvait pas les remplacer
+    // (sinon une offre « manual » pouvait se faire passer pour une offre
+    // recruteur, donc apparaître sur le tableau public des recruteurs).
+    const job = await JobOffer.create({ ...pick(req.body, JOB_CREATION_FIELDS), userId: req.user._id, source: 'manual' })
 
     notifyNewJobOffer(job)
 
     res.status(201).json({ job, message: 'Offre créée' })
   } catch (error) {
+    // Un `contractType` hors enum (ex. "CDI/CDD") partait en 500 sans message
+    // exploitable : on renvoie la liste des valeurs acceptées.
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        error: Object.values(error.errors || {}).map(e => e.message).join(', ') || 'Offre invalide',
+      })
+    }
     res.status(500).json({ error: 'Erreur lors de la création' })
   }
 })
 
 router.post('/:id/save', protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identifiant d\'offre invalide' })
+    }
     const job = await JobOffer.findOne({ _id: req.params.id, userId: req.user._id })
     if (!job) return res.status(404).json({ error: 'Offre non trouvée' })
     
@@ -259,6 +314,9 @@ router.post('/:id/save', protect, async (req, res) => {
 // Apply to a recruiter job from candidate side
 router.post('/:id/apply', protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identifiant d\'offre invalide' })
+    }
     const job = await JobOffer.findOne({ _id: req.params.id, source: 'recruiter', isActive: true })
     if (!job) return res.status(404).json({ error: 'Offre non trouvée' })
 
@@ -292,7 +350,13 @@ router.post('/:id/apply', protect, async (req, res) => {
 
 router.delete('/:id', protect, async (req, res) => {
   try {
-    await JobOffer.findOneAndDelete({ _id: req.params.id, userId: req.user._id })
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identifiant d\'offre invalide' })
+    }
+    // 404 si rien n'est supprimé (id inexistant ou offre d'autrui) : le 200
+    // précédent était un faux succès affiché à l'utilisateur.
+    const deleted = await JobOffer.findOneAndDelete({ _id: req.params.id, userId: req.user._id })
+    if (!deleted) return res.status(404).json({ error: 'Offre non trouvée' })
     res.json({ message: 'Offre supprimée' })
   } catch (error) {
     res.status(500).json({ error: 'Erreur serveur' })

@@ -16,11 +16,20 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { useRecruiters, useScrapeRecruiters } from '@/api/hooks'
+import { useRecruiters, useScrapeRecruiters, useCreateRecruiter } from '@/api/hooks'
 import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 const sectors = ['Tous', 'IT', 'Finance', 'Automobile', 'Agriculture', 'BTP', 'Marketing', 'RH']
 const locations = ['Toutes', 'Casablanca', 'Rabat', 'Marrakech', 'Tanger', 'Fès']
@@ -132,17 +141,17 @@ function RecruiterCard({ recruiter, index, navigate }) {
 
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
         {recruiter.linkedinUrl && (
-          <a
-            href={recruiter.linkedinUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm">
+            <a
+              href={recruiter.linkedinUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+            >
               <ExternalLink className="h-3.5 w-3.5" />
               Voir LinkedIn
-            </Button>
-          </a>
+            </a>
+          </Button>
         )}
 
         <Button
@@ -222,6 +231,19 @@ const item = {
   show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
 }
 
+const EMPTY_RECRUITER = {
+  firstName: '',
+  lastName: '',
+  title: '',
+  company: '',
+  email: '',
+  phone: '',
+  location: '',
+  sector: '',
+  linkedinUrl: '',
+  connectionDegree: '1st',
+}
+
 export default function RecruitersPage() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
@@ -229,6 +251,9 @@ export default function RecruitersPage() {
   const [location, setLocation] = useState('Toutes')
   const [connectionDegree, setConnectionDegree] = useState('Tous')
   const [page, setPage] = useState(1)
+  const [showAdd, setShowAdd] = useState(false)
+  const [form, setForm] = useState(EMPTY_RECRUITER)
+  const createRecruiterMutation = useCreateRecruiter()
 
   const apiFilters = useMemo(() => {
     const filters = { page, limit: 20 }
@@ -252,6 +277,32 @@ export default function RecruitersPage() {
       },
       onError: (err) => {
         toast.error(err?.message || 'Erreur lors du scrapping des recruteurs')
+      },
+    })
+  }
+
+  const setField = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
+
+  const handleAdd = (e) => {
+    e.preventDefault()
+    if (!form.firstName.trim() || !form.lastName.trim()) {
+      return toast.error('Le prénom et le nom sont obligatoires')
+    }
+    const payload = Object.fromEntries(
+      Object.entries(form)
+        .map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v])
+        .filter(([, v]) => v !== '')
+    )
+    createRecruiterMutation.mutate(payload, {
+      onSuccess: () => {
+        toast.success(`${payload.firstName} ${payload.lastName} a été ajouté`)
+        setForm(EMPTY_RECRUITER)
+        setShowAdd(false)
+        setPage(1)
+        refetch()
+      },
+      onError: (err) => {
+        toast.error(err?.message || "Erreur lors de l'ajout du recruteur")
       },
     })
   }
@@ -303,12 +354,100 @@ export default function RecruitersPage() {
             )}
             {scrapeRecruitersMutation.isPending ? 'Scrapping...' : 'Scraper les recruteurs'}
           </Button>
-          <Button>
+          <Button onClick={() => setShowAdd(true)}>
             <Plus className="h-4 w-4" />
             Ajouter un recruteur
           </Button>
         </div>
       </motion.div>
+
+      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Ajouter un recruteur</DialogTitle>
+            <DialogDescription>
+              Enregistrez un contact issu de LinkedIn, d'une candidature ou d'un salon.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAdd} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="rec-first">Prénom</Label>
+                <Input id="rec-first" value={form.firstName} onChange={setField('firstName')} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rec-last">Nom</Label>
+                <Input id="rec-last" value={form.lastName} onChange={setField('lastName')} required />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="rec-title">Titre</Label>
+              <Input id="rec-title" value={form.title} onChange={setField('title')} placeholder="Chargé de recrutement" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="rec-company">Entreprise</Label>
+              <Input id="rec-company" value={form.company} onChange={setField('company')} />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="rec-email">Email</Label>
+                <Input id="rec-email" type="email" value={form.email} onChange={setField('email')} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rec-phone">Téléphone</Label>
+                <Input id="rec-phone" type="tel" value={form.phone} onChange={setField('phone')} />
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="rec-location">Ville</Label>
+                <Input id="rec-location" value={form.location} onChange={setField('location')} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rec-sector">Secteur</Label>
+                <Input id="rec-sector" value={form.sector} onChange={setField('sector')} />
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="rec-linkedin">LinkedIn</Label>
+                <Input
+                  id="rec-linkedin"
+                  type="url"
+                  value={form.linkedinUrl}
+                  onChange={setField('linkedinUrl')}
+                  placeholder="https://www.linkedin.com/in/..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rec-degree">Degré de connexion</Label>
+                <Select
+                  value={form.connectionDegree}
+                  onValueChange={(v) => setForm((f) => ({ ...f, connectionDegree: v }))}
+                >
+                  <SelectTrigger id="rec-degree">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1st">1st</SelectItem>
+                    <SelectItem value="2nd">2nd</SelectItem>
+                    <SelectItem value="3rd+">3rd+</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowAdd(false)}>
+                Annuler
+              </Button>
+              <Button type="submit" disabled={createRecruiterMutation.isPending}>
+                {createRecruiterMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                Ajouter
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <motion.div variants={item}>
         <div className="relative">

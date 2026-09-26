@@ -2,11 +2,24 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { io } from 'socket.io-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from './AuthContext'
+import { session } from '@/lib/session'
 import { toast } from 'sonner'
 
 const SocketContext = createContext(null)
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || ''
+
+/**
+ * Le temps réel Socket.IO n'existe que sur le serveur persistant
+ * (`backend/start.js`). Sur Vercel, l'API est une fonction serverless : il n'y a
+ * pas de serveur WebSocket, et la requête `/socket.io/...` retombait sur le
+ * fallback SPA. Résultat : 10 tentatives de reconnexion par utilisateur, autant
+ * d'erreurs console, et un compteur de tentatives sans objet.
+ *
+ * Sans `VITE_SOCKET_URL` explicite, on ne tente donc plus la connexion : les
+ * notifications restent disponibles via le polling des requêtes React Query.
+ */
+const REALTIME_ENABLED = Boolean(import.meta.env.VITE_SOCKET_URL)
 
 export function SocketProvider({ children }) {
   const { user, isAuthenticated } = useAuth()
@@ -23,7 +36,14 @@ export function SocketProvider({ children }) {
       return undefined
     }
 
-    const token = localStorage.getItem('easyjob_access_token')
+    if (!REALTIME_ENABLED) {
+      setSocket(null)
+      setIsConnected(false)
+      setSocketError(null)
+      return undefined
+    }
+
+    const token = session.accessToken
     if (!token) return undefined
 
     const client = io(SOCKET_URL, {

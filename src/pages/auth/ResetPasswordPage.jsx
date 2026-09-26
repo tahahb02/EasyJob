@@ -43,9 +43,9 @@ export default function ResetPasswordPage() {
           <p className="text-sm text-muted-foreground">
             Votre mot de passe a été modifié avec succès.
           </p>
-          <Link to="/login">
-            <Button className="h-11 w-full">Se connecter</Button>
-          </Link>
+          <Button asChild className="h-11 w-full">
+            <Link to="/login">Se connecter</Link>
+          </Button>
         </div>
       ) : (
         <>

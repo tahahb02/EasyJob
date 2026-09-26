@@ -11,22 +11,37 @@ import {
   notifyEmailReceived,
 } from '../services/NotificationService.js'
 import { recordCandidateEmail } from '../services/MailService.js'
+import {
+  isValidObjectId,
+  clampInt,
+  asString,
+  pick,
+  APPLICATION_EDITABLE_FIELDS,
+  APPLICATION_STATUSES,
+} from '../utils/validation.js'
 
 const router = express.Router()
 
 // GET /api/applications
 router.get('/', protect, async (req, res) => {
   try {
-    const { status, page = 1, limit = 50 } = req.query
+    const { status, page, limit } = req.query
     const query = { userId: req.user._id }
-    if (status && status !== 'all') query.status = status
+    if (status && status !== 'all') {
+      if (!APPLICATION_STATUSES.includes(status)) {
+        return res.status(400).json({ error: 'Filtre de statut invalide' })
+      }
+      query.status = status
+    }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit)
+    const currentPage = clampInt(page, { min: 1, max: 100000, fallback: 1 })
+    const perPage = clampInt(limit, { min: 1, max: 100, fallback: 50 })
+    const skip = (currentPage - 1) * perPage
     const [applications, total] = await Promise.all([
-      Application.find(query).populate('jobOfferId', 'title company location contractType source sourceUrl').sort({ updatedAt: -1 }).skip(skip).limit(parseInt(limit)),
+      Application.find(query).populate('jobOfferId', 'title company location contractType source sourceUrl').sort({ updatedAt: -1 }).skip(skip).limit(perPage),
       Application.countDocuments(query),
     ])
-    res.json({ applications, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) })
+    res.json({ applications, total, page: currentPage, pages: Math.ceil(total / perPage) })
   } catch (error) {
     res.status(500).json({ error: 'Erreur serveur' })
   }
@@ -35,6 +50,9 @@ router.get('/', protect, async (req, res) => {
 // GET /api/applications/:id
 router.get('/:id', protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identifiant de candidature invalide' })
+    }
     const app = await Application.findOne({ _id: req.params.id, userId: req.user._id }).populate('jobOfferId')
     if (!app) return res.status(404).json({ error: 'Candidature non trouvée' })
     res.json({ application: app })
@@ -46,7 +64,22 @@ router.get('/:id', protect, async (req, res) => {
 // POST /api/applications - Create or mark as applied
 router.post('/', protect, async (req, res) => {
   try {
-    const { jobOfferId } = req.body
+    const { jobOfferId } = req.body || {}
+
+    // Sans cette validation, `Application.create` levait une CastError → 500,
+    // et un `jobOfferId` valide mais inexistant créait une candidature orpheline
+    // (201) qui n'apparaissait jamais dans `/api/jobs`.
+    if (!isValidObjectId(jobOfferId)) {
+      return res.status(400).json({ error: 'Offre d\'emploi invalide' })
+    }
+    const jobOffer = await JobOffer.findById(jobOfferId).select('_id isActive')
+    if (!jobOffer) {
+      return res.status(404).json({ error: 'Offre d\'emploi introuvable' })
+    }
+    if (jobOffer.isActive === false) {
+      return res.status(400).json({ error: 'Cette offre n\'accepte plus de candidatures' })
+    }
+
     const existing = await Application.findOne({ userId: req.user._id, jobOfferId })
     if (existing) {
       return res.status(400).json({ error: 'Vous avez déjà postulé à cette offre' })
@@ -60,10 +93,7 @@ router.post('/', protect, async (req, res) => {
       statusHistory: [{ status: 'envoyee', changedAt: new Date(), changedBy: 'candidat', note: 'Candidature envoyée' }],
     })
 
-    const jobOffer = await JobOffer.findById(jobOfferId)
-    if (jobOffer) {
-      notifyNewApplicationToRecruiter(application, jobOffer)
-    }
+    notifyNewApplicationToRecruiter(application, await JobOffer.findById(jobOfferId))
 
     res.status(201).json({ application, message: 'Candidature enregistrée' })
   } catch (error) {
@@ -74,8 +104,11 @@ router.post('/', protect, async (req, res) => {
 // POST /api/applications/mark-applied - Quick mark as applied
 router.post('/mark-applied', protect, async (req, res) => {
   try {
-    const { jobOfferId } = req.body
-    if (!jobOfferId) return res.status(400).json({ error: 'jobOfferId requis' })
+    const { jobOfferId } = req.body || {}
+    if (!isValidObjectId(jobOfferId)) return res.status(400).json({ error: 'Offre d\'emploi invalide' })
+
+    const jobOffer = await JobOffer.findById(jobOfferId).select('_id isActive')
+    if (!jobOffer) return res.status(404).json({ error: 'Offre d\'emploi introuvable' })
 
     const existing = await Application.findOne({ userId: req.user._id, jobOfferId })
     if (existing) {
@@ -93,10 +126,7 @@ router.post('/mark-applied', protect, async (req, res) => {
       statusHistory: [{ status: 'envoyee', changedAt: new Date(), changedBy: 'candidat', note: 'Candidature envoyée' }],
     })
 
-    const jobOffer = await JobOffer.findById(jobOfferId)
-    if (jobOffer) {
-      notifyNewApplicationToRecruiter(application, jobOffer)
-    }
+    notifyNewApplicationToRecruiter(application, await JobOffer.findById(jobOfferId))
 
     res.status(201).json({ application, message: 'Candidature enregistrée avec succès' })
   } catch (error) {
@@ -107,11 +137,17 @@ router.post('/mark-applied', protect, async (req, res) => {
 // POST /api/applications/:id/send
 router.post('/:id/send', protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identifiant de candidature invalide' })
+    }
     const app = await Application.findOne({ _id: req.params.id, userId: req.user._id })
     if (!app) return res.status(404).json({ error: 'Candidature non trouvée' })
 
-    const emailData = req.body.email || {}
-    const { to, subject, body, attachCv } = emailData
+    const emailData = (req.body && typeof req.body.email === 'object' && req.body.email !== null) ? req.body.email : {}
+    const to = asString(emailData.to, { max: 320 })
+    const subject = asString(emailData.subject, { max: 300 })
+    const body = asString(emailData.body, { max: 20000 })
+    const attachCv = !!emailData.attachCv
     if (!to || !subject || !body) {
       return res.status(400).json({ error: 'Destinataire, objet et contenu de l\'email requis' })
     }
@@ -206,11 +242,23 @@ router.post('/:id/send', protect, async (req, res) => {
 // PUT /api/applications/:id
 router.put('/:id', protect, async (req, res) => {
   try {
-    const updates = req.body
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identifiant de candidature invalide' })
+    }
+    // Allowlist stricte : le corps était appliqué tel quel en `$set`, ce qui
+    // permettait à l'appelant d'écrire `userId` (transférer sa candidature) ou
+    // `status` sans passer par l'historique ni la route dédiée.
+    const updates = pick(req.body, APPLICATION_EDITABLE_FIELDS)
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'Aucun champ modifiable fourni' })
+    }
+    if (updates.status !== undefined && !APPLICATION_STATUSES.includes(updates.status)) {
+      return res.status(400).json({ error: 'Statut invalide' })
+    }
     const app = await Application.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id },
       { $set: updates },
-      { new: true }
+      { new: true, runValidators: true }
     )
     if (!app) return res.status(404).json({ error: 'Candidature non trouvée' })
     res.json({ application: app, message: 'Candidature mise à jour' })
@@ -222,8 +270,11 @@ router.put('/:id', protect, async (req, res) => {
 // PUT /api/applications/:id/status
 router.put('/:id/status', protect, async (req, res) => {
   try {
-    const { status } = req.body
-    const allowedStatuses = ['brouillon', 'envoyee', 'consulte', 'valide_entretien', 'appel_attente', 'entretien_fait', 'accepte_final', 'refusee']
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identifiant de candidature invalide' })
+    }
+    const status = (req.body || {}).status
+    const allowedStatuses = APPLICATION_STATUSES
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ error: 'Statut invalide' })
     }
@@ -248,7 +299,13 @@ router.put('/:id/status', protect, async (req, res) => {
 // DELETE /api/applications/:id
 router.delete('/:id', protect, async (req, res) => {
   try {
-    await Application.findOneAndDelete({ _id: req.params.id, userId: req.user._id })
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identifiant de candidature invalide' })
+    }
+    // Le DELETE renvoyait 200 même quand rien n'avait été supprimé (mauvais id,
+    // candidature d'autrui) : l'UI display « supprimée » à tort. 404 sinon.
+    const deleted = await Application.findOneAndDelete({ _id: req.params.id, userId: req.user._id })
+    if (!deleted) return res.status(404).json({ error: 'Candidature non trouvée' })
     res.json({ message: 'Candidature supprimée' })
   } catch (error) {
     res.status(500).json({ error: 'Erreur serveur' })

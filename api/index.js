@@ -429,10 +429,10 @@ var dbMigration_exports = {};
 __export(dbMigration_exports, {
   fixJobOfferIndexes: () => fixJobOfferIndexes
 });
-import mongoose21 from "mongoose";
+import mongoose22 from "mongoose";
 async function fixJobOfferIndexes() {
   try {
-    const db = mongoose21.connection.db;
+    const db = mongoose22.connection.db;
     if (!db) return;
     const collection = db.collection("joboffers");
     const indexes = await collection.indexes();
@@ -441,7 +441,7 @@ async function fixJobOfferIndexes() {
       await collection.dropIndex(OLD_JOB_INDEX);
       console.log("\u{1F9F9} Ancien index unique supprim\xE9 (userId_1_source_1_sourceId_1)");
     }
-    await mongoose21.model("JobOffer").createIndexes();
+    await mongoose22.model("JobOffer").createIndexes();
   } catch (err) {
     console.error("Migration index JobOffer \xE9chou\xE9e:", err.message);
   }
@@ -458,7 +458,7 @@ import dotenv2 from "dotenv";
 
 // backend/server.js
 import express19 from "express";
-import mongoose22 from "mongoose";
+import mongoose23 from "mongoose";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -599,48 +599,101 @@ var authorize = (...roles) => (req, res, next) => {
 
 // backend/routes/auth.js
 var router = express.Router();
+var MAX_FIELD = 120;
+var MAX_PASSWORD = 128;
+var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function asString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+function normalizeEmail(value) {
+  return asString(value).toLowerCase();
+}
+function codeFallbackAllowed() {
+  if (process.env.NODE_ENV === "production") return false;
+  if (process.env.DISABLE_CODE_FALLBACK === "true") return false;
+  return process.env.ALLOW_CODE_FALLBACK === "true";
+}
 router.post("/register", async (req, res) => {
   try {
-    const { firstName, lastName, email, password, phone, role } = req.body;
+    const body = req.body || {};
+    const firstName = asString(body.firstName);
+    const lastName = asString(body.lastName);
+    const email = normalizeEmail(body.email);
+    const password = typeof body.password === "string" ? body.password : "";
+    const phone = asString(body.phone);
+    const role = asString(body.role);
     if (!firstName || !lastName || !email || !password) {
       return res.status(400).json({ error: "Tous les champs obligatoires doivent \xEAtre remplis" });
+    }
+    if (!EMAIL_RE.test(email)) {
+      return res.status(400).json({ error: "Adresse email invalide" });
+    }
+    if (firstName.length > MAX_FIELD || lastName.length > MAX_FIELD) {
+      return res.status(400).json({ error: `Pr\xE9nom et nom doivent faire moins de ${MAX_FIELD} caract\xE8res` });
+    }
+    if (phone.length > 40) {
+      return res.status(400).json({ error: "Num\xE9ro de t\xE9l\xE9phone trop long" });
     }
     if (password.length < 6) {
       return res.status(400).json({ error: "Le mot de passe doit contenir au moins 6 caract\xE8res" });
     }
-    const existingUser = await User_default.findOne({ email: email.toLowerCase() });
+    if (password.length > MAX_PASSWORD) {
+      return res.status(400).json({ error: `Le mot de passe doit faire moins de ${MAX_PASSWORD} caract\xE8res` });
+    }
+    const existingUser = await User_default.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ error: "Un compte avec cet email existe d\xE9j\xE0" });
     }
     const validRoles = ["candidat", "recruiter"];
     const userRole = validRoles.includes(role) ? role : "candidat";
-    const verificationCode = generateEmailVerificationCode();
-    const user = await User_default.create({
-      firstName,
-      lastName,
-      email: email.toLowerCase(),
-      password,
-      phone: phone || "",
-      role: userRole,
-      isEmailVerified: false,
-      emailVerificationCode: verificationCode,
-      emailVerificationExpire: new Date(Date.now() + 10 * 60 * 1e3)
-    });
+    const recruiterFields = {};
     if (userRole === "recruiter") {
-      const { companyName, industry, companySize, companyLocation, companyWebsite, companyDescription, position, linkedinUrl } = req.body;
-      await RecruiterProfile_default.create({
-        userId: user._id,
-        companyName: companyName || "",
-        industry: industry || "",
-        companySize: companySize || "11-50",
-        companyLocation: companyLocation || "",
-        companyWebsite: companyWebsite || "",
-        companyDescription: companyDescription || "",
-        position: position || "",
-        linkedinUrl: linkedinUrl || ""
+      recruiterFields.companyName = asString(body.companyName);
+      recruiterFields.industry = asString(body.industry);
+      recruiterFields.companySize = asString(body.companySize) || "11-50";
+      recruiterFields.companyLocation = asString(body.companyLocation);
+      recruiterFields.companyWebsite = asString(body.companyWebsite);
+      recruiterFields.companyDescription = asString(body.companyDescription);
+      recruiterFields.position = asString(body.position);
+      recruiterFields.linkedinUrl = asString(body.linkedinUrl);
+      if (!recruiterFields.companyName) {
+        return res.status(400).json({ error: "Le nom de l'entreprise est requis pour un compte recruteur" });
+      }
+      if (!recruiterFields.industry) {
+        return res.status(400).json({ error: "Le secteur d'activit\xE9 est requis pour un compte recruteur" });
+      }
+    }
+    const verificationCode = generateEmailVerificationCode();
+    let user;
+    try {
+      user = await User_default.create({
+        firstName,
+        lastName,
+        email,
+        password,
+        phone,
+        role: userRole,
+        isEmailVerified: false,
+        emailVerificationCode: verificationCode,
+        emailVerificationExpire: new Date(Date.now() + 10 * 60 * 1e3)
       });
-    } else {
-      await UserProfile_default.create({ userId: user._id });
+    } catch (createError) {
+      if (createError?.code === 11e3) {
+        return res.status(400).json({ error: "Un compte avec cet email existe d\xE9j\xE0" });
+      }
+      throw createError;
+    }
+    try {
+      if (userRole === "recruiter") {
+        await RecruiterProfile_default.create({ userId: user._id, ...recruiterFields });
+      } else {
+        await UserProfile_default.create({ userId: user._id });
+      }
+    } catch (profileError) {
+      await User_default.deleteOne({ _id: user._id }).catch(() => {
+      });
+      console.error("Erreur cr\xE9ation profil associ\xE9, compte annul\xE9:", profileError.message);
+      return res.status(400).json({ error: "Les informations de profil sont invalides. Aucun compte n'a \xE9t\xE9 cr\xE9\xE9." });
     }
     const emailResult = await sendVerificationEmail(user.email, user.firstName, verificationCode);
     const emailSent = emailResult.success;
@@ -659,7 +712,7 @@ router.post("/register", async (req, res) => {
       emailSent,
       emailError: emailSent ? null : emailResult.error || null,
       previewUrl: emailResult.previewUrl || null,
-      fallbackCode: emailSent || process.env.DISABLE_CODE_FALLBACK === "true" ? null : verificationCode
+      fallbackCode: codeFallbackAllowed() && !emailSent ? verificationCode : null
     });
   } catch (error) {
     console.error("Erreur register:", error);
@@ -668,9 +721,13 @@ router.post("/register", async (req, res) => {
 });
 router.post("/verify-email", async (req, res) => {
   try {
-    const { email, code } = req.body;
+    const email = normalizeEmail(req.body?.email);
+    const code = asString(req.body?.code);
+    if (!email || !code) {
+      return res.status(400).json({ error: "Email et code requis" });
+    }
     const user = await User_default.findOne({
-      email: email.toLowerCase(),
+      email,
       emailVerificationCode: code,
       emailVerificationExpire: { $gt: Date.now() }
     });
@@ -689,8 +746,11 @@ router.post("/verify-email", async (req, res) => {
 });
 router.post("/resend-verification", async (req, res) => {
   try {
-    const { email } = req.body;
-    const user = await User_default.findOne({ email: email.toLowerCase() });
+    const email = normalizeEmail(req.body?.email);
+    if (!email) {
+      return res.status(400).json({ error: "Email requis" });
+    }
+    const user = await User_default.findOne({ email });
     if (!user) return res.status(404).json({ error: "Utilisateur non trouv\xE9" });
     if (user.isEmailVerified) return res.status(400).json({ error: "Email d\xE9j\xE0 v\xE9rifi\xE9" });
     const verificationCode = generateEmailVerificationCode();
@@ -706,19 +766,24 @@ router.post("/resend-verification", async (req, res) => {
       emailSent: emailResult.success,
       emailError: emailResult.success ? null : emailResult.error || null,
       previewUrl: emailResult.previewUrl || null,
-      fallbackCode: emailResult.success || process.env.DISABLE_CODE_FALLBACK === "true" ? null : verificationCode
+      fallbackCode: codeFallbackAllowed() && !emailResult.success ? verificationCode : null
     });
   } catch (error) {
+    console.error("Erreur resend-verification:", error);
     res.status(500).json({ error: "Erreur lors de l'envoi" });
   }
 });
 router.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = normalizeEmail(req.body?.email);
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
     if (!email || !password) {
       return res.status(400).json({ error: "Email et mot de passe requis" });
     }
-    const user = await User_default.findOne({ email: email.toLowerCase() }).select("+password");
+    if (password.length > MAX_PASSWORD) {
+      return res.status(401).json({ error: "Email ou mot de passe incorrect" });
+    }
+    const user = await User_default.findOne({ email }).select("+password");
     if (!user) {
       return res.status(401).json({ error: "Email ou mot de passe incorrect" });
     }
@@ -775,8 +840,11 @@ router.post("/refresh-token", async (req, res) => {
 });
 router.post("/forgot-password", async (req, res) => {
   try {
-    const { email } = req.body;
-    const user = await User_default.findOne({ email: email.toLowerCase() });
+    const email = normalizeEmail(req.body?.email);
+    if (!email) {
+      return res.status(400).json({ error: "Email requis" });
+    }
+    const user = await User_default.findOne({ email });
     if (!user) {
       return res.json({ message: "Si un compte existe avec cet email, un lien de r\xE9initialisation a \xE9t\xE9 envoy\xE9." });
     }
@@ -793,10 +861,16 @@ router.post("/forgot-password", async (req, res) => {
 });
 router.post("/reset-password/:token", async (req, res) => {
   try {
-    const { password } = req.body;
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
     const { token } = req.params;
     if (!password || password.length < 6) {
       return res.status(400).json({ error: "Le mot de passe doit contenir au moins 6 caract\xE8res" });
+    }
+    if (password.length > MAX_PASSWORD) {
+      return res.status(400).json({ error: `Le mot de passe doit faire moins de ${MAX_PASSWORD} caract\xE8res` });
+    }
+    if (!token) {
+      return res.status(400).json({ error: "Lien invalide ou expir\xE9" });
     }
     const user = await User_default.findOne({
       resetPasswordToken: token,
@@ -849,28 +923,268 @@ var auth_default = router;
 // backend/routes/profile.js
 init_User();
 import express2 from "express";
-import mongoose4 from "mongoose";
+import mongoose5 from "mongoose";
 
 // backend/utils/fileUpload.js
 import multer from "multer";
 var storage = multer.memoryStorage();
-var fileFilter = (req, file, cb) => {
-  const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error("Type de fichier non support\xE9. Utilisez PDF, JPG, PNG ou WebP."), false);
+var ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+var MAGIC_BYTES = [
+  { mime: "application/pdf", bytes: [37, 80, 68, 70] },
+  // %PDF
+  { mime: "image/jpeg", bytes: [255, 216, 255] },
+  { mime: "image/png", bytes: [137, 80, 78, 71, 13, 10, 26, 10] },
+  { mime: "image/webp", bytes: [82, 73, 70, 70] }
+  // RIFF....WEBP
+];
+function detectMime(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 12) return null;
+  for (const { mime, bytes } of MAGIC_BYTES) {
+    if (bytes.every((byte, index) => buffer[index] === byte)) return mime;
   }
-};
+  if (buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP") {
+    return "image/webp";
+  }
+  return null;
+}
+function buildFileFilter(allowedTypes) {
+  return (req, file, cb) => {
+    if (!allowedTypes.includes(file.mimetype)) {
+      return cb(new Error("Type de fichier non support\xE9. Utilisez PDF, JPG, PNG ou WebP."));
+    }
+    cb(null, true);
+  };
+}
+var MAX_CV_BYTES = 5 * 1024 * 1024;
+var MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+var baseLimits = { files: 1, fields: 20 };
 var upload = multer({
   storage,
-  fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 }
-  // 10MB
+  fileFilter: buildFileFilter(ALLOWED_TYPES),
+  limits: { ...baseLimits, fileSize: MAX_CV_BYTES }
 });
+var uploadAvatar = multer({
+  storage,
+  fileFilter: buildFileFilter(["image/jpeg", "image/png", "image/webp"]),
+  limits: { ...baseLimits, fileSize: MAX_AVATAR_BYTES }
+});
+function assertFileSignature(req, res, field = "file") {
+  const file = req.file;
+  if (!file) return true;
+  const actual = detectMime(file.buffer);
+  if (!actual || actual !== file.mimetype) {
+    res.status(400).json({
+      error: "Le contenu du fichier ne correspond pas \xE0 son type. V\xE9rifiez votre fichier."
+    });
+    return false;
+  }
+  return true;
+}
+
+// backend/utils/validation.js
+import mongoose4 from "mongoose";
+function isValidObjectId(value) {
+  return typeof value === "string" && mongoose4.Types.ObjectId.isValid(value);
+}
+function asString2(value, { max = 2e3 } = {}) {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, max);
+}
+function asBool(value) {
+  if (typeof value === "boolean") return value;
+  if (value === "true" || value === 1 || value === "1") return true;
+  if (value === "false" || value === 0 || value === "0") return false;
+  return void 0;
+}
+function asNumber(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return void 0;
+}
+function clampInt(value, { min = 1, max = 100, fallback = null } = {}) {
+  const parsed = typeof value === "string" ? Number.parseInt(value, 10) : value;
+  if (!Number.isInteger(parsed)) return fallback;
+  if (parsed < min) return min;
+  if (parsed > max) return max;
+  return parsed;
+}
+function escapeRegExp(value) {
+  return asString2(value, { max: 200 }).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function isValidEmail(value) {
+  const email = asString2(value, { max: 320 }).toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+function pick(source, allowedKeys) {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+  const result = {};
+  for (const key of allowedKeys) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) result[key] = source[key];
+  }
+  return result;
+}
+var isPlainObject = (value) => !!value && typeof value === "object" && !Array.isArray(value);
+function asStringArray(value, { max = 50, itemMax = 500 } = {}) {
+  if (value === void 0) return void 0;
+  if (!Array.isArray(value)) return void 0;
+  return value.slice(0, max).map((v) => asString2(v, { max: itemMax }));
+}
+function asObjectArray(value, allowedKeys, { max = 30 } = {}) {
+  if (value === void 0) return void 0;
+  if (!Array.isArray(value)) return void 0;
+  return value.slice(0, max).map((entry) => pick(isPlainObject(entry) ? entry : {}, allowedKeys));
+}
+function asStringMap(value, allowedKeys, { max = 20 } = {}) {
+  if (value === void 0) return void 0;
+  if (!isPlainObject(value)) return void 0;
+  return pick(value, allowedKeys);
+}
+var PROFILE_STRING_FIELDS = ["title", "summary", "presentation"];
+var EDUCATION_KEYS = ["institution", "degree", "field", "startDate", "endDate", "description"];
+var EXPERIENCE_KEYS = ["company", "position", "startDate", "endDate", "isCurrent", "description", "skills"];
+var LANGUAGE_KEYS = ["language", "level"];
+var CERTIFICATION_KEYS = ["name", "issuer", "date", "url"];
+var SOCIAL_KEYS = ["linkedin", "github", "portfolio", "website"];
+var LOCATION_KEYS = ["city", "country", "isRemoteOpen"];
+var SALARY_KEYS = ["min", "max", "currency"];
+function sanitizeUserProfileUpdates(body) {
+  if (!isPlainObject(body)) return { updates: {}, invalid: ["corps de requ\xEAte"] };
+  const updates = {};
+  const invalid = [];
+  for (const field of PROFILE_STRING_FIELDS) {
+    if (body[field] === void 0) continue;
+    if (typeof body[field] !== "string") {
+      invalid.push(field);
+      continue;
+    }
+    updates[field] = body[field].slice(0, field === "summary" ? 5e3 : 2e3);
+  }
+  const education = asObjectArray(body.education, EDUCATION_KEYS);
+  if (body.education !== void 0) {
+    if (!education) invalid.push("education");
+    else updates.education = education.map((e) => ({ ...e, description: e.description ? asString2(e.description, { max: 2e3 }) : e.description }));
+  }
+  const experience = asObjectArray(body.experience, EXPERIENCE_KEYS);
+  if (body.experience !== void 0) {
+    if (!experience) {
+      invalid.push("experience");
+    } else {
+      updates.experience = experience.map((e) => {
+        const clean = { ...e };
+        if (e.isCurrent !== void 0) clean.isCurrent = !!asBool(e.isCurrent);
+        if (e.skills !== void 0) clean.skills = asStringArray(e.skills) || [];
+        if (e.description !== void 0) clean.description = asString2(e.description, { max: 3e3 });
+        return clean;
+      });
+    }
+  }
+  const languages = asObjectArray(body.languages, LANGUAGE_KEYS);
+  if (body.languages !== void 0) {
+    if (!languages) invalid.push("languages");
+    else updates.languages = languages.map((l) => ({ language: asString2(l.language, { max: 80 }), level: l.level }));
+  }
+  const certifications = asObjectArray(body.certifications, CERTIFICATION_KEYS);
+  if (body.certifications !== void 0) {
+    if (!certifications) invalid.push("certifications");
+    else updates.certifications = certifications.map((c) => ({ name: asString2(c.name, { max: 200 }), issuer: c.issuer ? asString2(c.issuer, { max: 200 }) : c.issuer, date: c.date, url: c.url }));
+  }
+  for (const [field, keys] of [["skills", null], ["jobTypes", null], ["domains", null], ["searchKeywords", null], ["preferredLocations", null]]) {
+    if (body[field] === void 0) continue;
+    const parsed = asStringArray(body[field], { max: 40, itemMax: 200 });
+    if (!parsed) invalid.push(field);
+    else updates[field] = parsed;
+  }
+  const socialLinks = asStringMap(body.socialLinks, SOCIAL_KEYS);
+  if (body.socialLinks !== void 0) {
+    if (!socialLinks) invalid.push("socialLinks");
+    else updates.socialLinks = socialLinks;
+  }
+  const location = asStringMap(body.location, LOCATION_KEYS);
+  if (body.location !== void 0) {
+    if (!location) {
+      invalid.push("location");
+    } else {
+      if (location.isRemoteOpen !== void 0) location.isRemoteOpen = !!asBool(location.isRemoteOpen);
+      updates.location = location;
+    }
+  }
+  const expectedSalary = asStringMap(body.expectedSalary, SALARY_KEYS);
+  if (body.expectedSalary !== void 0) {
+    if (!expectedSalary) {
+      invalid.push("expectedSalary");
+    } else {
+      for (const key of ["min", "max"]) {
+        if (expectedSalary[key] === void 0) continue;
+        const num = asNumber(expectedSalary[key]);
+        if (num === void 0 || num < 0) invalid.push(`expectedSalary.${key}`);
+        else expectedSalary[key] = num;
+      }
+      if (expectedSalary.currency !== void 0) expectedSalary.currency = asString2(expectedSalary.currency, { max: 8 });
+      updates.expectedSalary = expectedSalary;
+    }
+  }
+  return { updates, invalid: [...new Set(invalid)] };
+}
+var APPLICATION_STATUSES = [
+  "brouillon",
+  "envoyee",
+  "consulte",
+  "valide_entretien",
+  "appel_attente",
+  "entretien_fait",
+  "accepte_final",
+  "refusee"
+];
+var APPLICATION_EDITABLE_FIELDS = [
+  "notes",
+  "email",
+  "status",
+  "appliedAt",
+  "statusHistory",
+  "followUpDate"
+];
+var RECRUITER_EDITABLE_FIELDS = [
+  "firstName",
+  "lastName",
+  "title",
+  "company",
+  "linkedinUrl",
+  "email",
+  "phone",
+  "location",
+  "sector",
+  "connectionDegree",
+  "profilePicture",
+  "notes",
+  "tags",
+  "isActive"
+];
+var SEARCH_PROFILE_EDITABLE_FIELDS = [
+  "title",
+  "summary",
+  "location",
+  "jobTypes",
+  "domains",
+  "searchKeywords",
+  "preferredLocations",
+  "expectedSalary",
+  "isActive"
+];
 
 // backend/routes/profile.js
 var router2 = express2.Router();
+var PREFERENCE_FIELDS = [
+  "jobSearchStatus",
+  "jobType",
+  "remoteOnly",
+  "notifications",
+  "emailNotifications",
+  "language",
+  "theme"
+];
 router2.get("/", protect, async (req, res) => {
   try {
     let profile = await UserProfile_default.findOne({ userId: req.user._id });
@@ -879,7 +1193,7 @@ router2.get("/", protect, async (req, res) => {
     }
     let hasCV = false;
     try {
-      const CV = mongoose4.models.CV;
+      const CV = mongoose5.models.CV;
       if (CV) {
         const cv = await CV.findOne({ userId: req.user._id, isActive: true });
         hasCV = !!cv;
@@ -893,36 +1207,43 @@ router2.get("/", protect, async (req, res) => {
 });
 router2.put("/", protect, async (req, res) => {
   try {
-    const updates = req.body;
+    const updates = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+    const { updates: profileData, invalid } = sanitizeUserProfileUpdates(updates);
+    if (invalid.length > 0) {
+      return res.status(400).json({
+        error: `Champs invalides : ${invalid.join(", ")}`,
+        invalidFields: invalid
+      });
+    }
     const userUpdates = {};
-    if (updates.firstName) userUpdates.firstName = updates.firstName;
-    if (updates.lastName) userUpdates.lastName = updates.lastName;
-    if (updates.phone !== void 0) userUpdates.phone = updates.phone;
-    if (updates.preferences) userUpdates.preferences = updates.preferences;
-    if (updates.onboardingCompleted !== void 0) userUpdates.onboardingCompleted = updates.onboardingCompleted;
+    if (updates.firstName) userUpdates.firstName = asString2(updates.firstName, { max: 120 });
+    if (updates.lastName) userUpdates.lastName = asString2(updates.lastName, { max: 120 });
+    if (updates.phone !== void 0) userUpdates.phone = asString2(updates.phone, { max: 40 });
+    if (updates.preferences && typeof updates.preferences === "object" && !Array.isArray(updates.preferences)) {
+      userUpdates.preferences = pick(updates.preferences, PREFERENCE_FIELDS);
+    }
+    if (updates.onboardingCompleted !== void 0) userUpdates.onboardingCompleted = !!asBool(updates.onboardingCompleted);
     if (Object.keys(userUpdates).length > 0) {
       await User_default.findByIdAndUpdate(req.user._id, userUpdates);
     }
-    const profileData = { ...updates };
-    delete profileData.firstName;
-    delete profileData.lastName;
-    delete profileData.phone;
-    delete profileData.preferences;
-    delete profileData.email;
-    delete profileData.onboardingCompleted;
     if (updates.city !== void 0) {
-      profileData.location = { ...profileData.location || {}, city: updates.city };
-      delete profileData.city;
+      profileData.location = { ...profileData.location || {}, city: asString2(updates.city, { max: 120 }) };
     }
-    const profile = await UserProfile_default.findOneAndUpdate(
+    if (Object.keys(profileData).length === 0 && Object.keys(userUpdates).length === 0) {
+      return res.status(400).json({ error: "Aucun champ modifiable fourni" });
+    }
+    const profile = Object.keys(profileData).length > 0 ? await UserProfile_default.findOneAndUpdate(
       { userId: req.user._id },
       { $set: profileData },
-      { new: true, upsert: true }
-    );
+      { new: true, upsert: true, runValidators: true }
+    ) : await UserProfile_default.findOne({ userId: req.user._id });
     const user = await User_default.findById(req.user._id);
     res.json({ profile, user, message: "Profil mis \xE0 jour" });
   } catch (error) {
     console.error("Erreur profile update:", error);
+    if (error.name === "CastError" || error.name === "ValidationError") {
+      return res.status(400).json({ error: "Donn\xE9es de profil invalides" });
+    }
     res.status(500).json({ error: "Erreur lors de la mise \xE0 jour du profil" });
   }
 });
@@ -964,13 +1285,15 @@ router2.get("/onboarding-status", protect, async (req, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router2.post("/avatar", protect, upload.single("avatar"), async (req, res) => {
+router2.post("/avatar", protect, uploadAvatar.single("avatar"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "Aucun fichier fourni" });
+    if (!assertFileSignature(req, res, "avatar")) return;
     const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
     await User_default.findByIdAndUpdate(req.user._id, { avatar: base64 });
     res.json({ avatar: base64, message: "Avatar mis \xE0 jour" });
   } catch (error) {
+    console.error("Erreur upload avatar:", error);
     res.status(500).json({ error: "Erreur lors de l'upload" });
   }
 });
@@ -980,10 +1303,10 @@ var profile_default = router2;
 import express3 from "express";
 
 // backend/models/JobOffer.js
-import mongoose5 from "mongoose";
-var jobOfferSchema = new mongoose5.Schema({
-  userId: { type: mongoose5.Schema.Types.ObjectId, ref: "User" },
-  postedBy: { type: mongoose5.Schema.Types.ObjectId, ref: "User" },
+import mongoose6 from "mongoose";
+var jobOfferSchema = new mongoose6.Schema({
+  userId: { type: mongoose6.Schema.Types.ObjectId, ref: "User" },
+  postedBy: { type: mongoose6.Schema.Types.ObjectId, ref: "User" },
   source: { type: String, enum: ["linkedin", "indeed", "welcometothejungle", "rekrute", "manpower", "dreamjob", "onejob", "marocemploi", "emplois", "concours", "emploi-public", "manual", "recruiter", "autre"] },
   sourceId: String,
   sourceUrl: String,
@@ -1034,12 +1357,12 @@ jobOfferSchema.index({ userId: 1, isActive: 1 });
 jobOfferSchema.index({ postedBy: 1, isActive: 1 });
 jobOfferSchema.index({ title: "text", company: "text", description: "text" });
 jobOfferSchema.index({ domain: 1, sector: 1, isActive: 1 });
-var JobOffer_default = mongoose5.model("JobOffer", jobOfferSchema);
+var JobOffer_default = mongoose6.model("JobOffer", jobOfferSchema);
 
 // backend/models/PublicNews.js
-import mongoose6 from "mongoose";
-var publicNewsSchema = new mongoose6.Schema({
-  userId: { type: mongoose6.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose7 from "mongoose";
+var publicNewsSchema = new mongoose7.Schema({
+  userId: { type: mongoose7.Schema.Types.ObjectId, ref: "User", required: true },
   source: { type: String, enum: ["emploi-public"], default: "emploi-public" },
   category: { type: String, enum: ["actualite", "concours-prochain", "info"], required: true },
   title: { type: String, required: true },
@@ -1055,13 +1378,13 @@ var publicNewsSchema = new mongoose6.Schema({
 }, { timestamps: true });
 publicNewsSchema.index({ userId: 1, source: 1, sourceId: 1 }, { unique: true, partialFilterExpression: { sourceId: { $type: "string" } } });
 publicNewsSchema.index({ userId: 1, category: 1, postedAt: -1 });
-var PublicNews_default = mongoose6.model("PublicNews", publicNewsSchema);
+var PublicNews_default = mongoose7.model("PublicNews", publicNewsSchema);
 
 // backend/models/Application.js
-import mongoose7 from "mongoose";
-var applicationSchema = new mongoose7.Schema({
-  userId: { type: mongoose7.Schema.Types.ObjectId, ref: "User", required: true },
-  jobOfferId: { type: mongoose7.Schema.Types.ObjectId, ref: "JobOffer", required: true },
+import mongoose8 from "mongoose";
+var applicationSchema = new mongoose8.Schema({
+  userId: { type: mongoose8.Schema.Types.ObjectId, ref: "User", required: true },
+  jobOfferId: { type: mongoose8.Schema.Types.ObjectId, ref: "JobOffer", required: true },
   status: {
     type: String,
     enum: [
@@ -1133,12 +1456,12 @@ var applicationSchema = new mongoose7.Schema({
 }, { timestamps: true });
 applicationSchema.index({ userId: 1, jobOfferId: 1 }, { unique: true });
 applicationSchema.index({ jobOfferId: 1, status: 1 });
-var Application_default = mongoose7.model("Application", applicationSchema);
+var Application_default = mongoose8.model("Application", applicationSchema);
 
 // backend/models/Notification.js
-import mongoose8 from "mongoose";
-var notificationSchema = new mongoose8.Schema({
-  userId: { type: mongoose8.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose9 from "mongoose";
+var notificationSchema = new mongoose9.Schema({
+  userId: { type: mongoose9.Schema.Types.ObjectId, ref: "User", required: true },
   type: {
     type: String,
     enum: [
@@ -1158,20 +1481,20 @@ var notificationSchema = new mongoose8.Schema({
   },
   title: { type: String, required: true },
   message: { type: String, required: true },
-  data: mongoose8.Schema.Types.Mixed,
+  data: mongoose9.Schema.Types.Mixed,
   isRead: { type: Boolean, default: false },
   actionUrl: String
 }, { timestamps: true });
 notificationSchema.index({ userId: 1, createdAt: -1 });
 notificationSchema.index({ userId: 1, isRead: 1 });
-var Notification_default = mongoose8.model("Notification", notificationSchema);
+var Notification_default = mongoose9.model("Notification", notificationSchema);
 
 // backend/services/NotificationService.js
 init_User();
 
 // backend/models/CompanyEmail.js
-import mongoose9 from "mongoose";
-var companyEmailSchema = new mongoose9.Schema({
+import mongoose10 from "mongoose";
+var companyEmailSchema = new mongoose10.Schema({
   companyName: { type: String, required: true, trim: true },
   email: { type: String, required: true, lowercase: true, trim: true },
   website: { type: String, default: "" },
@@ -1196,7 +1519,7 @@ var companyEmailSchema = new mongoose9.Schema({
 companyEmailSchema.index({ companyName: "text", email: "text", sector: "text", domain: "text" });
 companyEmailSchema.index({ sector: 1, domain: 1, companyType: 1, city: 1 });
 companyEmailSchema.index({ email: 1 }, { unique: true });
-var CompanyEmail_default = mongoose9.model("CompanyEmail", companyEmailSchema);
+var CompanyEmail_default = mongoose10.model("CompanyEmail", companyEmailSchema);
 
 // backend/services/NotificationService.js
 var io = null;
@@ -1300,17 +1623,21 @@ async function notifyApplicationStatusChange(application, oldStatus, newStatus, 
 }
 async function notifyNewCompany(company) {
   try {
-    const candidates = await User_default.find({ role: "candidat" });
-    for (const user of candidates) {
-      await createNotification({
-        userId: user._id,
-        type: "nouvelle_entreprise",
-        title: "Nouvelle entreprise disponible",
-        message: `${company.companyName} a rejoint notre plateforme - ${company.sector} \xE0 ${company.city}`,
-        data: { companyEmailId: company._id, companyName: company.companyName },
-        actionUrl: `/company-emails`
-      });
-    }
+    const MAX_RECIPIENTS = 500;
+    const candidates = await User_default.find({ role: "candidat", isActive: true }).select("_id").limit(MAX_RECIPIENTS).lean();
+    if (candidates.length === 0) return;
+    const now = /* @__PURE__ */ new Date();
+    const rows = candidates.map((user) => ({
+      userId: user._id,
+      type: "nouvelle_entreprise",
+      title: "Nouvelle entreprise disponible",
+      message: `${company.companyName} a rejoint notre plateforme - ${company.sector} \xE0 ${company.city}`,
+      data: { companyEmailId: company._id, companyName: company.companyName },
+      actionUrl: "/company-emails",
+      createdAt: now,
+      updatedAt: now
+    }));
+    await Notification_default.insertMany(rows, { ordered: false });
   } catch (err) {
     console.error("Erreur notifyNewCompany:", err.message);
   }
@@ -3040,13 +3367,13 @@ function calculateCandidateMatch(candidateProfile, jobOffer) {
 
 // backend/services/candidateInfo.js
 init_User();
-import mongoose10 from "mongoose";
+import mongoose11 from "mongoose";
 async function buildCandidateInfo(userId, jobOffer) {
   const [user, profile] = await Promise.all([
     User_default.findById(userId),
     UserProfile_default.findOne({ userId })
   ]);
-  const CV = mongoose10.models.CV;
+  const CV = mongoose11.models.CV;
   const cv = CV ? await CV.findOne({ userId, isActive: true }) : null;
   const cvSkills = cv?.parsedData?.skills || [];
   const profileSkills = profile?.skills || [];
@@ -3098,20 +3425,44 @@ async function buildCandidateInfo(userId, jobOffer) {
 }
 
 // backend/routes/jobs.js
+var JOB_CREATION_FIELDS = [
+  "title",
+  "company",
+  "companyLogo",
+  "companyUrl",
+  "location",
+  "isRemote",
+  "contractType",
+  "description",
+  "requirements",
+  "responsibilities",
+  "salary",
+  "salaryText",
+  "city",
+  "experience",
+  "education",
+  "reference",
+  "nbPostes",
+  "applicationDeadline",
+  "sector",
+  "domain",
+  "keywords"
+];
 var router3 = express3.Router();
 router3.get("/", protect, async (req, res) => {
   try {
-    const { search, contractType, location, source, group, sort, page = 1, limit = 20 } = req.query;
+    const { search, contractType, location, source, group, sort, page, limit } = req.query;
     const query = { userId: req.user._id, isActive: true };
     if (search) {
+      const safe = new RegExp(escapeRegExp(search), "i");
       query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { company: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } }
+        { title: safe },
+        { company: safe },
+        { description: safe }
       ];
     }
     if (contractType) query.contractType = contractType;
-    if (location) query.location = { $regex: location, $options: "i" };
+    if (location) query.location = new RegExp(escapeRegExp(location), "i");
     if (source && source !== "Toutes") {
       query.source = source;
     } else if (group === "sites") {
@@ -3126,12 +3477,14 @@ router3.get("/", protect, async (req, res) => {
     let sortOption = { relevanceScore: -1, postedAt: -1, createdAt: -1 };
     if (sort === "date") sortOption = { postedAt: -1, createdAt: -1 };
     else if (sort === "salary") sortOption = { "salary.max": -1, postedAt: -1, createdAt: -1 };
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const currentPage = clampInt(page, { min: 1, max: 1e4, fallback: 1 });
+    const perPage = clampInt(limit, { min: 1, max: 100, fallback: 20 });
+    const skip = (currentPage - 1) * perPage;
     const [jobs, total] = await Promise.all([
-      JobOffer_default.find(query).sort(sortOption).skip(skip).limit(parseInt(limit)),
+      JobOffer_default.find(query).sort(sortOption).skip(skip).limit(perPage),
       JobOffer_default.countDocuments(query)
     ]);
-    res.json({ jobs, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) });
+    res.json({ jobs, total, page: currentPage, pages: Math.ceil(total / perPage) });
   } catch (error) {
     console.error("Erreur jobs list:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des offres" });
@@ -3139,16 +3492,17 @@ router3.get("/", protect, async (req, res) => {
 });
 router3.get("/recruiter-board", protect, async (req, res) => {
   try {
-    const { domain, contractType, location, search, sort, matched, page = 1, limit = 20 } = req.query;
+    const { domain, contractType, location, search, sort, matched, page, limit } = req.query;
     const query = { source: "recruiter", isActive: true };
     if (domain) query.domain = domain;
     if (contractType) query.contractType = contractType;
-    if (location) query.location = { $regex: location, $options: "i" };
+    if (location) query.location = new RegExp(escapeRegExp(location), "i");
     if (search) {
+      const safe = new RegExp(escapeRegExp(search), "i");
       query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { company: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } }
+        { title: safe },
+        { company: safe },
+        { description: safe }
       ];
     }
     let sortOption = { createdAt: -1 };
@@ -3176,15 +3530,17 @@ router3.get("/recruiter-board", protect, async (req, res) => {
       visibleJobs.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
     }
     const total = visibleJobs.length;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const paginatedJobs = visibleJobs.slice(skip, skip + parseInt(limit));
+    const currentPage = clampInt(page, { min: 1, max: 1e4, fallback: 1 });
+    const perPage = clampInt(limit, { min: 1, max: 100, fallback: 20 });
+    const skip = (currentPage - 1) * perPage;
+    const paginatedJobs = visibleJobs.slice(skip, skip + perPage);
     res.json({
       jobs: paginatedJobs,
       total,
       totalUnfiltered,
       profileMatched: !!(profile && hasProfile),
-      page: parseInt(page),
-      pages: Math.max(1, Math.ceil(total / parseInt(limit)))
+      page: currentPage,
+      pages: Math.max(1, Math.ceil(total / perPage))
     });
   } catch (error) {
     console.error("Recruiter board error:", error);
@@ -3214,19 +3570,22 @@ router3.get("/recommended", protect, async (req, res) => {
 });
 router3.get("/public-sector", protect, async (req, res) => {
   try {
-    const { search, category, page = 1, limit = 20, sort = "date" } = req.query;
+    const { search, category, page, limit, sort = "date" } = req.query;
     const query = { userId: req.user._id, isActive: true, source: { $in: PUBLIC_SOURCES } };
     if (search) {
+      const safe = new RegExp(escapeRegExp(search), "i");
       query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { company: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } }
+        { title: safe },
+        { company: safe },
+        { description: safe }
       ];
     }
     const sortOption = sort === "relevance" ? { relevanceScore: -1, postedAt: -1, createdAt: -1 } : { postedAt: -1, createdAt: -1 };
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const currentPage = clampInt(page, { min: 1, max: 1e4, fallback: 1 });
+    const perPage = clampInt(limit, { min: 1, max: 100, fallback: 20 });
+    const skip = (currentPage - 1) * perPage;
     const [jobs, total] = await Promise.all([
-      JobOffer_default.find(query).sort(sortOption).skip(skip).limit(parseInt(limit)),
+      JobOffer_default.find(query).sort(sortOption).skip(skip).limit(perPage),
       JobOffer_default.countDocuments(query)
     ]);
     const newsQuery = { userId: req.user._id };
@@ -3242,7 +3601,7 @@ router3.get("/public-sector", protect, async (req, res) => {
       if (a.category === "concours-prochain") return new Date(a.eventDate) - new Date(b.eventDate);
       return new Date(b.postedAt) - new Date(a.postedAt);
     });
-    res.json({ jobs, news, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) });
+    res.json({ jobs, news, total, page: currentPage, pages: Math.ceil(total / perPage) });
   } catch (error) {
     console.error("Erreur secteur public:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration du secteur public" });
@@ -3250,6 +3609,9 @@ router3.get("/public-sector", protect, async (req, res) => {
 });
 router3.get("/:id", protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant d'offre invalide" });
+    }
     const job = await JobOffer_default.findOne({
       _id: req.params.id,
       $or: [
@@ -3266,15 +3628,23 @@ router3.get("/:id", protect, async (req, res) => {
 });
 router3.post("/", protect, async (req, res) => {
   try {
-    const job = await JobOffer_default.create({ ...req.body, userId: req.user._id, source: "manual" });
+    const job = await JobOffer_default.create({ ...pick(req.body, JOB_CREATION_FIELDS), userId: req.user._id, source: "manual" });
     notifyNewJobOffer(job);
     res.status(201).json({ job, message: "Offre cr\xE9\xE9e" });
   } catch (error) {
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        error: Object.values(error.errors || {}).map((e) => e.message).join(", ") || "Offre invalide"
+      });
+    }
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation" });
   }
 });
 router3.post("/:id/save", protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant d'offre invalide" });
+    }
     const job = await JobOffer_default.findOne({ _id: req.params.id, userId: req.user._id });
     if (!job) return res.status(404).json({ error: "Offre non trouv\xE9e" });
     job.isSaved = !job.isSaved;
@@ -3286,6 +3656,9 @@ router3.post("/:id/save", protect, async (req, res) => {
 });
 router3.post("/:id/apply", protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant d'offre invalide" });
+    }
     const job = await JobOffer_default.findOne({ _id: req.params.id, source: "recruiter", isActive: true });
     if (!job) return res.status(404).json({ error: "Offre non trouv\xE9e" });
     const existing = await Application_default.findOne({ userId: req.user._id, jobOfferId: job._id });
@@ -3312,7 +3685,11 @@ router3.post("/:id/apply", protect, async (req, res) => {
 });
 router3.delete("/:id", protect, async (req, res) => {
   try {
-    await JobOffer_default.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant d'offre invalide" });
+    }
+    const deleted = await JobOffer_default.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    if (!deleted) return res.status(404).json({ error: "Offre non trouv\xE9e" });
     res.json({ message: "Offre supprim\xE9e" });
   } catch (error) {
     res.status(500).json({ error: "Erreur serveur" });
@@ -3325,9 +3702,9 @@ import express4 from "express";
 init_User();
 
 // backend/models/CV.js
-import mongoose11 from "mongoose";
-var cvSchema = new mongoose11.Schema({
-  userId: { type: mongoose11.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose12 from "mongoose";
+var cvSchema = new mongoose12.Schema({
+  userId: { type: mongoose12.Schema.Types.ObjectId, ref: "User", required: true },
   fileName: String,
   originalName: String,
   fileData: String,
@@ -3367,18 +3744,18 @@ var cvSchema = new mongoose11.Schema({
   isActive: { type: Boolean, default: true },
   version: { type: Number, default: 1 }
 }, { timestamps: true });
-var CV_default = mongoose11.models.CV || mongoose11.model("CV", cvSchema);
+var CV_default = mongoose12.models.CV || mongoose12.model("CV", cvSchema);
 
 // backend/routes/applications.js
 init_sendEmail();
 
 // backend/models/Email.js
-import mongoose12 from "mongoose";
-var emailSchema = new mongoose12.Schema({
-  userId: { type: mongoose12.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose13 from "mongoose";
+var emailSchema = new mongoose13.Schema({
+  userId: { type: mongoose13.Schema.Types.ObjectId, ref: "User", required: true },
   direction: { type: String, enum: ["sent", "received"], required: true, index: true },
-  fromUser: { type: mongoose12.Schema.Types.ObjectId, ref: "User", default: null },
-  toUser: { type: mongoose12.Schema.Types.ObjectId, ref: "User", default: null },
+  fromUser: { type: mongoose13.Schema.Types.ObjectId, ref: "User", default: null },
+  toUser: { type: mongoose13.Schema.Types.ObjectId, ref: "User", default: null },
   fromName: { type: String, default: "" },
   toName: { type: String, default: "" },
   fromEmail: { type: String, default: "" },
@@ -3387,15 +3764,15 @@ var emailSchema = new mongoose12.Schema({
   body: { type: String, default: "" },
   companyName: { type: String, default: "" },
   campaignType: { type: String, default: "" },
-  applicationId: { type: mongoose12.Schema.Types.ObjectId, ref: "Application", default: null },
-  jobOfferId: { type: mongoose12.Schema.Types.ObjectId, ref: "JobOffer", default: null },
+  applicationId: { type: mongoose13.Schema.Types.ObjectId, ref: "Application", default: null },
+  jobOfferId: { type: mongoose13.Schema.Types.ObjectId, ref: "JobOffer", default: null },
   messageId: { type: String, default: "" },
   isRead: { type: Boolean, default: false },
   readAt: Date
 }, { timestamps: true });
 emailSchema.index({ userId: 1, createdAt: -1 });
 emailSchema.index({ userId: 1, direction: 1, createdAt: -1 });
-var Email_default = mongoose12.model("Email", emailSchema);
+var Email_default = mongoose13.model("Email", emailSchema);
 
 // backend/services/MailService.js
 async function recordExchange({ senderUser, recipientUser, subject, body, fromName, toName, toEmail, companyName, campaignType = "", applicationId = null, jobOfferId = null, messageId = "" }) {
@@ -3467,21 +3844,31 @@ async function recordRecruiterEmail({ recruiterUser, candidateUser, subject, bod
 var router4 = express4.Router();
 router4.get("/", protect, async (req, res) => {
   try {
-    const { status, page = 1, limit = 50 } = req.query;
+    const { status, page, limit } = req.query;
     const query = { userId: req.user._id };
-    if (status && status !== "all") query.status = status;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    if (status && status !== "all") {
+      if (!APPLICATION_STATUSES.includes(status)) {
+        return res.status(400).json({ error: "Filtre de statut invalide" });
+      }
+      query.status = status;
+    }
+    const currentPage = clampInt(page, { min: 1, max: 1e5, fallback: 1 });
+    const perPage = clampInt(limit, { min: 1, max: 100, fallback: 50 });
+    const skip = (currentPage - 1) * perPage;
     const [applications, total] = await Promise.all([
-      Application_default.find(query).populate("jobOfferId", "title company location contractType source sourceUrl").sort({ updatedAt: -1 }).skip(skip).limit(parseInt(limit)),
+      Application_default.find(query).populate("jobOfferId", "title company location contractType source sourceUrl").sort({ updatedAt: -1 }).skip(skip).limit(perPage),
       Application_default.countDocuments(query)
     ]);
-    res.json({ applications, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) });
+    res.json({ applications, total, page: currentPage, pages: Math.ceil(total / perPage) });
   } catch (error) {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
 router4.get("/:id", protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant de candidature invalide" });
+    }
     const app2 = await Application_default.findOne({ _id: req.params.id, userId: req.user._id }).populate("jobOfferId");
     if (!app2) return res.status(404).json({ error: "Candidature non trouv\xE9e" });
     res.json({ application: app2 });
@@ -3491,7 +3878,17 @@ router4.get("/:id", protect, async (req, res) => {
 });
 router4.post("/", protect, async (req, res) => {
   try {
-    const { jobOfferId } = req.body;
+    const { jobOfferId } = req.body || {};
+    if (!isValidObjectId(jobOfferId)) {
+      return res.status(400).json({ error: "Offre d'emploi invalide" });
+    }
+    const jobOffer = await JobOffer_default.findById(jobOfferId).select("_id isActive");
+    if (!jobOffer) {
+      return res.status(404).json({ error: "Offre d'emploi introuvable" });
+    }
+    if (jobOffer.isActive === false) {
+      return res.status(400).json({ error: "Cette offre n'accepte plus de candidatures" });
+    }
     const existing = await Application_default.findOne({ userId: req.user._id, jobOfferId });
     if (existing) {
       return res.status(400).json({ error: "Vous avez d\xE9j\xE0 postul\xE9 \xE0 cette offre" });
@@ -3503,10 +3900,7 @@ router4.post("/", protect, async (req, res) => {
       appliedAt: /* @__PURE__ */ new Date(),
       statusHistory: [{ status: "envoyee", changedAt: /* @__PURE__ */ new Date(), changedBy: "candidat", note: "Candidature envoy\xE9e" }]
     });
-    const jobOffer = await JobOffer_default.findById(jobOfferId);
-    if (jobOffer) {
-      notifyNewApplicationToRecruiter(application, jobOffer);
-    }
+    notifyNewApplicationToRecruiter(application, await JobOffer_default.findById(jobOfferId));
     res.status(201).json({ application, message: "Candidature enregistr\xE9e" });
   } catch (error) {
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation" });
@@ -3514,8 +3908,10 @@ router4.post("/", protect, async (req, res) => {
 });
 router4.post("/mark-applied", protect, async (req, res) => {
   try {
-    const { jobOfferId } = req.body;
-    if (!jobOfferId) return res.status(400).json({ error: "jobOfferId requis" });
+    const { jobOfferId } = req.body || {};
+    if (!isValidObjectId(jobOfferId)) return res.status(400).json({ error: "Offre d'emploi invalide" });
+    const jobOffer = await JobOffer_default.findById(jobOfferId).select("_id isActive");
+    if (!jobOffer) return res.status(404).json({ error: "Offre d'emploi introuvable" });
     const existing = await Application_default.findOne({ userId: req.user._id, jobOfferId });
     if (existing) {
       existing.status = "envoyee";
@@ -3530,10 +3926,7 @@ router4.post("/mark-applied", protect, async (req, res) => {
       appliedAt: /* @__PURE__ */ new Date(),
       statusHistory: [{ status: "envoyee", changedAt: /* @__PURE__ */ new Date(), changedBy: "candidat", note: "Candidature envoy\xE9e" }]
     });
-    const jobOffer = await JobOffer_default.findById(jobOfferId);
-    if (jobOffer) {
-      notifyNewApplicationToRecruiter(application, jobOffer);
-    }
+    notifyNewApplicationToRecruiter(application, await JobOffer_default.findById(jobOfferId));
     res.status(201).json({ application, message: "Candidature enregistr\xE9e avec succ\xE8s" });
   } catch (error) {
     res.status(500).json({ error: "Erreur serveur" });
@@ -3541,10 +3934,16 @@ router4.post("/mark-applied", protect, async (req, res) => {
 });
 router4.post("/:id/send", protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant de candidature invalide" });
+    }
     const app2 = await Application_default.findOne({ _id: req.params.id, userId: req.user._id });
     if (!app2) return res.status(404).json({ error: "Candidature non trouv\xE9e" });
-    const emailData = req.body.email || {};
-    const { to, subject, body, attachCv } = emailData;
+    const emailData = req.body && typeof req.body.email === "object" && req.body.email !== null ? req.body.email : {};
+    const to = asString2(emailData.to, { max: 320 });
+    const subject = asString2(emailData.subject, { max: 300 });
+    const body = asString2(emailData.body, { max: 2e4 });
+    const attachCv = !!emailData.attachCv;
     if (!to || !subject || !body) {
       return res.status(400).json({ error: "Destinataire, objet et contenu de l'email requis" });
     }
@@ -3628,11 +4027,20 @@ router4.post("/:id/send", protect, async (req, res) => {
 });
 router4.put("/:id", protect, async (req, res) => {
   try {
-    const updates = req.body;
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant de candidature invalide" });
+    }
+    const updates = pick(req.body, APPLICATION_EDITABLE_FIELDS);
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "Aucun champ modifiable fourni" });
+    }
+    if (updates.status !== void 0 && !APPLICATION_STATUSES.includes(updates.status)) {
+      return res.status(400).json({ error: "Statut invalide" });
+    }
     const app2 = await Application_default.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id },
       { $set: updates },
-      { new: true }
+      { new: true, runValidators: true }
     );
     if (!app2) return res.status(404).json({ error: "Candidature non trouv\xE9e" });
     res.json({ application: app2, message: "Candidature mise \xE0 jour" });
@@ -3642,8 +4050,11 @@ router4.put("/:id", protect, async (req, res) => {
 });
 router4.put("/:id/status", protect, async (req, res) => {
   try {
-    const { status } = req.body;
-    const allowedStatuses = ["brouillon", "envoyee", "consulte", "valide_entretien", "appel_attente", "entretien_fait", "accepte_final", "refusee"];
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant de candidature invalide" });
+    }
+    const status = (req.body || {}).status;
+    const allowedStatuses = APPLICATION_STATUSES;
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ error: "Statut invalide" });
     }
@@ -3664,7 +4075,11 @@ router4.put("/:id/status", protect, async (req, res) => {
 });
 router4.delete("/:id", protect, async (req, res) => {
   try {
-    await Application_default.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant de candidature invalide" });
+    }
+    const deleted = await Application_default.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    if (!deleted) return res.status(404).json({ error: "Candidature non trouv\xE9e" });
     res.json({ message: "Candidature supprim\xE9e" });
   } catch (error) {
     res.status(500).json({ error: "Erreur serveur" });
@@ -3676,9 +4091,9 @@ var applications_default = router4;
 import express5 from "express";
 
 // backend/models/Recruiter.js
-import mongoose13 from "mongoose";
-var recruiterSchema = new mongoose13.Schema({
-  userId: { type: mongoose13.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose14 from "mongoose";
+var recruiterSchema = new mongoose14.Schema({
+  userId: { type: mongoose14.Schema.Types.ObjectId, ref: "User", required: true },
   firstName: { type: String, required: true },
   lastName: { type: String, required: true },
   title: String,
@@ -3696,7 +4111,7 @@ var recruiterSchema = new mongoose13.Schema({
   lastContactedAt: Date,
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
-var Recruiter_default = mongoose13.model("Recruiter", recruiterSchema);
+var Recruiter_default = mongoose14.model("Recruiter", recruiterSchema);
 
 // backend/routes/recruiters.js
 var router5 = express5.Router();
@@ -3754,14 +4169,15 @@ router5.get("/", protect, async (req, res) => {
     const { search, sector, location, connectionDegree } = req.query;
     const query = { userId: req.user._id, isActive: true };
     if (search) {
+      const safe = new RegExp(escapeRegExp(search), "i");
       query.$or = [
-        { firstName: { $regex: search, $options: "i" } },
-        { lastName: { $regex: search, $options: "i" } },
-        { company: { $regex: search, $options: "i" } }
+        { firstName: safe },
+        { lastName: safe },
+        { company: safe }
       ];
     }
     if (sector) query.sector = sector;
-    if (location) query.location = { $regex: location, $options: "i" };
+    if (location) query.location = new RegExp(escapeRegExp(location), "i");
     if (connectionDegree) query.connectionDegree = connectionDegree;
     const recruiters = await Recruiter_default.find(query).sort({ updatedAt: -1 });
     res.json({ recruiters, total: recruiters.length });
@@ -3771,6 +4187,9 @@ router5.get("/", protect, async (req, res) => {
 });
 router5.get("/:id", protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant recruteur invalide" });
+    }
     const recruiter = await Recruiter_default.findOne({ _id: req.params.id, userId: req.user._id });
     if (!recruiter) return res.status(404).json({ error: "Recruteur non trouv\xE9" });
     res.json({ recruiter });
@@ -3780,30 +4199,49 @@ router5.get("/:id", protect, async (req, res) => {
 });
 router5.post("/", protect, async (req, res) => {
   try {
-    const recruiter = await Recruiter_default.create({ ...req.body, userId: req.user._id });
+    const recruiter = await Recruiter_default.create({ ...pick(req.body, RECRUITER_EDITABLE_FIELDS), userId: req.user._id });
     res.status(201).json({ recruiter, message: "Recruteur ajout\xE9" });
   } catch (error) {
+    if (error.name === "ValidationError") {
+      const details = Object.values(error.errors || {}).map((e) => e.message).join(", ");
+      return res.status(400).json({ error: details || "Donn\xE9es recruteur invalides" });
+    }
     res.status(500).json({ error: "Erreur lors de l'ajout" });
   }
 });
 router5.put("/:id", protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant recruteur invalide" });
+    }
+    const updates = pick(req.body, RECRUITER_EDITABLE_FIELDS);
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "Aucun champ modifiable fourni" });
+    }
     const recruiter = await Recruiter_default.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id },
-      req.body,
-      { new: true }
+      { $set: updates },
+      { new: true, runValidators: true }
     );
     if (!recruiter) return res.status(404).json({ error: "Recruteur non trouv\xE9" });
     res.json({ recruiter, message: "Recruteur mis \xE0 jour" });
   } catch (error) {
+    if (error.name === "ValidationError") {
+      const details = Object.values(error.errors || {}).map((e) => e.message).join(", ");
+      return res.status(400).json({ error: details || "Donn\xE9es recruteur invalides" });
+    }
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
 router5.delete("/:id", protect, async (req, res) => {
   try {
-    await Recruiter_default.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant recruteur invalide" });
+    }
+    const deleted = await Recruiter_default.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    if (!deleted) return res.status(404).json({ error: "Recruteur non trouv\xE9" });
     res.json({ message: "Recruteur supprim\xE9" });
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -3968,9 +4406,9 @@ import express8 from "express";
 import { createHash as createHash2 } from "node:crypto";
 
 // backend/models/ScrapingLog.js
-import mongoose14 from "mongoose";
-var scrapingLogSchema = new mongoose14.Schema({
-  userId: { type: mongoose14.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose15 from "mongoose";
+var scrapingLogSchema = new mongoose15.Schema({
+  userId: { type: mongoose15.Schema.Types.ObjectId, ref: "User", required: true },
   status: { type: String, enum: ["running", "success", "partial", "failed"], default: "running" },
   sources: [{
     source: String,
@@ -3990,7 +4428,7 @@ var scrapingLogSchema = new mongoose14.Schema({
     // premiers mots-clés de la liste globale et la source ne renvoie rien.
     sourceKeywords: { type: Map, of: [String], default: {} },
     location: String,
-    userProfile: { type: mongoose14.Schema.Types.Mixed, default: {} }
+    userProfile: { type: mongoose15.Schema.Types.Mixed, default: {} }
   },
   progress: { type: Number, default: 0 },
   totalSources: { type: Number, default: 0 },
@@ -4007,12 +4445,12 @@ var scrapingLogSchema = new mongoose14.Schema({
 }, { timestamps: true, suppressReservedKeysWarning: true });
 scrapingLogSchema.index({ userId: 1, status: 1 });
 scrapingLogSchema.index({ userId: 1, createdAt: -1 });
-var ScrapingLog_default = mongoose14.model("ScrapingLog", scrapingLogSchema);
+var ScrapingLog_default = mongoose15.model("ScrapingLog", scrapingLogSchema);
 
 // backend/models/SearchProfile.js
-import mongoose15 from "mongoose";
-var searchProfileSchema = new mongoose15.Schema({
-  userId: { type: mongoose15.Schema.Types.ObjectId, ref: "User", required: true },
+import mongoose16 from "mongoose";
+var searchProfileSchema = new mongoose16.Schema({
+  userId: { type: mongoose16.Schema.Types.ObjectId, ref: "User", required: true },
   name: { type: String, required: true },
   sectors: [String],
   keywords: [String],
@@ -4035,7 +4473,7 @@ var searchProfileSchema = new mongoose15.Schema({
   isActive: { type: Boolean, default: true },
   frequency: { type: String, enum: ["quotidien", "hebdomadaire", "manuel"], default: "manuel" }
 }, { timestamps: true });
-var SearchProfile_default = mongoose15.model("SearchProfile", searchProfileSchema);
+var SearchProfile_default = mongoose16.model("SearchProfile", searchProfileSchema);
 
 // backend/routes/scraping.js
 init_User();
@@ -4633,9 +5071,9 @@ var scraping_default = router8;
 import express9 from "express";
 
 // backend/models/EmailTemplate.js
-import mongoose16 from "mongoose";
-var emailTemplateSchema = new mongoose16.Schema({
-  userId: { type: mongoose16.Schema.Types.ObjectId, ref: "User" },
+import mongoose17 from "mongoose";
+var emailTemplateSchema = new mongoose17.Schema({
+  userId: { type: mongoose17.Schema.Types.ObjectId, ref: "User" },
   name: { type: String, required: true },
   subject: { type: String, required: true },
   body: { type: String, required: true },
@@ -4644,7 +5082,7 @@ var emailTemplateSchema = new mongoose16.Schema({
   category: { type: String, enum: ["Candidature", "Relance", "Remerciement", "Suivi", "Personnalis\xE9"], default: "Candidature" },
   usageCount: { type: Number, default: 0 }
 }, { timestamps: true });
-var EmailTemplate_default = mongoose16.model("EmailTemplate", emailTemplateSchema);
+var EmailTemplate_default = mongoose17.model("EmailTemplate", emailTemplateSchema);
 
 // backend/routes/emailTemplates.js
 var router9 = express9.Router();
@@ -4757,6 +5195,9 @@ router10.get("/", protect, async (req, res) => {
 });
 router10.get("/:id", protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant de profil invalide" });
+    }
     const profile = await SearchProfile_default.findOne({ _id: req.params.id, userId: req.user._id });
     if (!profile) return res.status(404).json({ error: "Profil non trouv\xE9" });
     res.json({ profile });
@@ -4766,7 +5207,7 @@ router10.get("/:id", protect, async (req, res) => {
 });
 router10.post("/", protect, async (req, res) => {
   try {
-    const profile = await SearchProfile_default.create({ ...req.body, userId: req.user._id });
+    const profile = await SearchProfile_default.create({ ...pick(req.body, SEARCH_PROFILE_EDITABLE_FIELDS), userId: req.user._id });
     res.status(201).json({ profile, message: "Profil de recherche cr\xE9\xE9" });
   } catch (error) {
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation" });
@@ -4774,10 +5215,17 @@ router10.post("/", protect, async (req, res) => {
 });
 router10.put("/:id", protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant de profil invalide" });
+    }
+    const updates = pick(req.body, SEARCH_PROFILE_EDITABLE_FIELDS);
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "Aucun champ modifiable fourni" });
+    }
     const profile = await SearchProfile_default.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id },
-      req.body,
-      { new: true }
+      { $set: updates },
+      { new: true, runValidators: true }
     );
     if (!profile) return res.status(404).json({ error: "Profil non trouv\xE9" });
     res.json({ profile, message: "Profil mis \xE0 jour" });
@@ -4787,7 +5235,11 @@ router10.put("/:id", protect, async (req, res) => {
 });
 router10.delete("/:id", protect, async (req, res) => {
   try {
-    await SearchProfile_default.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant de profil invalide" });
+    }
+    const deleted = await SearchProfile_default.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    if (!deleted) return res.status(404).json({ error: "Profil non trouv\xE9" });
     res.json({ message: "Profil supprim\xE9" });
   } catch (error) {
     res.status(500).json({ error: "Erreur serveur" });
@@ -4795,6 +5247,9 @@ router10.delete("/:id", protect, async (req, res) => {
 });
 router10.post("/:id/activate", protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant de profil invalide" });
+    }
     const profile = await SearchProfile_default.findOne({ _id: req.params.id, userId: req.user._id });
     if (!profile) return res.status(404).json({ error: "Profil non trouv\xE9" });
     profile.isActive = !profile.isActive;
@@ -4901,7 +5356,7 @@ var analytics_default = router11;
 
 // backend/routes/cv.js
 import express12 from "express";
-import mongoose17 from "mongoose";
+import mongoose18 from "mongoose";
 var router12 = express12.Router();
 function analyzeCV(text, parsedData) {
   let score = 0;
@@ -5858,7 +6313,7 @@ router12.get("/", protect, async (req, res) => {
 router12.post("/", protect, upload.single("cv"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "Aucun fichier fourni" });
-    await CV_default.updateMany({ userId: req.user._id, isActive: true }, { isActive: false });
+    if (!assertFileSignature(req, res, "cv")) return;
     let extractedText = "";
     if (req.file.mimetype === "application/pdf") {
       try {
@@ -5875,6 +6330,7 @@ router12.post("/", protect, upload.single("cv"), async (req, res) => {
     const analysis = analyzeCV(extractedText, parsedData);
     const candidateSummary = generateCandidateSummary(extractedText, parsedData, {});
     const keywords = extractKeywords(extractedText, parsedData);
+    const previousVersions = await CV_default.countDocuments({ userId: req.user._id, isActive: true });
     const cv = await CV_default.create({
       userId: req.user._id,
       fileName: `cv_${Date.now()}`,
@@ -5887,8 +6343,12 @@ router12.post("/", protect, upload.single("cv"), async (req, res) => {
       analysis,
       candidateSummary,
       keywords,
-      version: 1
+      version: previousVersions + 1
     });
+    await CV_default.updateMany(
+      { userId: req.user._id, isActive: true, _id: { $ne: cv._id } },
+      { isActive: false }
+    );
     res.json({
       cv,
       message: "CV upload\xE9 et analys\xE9 avec succ\xE8s",
@@ -5898,6 +6358,9 @@ router12.post("/", protect, upload.single("cv"), async (req, res) => {
     });
   } catch (error) {
     console.error("Erreur upload CV:", error);
+    if (error.name === "ValidationError") {
+      return res.status(400).json({ error: "Fichier invalide" });
+    }
     res.status(500).json({ error: "Erreur lors de l'upload" });
   }
 });
@@ -5917,7 +6380,7 @@ router12.post("/match-jobs", protect, async (req, res) => {
     const { keywords } = req.body || {};
     const cv = await CV_default.findOne({ userId: req.user._id, isActive: true });
     if (!cv) return res.status(404).json({ error: "Aucun CV trouv\xE9" });
-    const JobOffer = mongoose17.model("JobOffer");
+    const JobOffer = mongoose18.model("JobOffer");
     const query = { userId: req.user._id, isActive: true };
     const allJobs = await JobOffer.find(query);
     const cvSkills = (cv.parsedData?.skills || []).map((s) => s.toLowerCase());
@@ -5972,7 +6435,11 @@ router12.post("/match-jobs", protect, async (req, res) => {
 });
 router12.delete("/:id", protect, async (req, res) => {
   try {
-    await CV_default.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant de CV invalide" });
+    }
+    const deleted = await CV_default.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    if (!deleted) return res.status(404).json({ error: "CV non trouv\xE9" });
     res.json({ message: "CV supprim\xE9" });
   } catch (error) {
     res.status(500).json({ error: "Erreur serveur" });
@@ -5980,6 +6447,9 @@ router12.delete("/:id", protect, async (req, res) => {
 });
 router12.put("/:id", protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant de CV invalide" });
+    }
     const cv = await CV_default.findOne({ _id: req.params.id, userId: req.user._id });
     if (!cv) return res.status(404).json({ error: "CV non trouv\xE9" });
     if (req.body.reanalyze) {
@@ -6020,7 +6490,7 @@ router12.put("/:id", protect, async (req, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router12.post("/backfill-summaries", protect, async (req, res) => {
+router12.post("/backfill-summaries", protect, authorize("admin"), async (req, res) => {
   try {
     const cvs = await CV_default.find({ isActive: true });
     let updated = 0;
@@ -6040,10 +6510,10 @@ var cv_default = router12;
 
 // backend/routes/portfolio.js
 import express13 from "express";
-import mongoose18 from "mongoose";
+import mongoose19 from "mongoose";
 var router13 = express13.Router();
-var portfolioSchema = new mongoose18.Schema({
-  userId: { type: mongoose18.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
+var portfolioSchema = new mongoose19.Schema({
+  userId: { type: mongoose19.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
   url: { type: String, default: "" },
   description: { type: String, default: "" },
   projects: [{
@@ -6054,7 +6524,7 @@ var portfolioSchema = new mongoose18.Schema({
     technologies: [String]
   }]
 }, { timestamps: true });
-var Portfolio = mongoose18.models.Portfolio || mongoose18.model("Portfolio", portfolioSchema);
+var Portfolio = mongoose19.models.Portfolio || mongoose19.model("Portfolio", portfolioSchema);
 router13.get("/", protect, async (req, res) => {
   try {
     let portfolio = await Portfolio.findOne({ userId: req.user._id });
@@ -6082,7 +6552,7 @@ var portfolio_default = router13;
 
 // backend/routes/recruiterSpace.js
 import express14 from "express";
-import mongoose19 from "mongoose";
+import mongoose20 from "mongoose";
 init_User();
 init_sendEmail();
 var router14 = express14.Router();
@@ -6536,7 +7006,7 @@ router14.get("/candidates", protect, authorize("recruiter"), async (req, res) =>
 router14.get("/candidates/:userId", protect, authorize("recruiter"), async (req, res) => {
   try {
     const { userId } = req.params;
-    if (!mongoose19.Types.ObjectId.isValid(userId)) {
+    if (!mongoose20.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ error: "ID invalide" });
     }
     const profile = await UserProfile_default.findOne({ userId }).populate("userId", "firstName lastName email avatar jobSearchStatus lastLogin");
@@ -6552,7 +7022,7 @@ router14.get("/candidates/:userId", protect, authorize("recruiter"), async (req,
 });
 router14.get("/candidates/:userId/cv/download", protect, authorize("recruiter"), async (req, res) => {
   try {
-    if (!mongoose19.Types.ObjectId.isValid(req.params.userId)) {
+    if (!mongoose20.Types.ObjectId.isValid(req.params.userId)) {
       return res.status(400).json({ error: "ID invalide" });
     }
     const cv = await CV_default.findOne({ userId: req.params.userId, isActive: true });
@@ -6571,7 +7041,7 @@ router14.get("/candidates/:userId/cv/download", protect, authorize("recruiter"),
 });
 router14.get("/candidates/:userId/cv/preview", protect, authorize("recruiter"), async (req, res) => {
   try {
-    if (!mongoose19.Types.ObjectId.isValid(req.params.userId)) {
+    if (!mongoose20.Types.ObjectId.isValid(req.params.userId)) {
       return res.status(400).json({ error: "ID invalide" });
     }
     const cv = await CV_default.findOne({ userId: req.params.userId, isActive: true }).select("fileData fileSize mimeType originalName");
@@ -6864,14 +7334,40 @@ init_User();
 init_sendEmail();
 var router16 = express16.Router();
 var MAIL_SUBJECT_PREFIX = "[EasyJob] ";
-function normalizeEmail(value) {
+var SEND_WINDOW_MS = 60 * 60 * 1e3;
+var SEND_LIMIT_PER_USER = 30;
+var SEND_LIMIT_PER_IP = 60;
+var sendLog = /* @__PURE__ */ new Map();
+function checkSendQuota(userId, ip) {
+  const now = Date.now();
+  const entries = [
+    { key: `u:${userId}`, limit: SEND_LIMIT_PER_USER },
+    { key: `i:${ip}`, limit: SEND_LIMIT_PER_IP }
+  ];
+  for (const entry of entries) {
+    const hits = (sendLog.get(entry.key) || []).filter((t) => now - t < SEND_WINDOW_MS);
+    if (hits.length >= entry.limit) {
+      sendLog.set(entry.key, hits);
+      return { allowed: false, scope: entry.key.startsWith("u:") ? "compte" : "IP" };
+    }
+    hits.push(now);
+    sendLog.set(entry.key, hits);
+  }
+  if (sendLog.size > 5e3) {
+    for (const [key, hits] of sendLog) {
+      if (!hits.some((t) => now - t < SEND_WINDOW_MS)) sendLog.delete(key);
+    }
+  }
+  return { allowed: true };
+}
+function normalizeEmail2(value) {
   return String(value || "").trim().toLowerCase();
 }
 function emailBaseSubject(subject) {
   return String(subject || "").replace(/^(Re|RE|Re:\s?)+:/g, "").replace(/^\s*Re:\s*/i, "").trim();
 }
 async function resolveRecipientUser(to) {
-  const email = normalizeEmail(to);
+  const email = normalizeEmail2(to);
   if (!email) return null;
   try {
     return await User_default.findOne({ email });
@@ -6881,29 +7377,31 @@ async function resolveRecipientUser(to) {
 }
 router16.get("/", protect, async (req, res) => {
   try {
-    const { type = "inbox", search, conversation, page = 1, limit = 30 } = req.query;
+    const { type = "inbox", search, conversation, page, limit } = req.query;
     const query = { userId: req.user._id };
     const orClauses = [];
     if (conversation && conversation.trim()) {
-      const other = normalizeEmail(conversation);
+      const other = normalizeEmail2(conversation);
       orClauses.push({ fromEmail: other }, { toEmail: other });
     } else {
       query.direction = type === "sent" ? "sent" : "received";
     }
     if (search && search.trim()) {
-      const regex = new RegExp(search.trim(), "i");
+      const regex = new RegExp(escapeRegExp(search), "i");
       orClauses.push({ subject: regex }, { body: regex }, { fromName: regex }, { toName: regex }, { companyName: regex });
     }
     if (orClauses.length > 0) {
       query.$or = orClauses;
     }
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const currentPage = clampInt(page, { min: 1, max: 1e4, fallback: 1 });
+    const perPage = clampInt(limit, { min: 1, max: 100, fallback: 30 });
+    const skip = (currentPage - 1) * perPage;
     const [emails, total, unreadCount] = await Promise.all([
-      Email_default.find(query).populate("fromUser", "firstName lastName email avatar role").populate("toUser", "firstName lastName email avatar role").sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)),
+      Email_default.find(query).populate("fromUser", "firstName lastName email avatar role").populate("toUser", "firstName lastName email avatar role").sort({ createdAt: -1 }).skip(skip).limit(perPage),
       Email_default.countDocuments(query),
       Email_default.countDocuments({ userId: req.user._id, direction: "received", isRead: false })
     ]);
-    res.json({ emails, total, unreadCount, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) });
+    res.json({ emails, total, unreadCount, page: currentPage, pages: Math.ceil(total / perPage) });
   } catch (error) {
     console.error("Mailbox error:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des emails" });
@@ -6916,7 +7414,7 @@ router16.get("/conversations", protect, async (req, res) => {
     for (const email of emails) {
       const received = email.direction === "received";
       const participant = received ? email.fromUser || { email: email.fromEmail } : email.toUser || { email: email.toEmail };
-      const key = normalizeEmail(participant.email || (received ? email.fromEmail : email.toEmail)) || "inconnu";
+      const key = normalizeEmail2(participant.email || (received ? email.fromEmail : email.toEmail)) || "inconnu";
       let group = groups.get(key);
       if (!group) {
         const participantName = received ? email.fromName || (email.fromUser ? `${email.fromUser.firstName || ""} ${email.fromUser.lastName || ""}`.trim() : email.fromEmail) || "Inconnu" : email.toName || (email.toUser ? `${email.toUser.firstName || ""} ${email.toUser.lastName || ""}`.trim() : email.toEmail) || "Destinataire";
@@ -6943,7 +7441,7 @@ router16.get("/conversations", protect, async (req, res) => {
     for (const email of emails) {
       const received = email.direction === "received";
       const participant = received ? email.fromUser || { email: email.fromEmail } : email.toUser || { email: email.toEmail };
-      const key = normalizeEmail(participant.email || (received ? email.fromEmail : email.toEmail)) || "inconnu";
+      const key = normalizeEmail2(participant.email || (received ? email.fromEmail : email.toEmail)) || "inconnu";
       const group = groups.get(key);
       if (!group) continue;
       if (!group.lastMessage) {
@@ -6964,36 +7462,47 @@ router16.get("/conversations", protect, async (req, res) => {
 });
 router16.post("/send", protect, async (req, res) => {
   try {
-    const { to, subject, body, companyName = "", applicationId = null, jobOfferId = null } = req.body;
+    const { to, subject, body, companyName = "", applicationId = null, jobOfferId = null } = req.body || {};
     if (!to || !subject || !body) {
       return res.status(400).json({ error: "Destinataire, objet et contenu requis" });
     }
-    const toEmail = String(to).trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail)) {
+    const toEmail = asString2(to, { max: 320 });
+    if (!isValidEmail(toEmail)) {
       return res.status(400).json({ error: "Adresse email invalide" });
+    }
+    const subjectLine = asString2(subject, { max: 200 });
+    const bodyText = asString2(body, { max: 2e4 });
+    if (!subjectLine || !bodyText) {
+      return res.status(400).json({ error: "Objet et contenu requis" });
+    }
+    const quota = checkSendQuota(req.user._id, req.ip);
+    if (!quota.allowed) {
+      return res.status(429).json({
+        error: "Trop d'emails envoy\xE9s. La limite est de " + SEND_LIMIT_PER_USER + " par heure."
+      });
     }
     const recipientUser = await resolveRecipientUser(toEmail);
     const senderName = `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim() || "Utilisateur EasyJob";
     const recipientName = recipientUser ? `${recipientUser.firstName || ""} ${recipientUser.lastName || ""}`.trim() : req.body.toName || "";
     const content = `
       <p style="margin:0 0 8px 0; font-size:14px; color:#334155; line-height:1.6;">Bonjour <strong>${escapeHtml(recipientName || "")}</strong>,</p>
-      <div style="background:#eff6ff; border-left:4px solid #2563eb; border-radius:12px; padding:18px 20px; margin:0 0 6px 0; white-space:pre-wrap; color:#334155; font-size:14px; line-height:1.7;">${escapeHtml(body)}</div>
+      <div style="background:#eff6ff; border-left:4px solid #2563eb; border-radius:12px; padding:18px 20px; margin:0 0 6px 0; white-space:pre-wrap; color:#334155; font-size:14px; line-height:1.7;">${escapeHtml(bodyText)}</div>
       <p style="margin:14px 0 0 0; font-size:13px; color:#94a3b8; line-height:1.6;">Envoy\xE9 par <strong>${escapeHtml(senderName)}</strong> via EasyJob</p>
     `;
     const html = brandLayout({
-      title: subject,
+      title: subjectLine,
       content,
       footerText: "Message envoy\xE9 via EasyJob \u2014 Votre carri\xE8re au Maroc"
     });
-    const emailResult = await sendEmail({ to: toEmail, subject: `${MAIL_SUBJECT_PREFIX}${subject}`, html });
+    const emailResult = await sendEmail({ to: toEmail, subject: `${MAIL_SUBJECT_PREFIX}${subjectLine}`, html });
     if (!emailResult.success) {
-      return res.status(500).json({ error: "Erreur lors de l'envoi de l'email", details: emailResult.error });
+      return res.status(502).json({ error: "Erreur lors de l'envoi de l'email", details: emailResult.error });
     }
     const recorded = await recordExchange({
       senderUser: req.user,
       recipientUser,
-      subject,
-      body,
+      subject: subjectLine,
+      body: bodyText,
       fromName: senderName,
       toName: recipientName,
       toEmail,
@@ -7010,7 +7519,7 @@ router16.post("/send", protect, async (req, res) => {
         userId: recipientUser._id,
         fromName: senderName,
         companyName,
-        subject,
+        subject: subjectLine,
         emailId: receivedCopy?._id?.toString() || null
       });
     }
@@ -7022,9 +7531,18 @@ router16.post("/send", protect, async (req, res) => {
 });
 router16.post("/:id/reply", protect, async (req, res) => {
   try {
-    const { body } = req.body;
-    if (!body || !String(body).trim()) {
+    const bodyText = asString2(req.body?.body, { max: 2e4 });
+    if (!bodyText) {
       return res.status(400).json({ error: "Le contenu de la r\xE9ponse est requis" });
+    }
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant d'email invalide" });
+    }
+    const quota = checkSendQuota(req.user._id, req.ip);
+    if (!quota.allowed) {
+      return res.status(429).json({
+        error: "Trop d'emails envoy\xE9s. La limite est de " + SEND_LIMIT_PER_USER + " par heure."
+      });
     }
     const email = await Email_default.findOne({ _id: req.params.id, userId: req.user._id });
     if (!email) return res.status(404).json({ error: "Email non trouv\xE9" });
@@ -7037,7 +7555,7 @@ router16.post("/:id/reply", protect, async (req, res) => {
     const recipientName = (received ? email.fromName : email.toName) || (recipientUser ? `${recipientUser.firstName || ""} ${recipientUser.lastName || ""}`.trim() : "");
     const content = `
       <p style="margin:0 0 8px 0; font-size:14px; color:#334155; line-height:1.6;">Bonjour <strong>${escapeHtml(recipientName || "")}</strong>,</p>
-      <div style="background:#eff6ff; border-left:4px solid #2563eb; border-radius:12px; padding:18px 20px; margin:0 0 16px 0; white-space:pre-wrap; color:#334155; font-size:14px; line-height:1.7;">${escapeHtml(body)}</div>
+      <div style="background:#eff6ff; border-left:4px solid #2563eb; border-radius:12px; padding:18px 20px; margin:0 0 16px 0; white-space:pre-wrap; color:#334155; font-size:14px; line-height:1.7;">${escapeHtml(bodyText)}</div>
       <div style="border-left:3px solid #e2e8f0; padding:10px 14px; font-size:12px; color:#94a3b8; line-height:1.6;">
         <strong style="color:#64748b;">De : ${escapeHtml(email.fromName || "")}</strong><br />
         <strong style="color:#64748b;">Objet : ${escapeHtml(email.subject || "")}</strong><br />
@@ -7052,13 +7570,13 @@ router16.post("/:id/reply", protect, async (req, res) => {
     });
     const emailResult = await sendEmail({ to: toEmail, subject: `${MAIL_SUBJECT_PREFIX}${subject}`, html });
     if (!emailResult.success) {
-      return res.status(500).json({ error: "Erreur lors de l'envoi de la r\xE9ponse", details: emailResult.error });
+      return res.status(502).json({ error: "Erreur lors de l'envoi de la r\xE9ponse", details: emailResult.error });
     }
     const recorded = await recordExchange({
       senderUser: req.user,
       recipientUser,
       subject,
-      body,
+      body: bodyText,
       fromName: senderName,
       toName: recipientName,
       toEmail,
@@ -7087,6 +7605,9 @@ router16.post("/:id/reply", protect, async (req, res) => {
 });
 router16.get("/:id", protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant d'email invalide" });
+    }
     const email = await Email_default.findOne({ _id: req.params.id, userId: req.user._id }).populate("fromUser", "firstName lastName email avatar role").populate("toUser", "firstName lastName email avatar role");
     if (!email) return res.status(404).json({ error: "Email non trouv\xE9" });
     res.json({ email });
@@ -7097,6 +7618,9 @@ router16.get("/:id", protect, async (req, res) => {
 });
 router16.put("/:id/read", protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "Identifiant d'email invalide" });
+    }
     const email = await Email_default.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id, direction: "received" },
       { isRead: true, readAt: /* @__PURE__ */ new Date() },
@@ -7254,7 +7778,7 @@ var seed_default = router17;
 // backend/routes/admin.js
 init_User();
 import express18 from "express";
-import mongoose20 from "mongoose";
+import mongoose21 from "mongoose";
 import crypto2 from "crypto";
 var router18 = express18.Router();
 router18.use(protect, authorize("admin"));
@@ -7678,42 +8202,68 @@ router18.get("/jobs", async (req, res) => {
 });
 router18.post("/users", async (req, res) => {
   try {
-    const { firstName, lastName, email, password, phone, role, companyName, industry, companySize, companyLocation, position } = req.body;
+    const body = req.body || {};
+    const firstName = typeof body.firstName === "string" ? body.firstName.trim() : "";
+    const lastName = typeof body.lastName === "string" ? body.lastName.trim() : "";
+    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const phone = typeof body.phone === "string" ? body.phone.trim() : "";
+    const { password, role, companyName, industry, companySize, companyLocation, position } = body;
     if (!firstName || !lastName || !email) {
       return res.status(400).json({ error: "Pr\xE9nom, nom et email sont requis" });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Adresse email invalide" });
     }
     const validRoles = ["candidat", "recruiter", "admin"];
     const userRole = validRoles.includes(role) ? role : "candidat";
     if (userRole === "recruiter" && !companyName) {
       return res.status(400).json({ error: "Le nom de l'entreprise est requis pour un recruteur" });
     }
-    const existing = await User_default.findOne({ email: email.toLowerCase() });
+    if (userRole === "recruiter" && !industry) {
+      return res.status(400).json({ error: "Le secteur d'activit\xE9 est requis pour un recruteur" });
+    }
+    const existing = await User_default.findOne({ email });
     if (existing) {
       return res.status(400).json({ error: "Un compte avec cet email existe d\xE9j\xE0" });
     }
-    const generatedPassword = password && password.length >= 6 ? password : crypto2.randomBytes(5).toString("hex");
-    const user = await User_default.create({
-      firstName,
-      lastName,
-      email: email.toLowerCase(),
-      password: generatedPassword,
-      phone: phone || "",
-      role: userRole,
-      isEmailVerified: true,
-      isActive: true,
-      onboardingCompleted: true
-    });
-    if (userRole === "recruiter") {
-      await RecruiterProfile_default.create({
-        userId: user._id,
-        companyName,
-        industry: industry || "",
-        companySize: companySize || "11-50",
-        companyLocation: companyLocation || "",
-        position: position || ""
+    const generatedPassword = typeof password === "string" && password.length >= 8 ? password : crypto2.randomBytes(9).toString("hex");
+    let user;
+    try {
+      user = await User_default.create({
+        firstName,
+        lastName,
+        email,
+        password: generatedPassword,
+        phone,
+        role: userRole,
+        isEmailVerified: true,
+        isActive: true,
+        onboardingCompleted: true
       });
-    } else if (userRole === "candidat") {
-      await UserProfile_default.create({ userId: user._id });
+    } catch (error) {
+      if (error?.code === 11e3) {
+        return res.status(400).json({ error: "Un compte avec cet email existe d\xE9j\xE0" });
+      }
+      throw error;
+    }
+    try {
+      if (userRole === "recruiter") {
+        await RecruiterProfile_default.create({
+          userId: user._id,
+          companyName,
+          industry,
+          companySize: companySize || "11-50",
+          companyLocation: companyLocation || "",
+          position: position || ""
+        });
+      } else if (userRole === "candidat") {
+        await UserProfile_default.create({ userId: user._id });
+      }
+    } catch (profileError) {
+      await User_default.deleteOne({ _id: user._id }).catch(() => {
+      });
+      console.error("Cr\xE9ation profil admin \xE9chou\xE9e, compte annul\xE9:", profileError.message);
+      return res.status(400).json({ error: "Les informations de profil sont invalides. Aucun compte n'a \xE9t\xE9 cr\xE9\xE9." });
     }
     res.status(201).json({
       message: "Compte cr\xE9\xE9 avec succ\xE8s",
@@ -7728,7 +8278,7 @@ router18.post("/users", async (req, res) => {
 router18.put("/users/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose20.Types.ObjectId.isValid(id)) {
+    if (!mongoose21.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: "ID invalide" });
     }
     const user = await User_default.findById(id);
@@ -7772,7 +8322,7 @@ router18.put("/users/:id", async (req, res) => {
 router18.delete("/users/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose20.Types.ObjectId.isValid(id)) {
+    if (!mongoose21.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: "ID invalide" });
     }
     if (id === req.user._id.toString()) {
@@ -7786,13 +8336,26 @@ router18.delete("/users/:id", async (req, res) => {
         return res.status(400).json({ error: "Impossible de supprimer le dernier administrateur" });
       }
     }
-    await Promise.all([
-      UserProfile_default.deleteMany({ userId: id }),
-      RecruiterProfile_default.deleteMany({ userId: id }),
-      JobOffer_default.deleteMany({ postedBy: id })
-    ]);
+    const cascade = [
+      ["UserProfile", () => UserProfile_default.deleteMany({ userId: id })],
+      ["RecruiterProfile", () => RecruiterProfile_default.deleteMany({ userId: id })],
+      ["Recruiter", () => Recruiter_default.deleteMany({ userId: id })],
+      ["JobOffer (postedBy)", () => JobOffer_default.deleteMany({ postedBy: id })],
+      ["JobOffer (userId)", () => JobOffer_default.deleteMany({ userId: id })],
+      ["Application", () => Application_default.deleteMany({ userId: id })],
+      ["CV", () => CV_default.deleteMany({ userId: id })],
+      ["Email", () => Email_default.deleteMany({ userId: id })],
+      ["Notification", () => Notification_default.deleteMany({ userId: id })],
+      ["SearchProfile", () => SearchProfile_default.deleteMany({ userId: id })],
+      ["PublicNews", () => PublicNews_default.deleteMany({ userId: id })]
+    ];
+    const results = await Promise.allSettled(cascade.map(([, run]) => run()));
+    const failed = results.map((result, index) => result.status === "rejected" ? cascade[index][0] : null).filter(Boolean);
+    if (failed.length > 0) {
+      console.warn(`Suppression admin ${id} : \xE9checs partiels sur ${failed.join(", ")}`);
+    }
     await user.deleteOne();
-    res.json({ message: "Utilisateur supprim\xE9" });
+    res.json({ message: "Utilisateur supprim\xE9", partialCleanup: failed });
   } catch (error) {
     console.error("Erreur admin delete user:", error);
     res.status(500).json({ error: "Erreur serveur" });
@@ -7801,8 +8364,8 @@ router18.delete("/users/:id", async (req, res) => {
 var admin_default = router18;
 
 // backend/server.js
-mongoose22.set("toJSON", { virtuals: true, versionKey: false });
-mongoose22.set("toObject", { virtuals: true, versionKey: false });
+mongoose23.set("toJSON", { virtuals: true, versionKey: false });
+mongoose23.set("toObject", { virtuals: true, versionKey: false });
 var app = express19();
 app.set("trust proxy", 1);
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -7845,6 +8408,31 @@ var scrapingStatusLimiter = rateLimit({
 });
 app.use("/api/scraping/status", scrapingStatusLimiter);
 app.use("/api/", apiLimiter);
+var authLimiter = (limit, windowMs, message) => rateLimit({
+  windowMs,
+  limit,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  // Un 429 sur ces routes doit toujours rester lisible par le frontend.
+  handler: (req, res) => res.status(429).json({ error: message, retryAfterSeconds: Math.ceil(windowMs / 1e3) })
+});
+var REGISTER_LIMIT = authLimiter(5, 60 * 60 * 1e3, "Trop de cr\xE9ations de compte. R\xE9essayez plus tard.");
+var LOGIN_LIMIT = authLimiter(20, 15 * 60 * 1e3, "Trop de tentatives de connexion. R\xE9essayez dans quelques minutes.");
+var EMAIL_ROUTE_LIMIT = authLimiter(5, 60 * 60 * 1e3, "Trop de demandes. V\xE9rifiez votre bo\xEEte mail ou r\xE9essayez plus tard.");
+var WRITE_LIMIT = authLimiter(30, 15 * 60 * 1e3, "Trop de requ\xEAtes. Merci de patienter quelques minutes.");
+app.use("/api/auth/register", REGISTER_LIMIT);
+app.use("/api/auth/login", LOGIN_LIMIT);
+app.use("/api/auth/refresh-token", LOGIN_LIMIT);
+app.use("/api/auth/verify-email", EMAIL_ROUTE_LIMIT);
+app.use("/api/auth/resend-verification", EMAIL_ROUTE_LIMIT);
+app.use("/api/auth/forgot-password", EMAIL_ROUTE_LIMIT);
+app.use("/api/auth/reset-password", EMAIL_ROUTE_LIMIT);
+var UPLOAD_LIMIT = authLimiter(10, 60 * 60 * 1e3, "Trop d'envois de fichiers. R\xE9essayez plus tard.");
+app.use("/api/profile/cv", UPLOAD_LIMIT);
+app.use("/api/profile/avatar", UPLOAD_LIMIT);
+var SCRAPE_LIMIT = authLimiter(5, 60 * 60 * 1e3, "Trop de lancements de recherche. R\xE9essayez dans une heure.");
+app.use("/api/recruiters/scrape", SCRAPE_LIMIT);
+app.use("/api/scraping", SCRAPE_LIMIT);
 app.use("/api/auth", auth_default);
 app.use("/api/profile/cv", cv_default);
 app.use("/api/profile/portfolio", portfolio_default);
@@ -7868,18 +8456,40 @@ app.use("/api", (req, res) => {
   res.status(404).json({ error: `Route non trouv\xE9e: ${req.method} ${req.originalUrl}` });
 });
 app.use((err, req, res, next) => {
+  if (err.name === "CastError") {
+    return res.status(400).json({
+      error: `Identifiant invalide pour le champ \xAB ${err.path} \xBB`,
+      field: err.path
+    });
+  }
+  if (err.name === "ValidationError") {
+    const details = Object.values(err.errors || {}).map((e) => e.message);
+    return res.status(400).json({
+      error: details.length ? details.join(", ") : "Donn\xE9es invalides",
+      fields: details.length ? Object.keys(err.errors || {}) : void 0
+    });
+  }
+  if (err.type === "entity.too.large" || err.status === 413) {
+    return res.status(413).json({ error: "Fichier ou requ\xEAte trop volumineux" });
+  }
+  if (err.type === "entity.parse.failed") {
+    return res.status(400).json({ error: "Corps de requ\xEAte JSON invalide" });
+  }
+  if (err.name === "MongoServerError" && err.code === 11e3) {
+    return res.status(400).json({ error: "Cette donn\xE9e existe d\xE9j\xE0" });
+  }
   console.error(err.stack);
   res.status(err.status || 500).json({ error: err.message || "Erreur serveur interne" });
 });
 async function connectDB() {
-  if (mongoose22.connection.readyState === 1) return;
+  if (mongoose23.connection.readyState === 1) return;
   const uri = process.env.MONGODB_URI;
   if (!uri) {
     console.error("\u274C MONGODB_URI non d\xE9fini");
     throw new Error("MONGODB_URI non d\xE9fini");
   }
   try {
-    await mongoose22.connect(uri, {
+    await mongoose23.connect(uri, {
       serverSelectionTimeoutMS: 2e4,
       connectTimeoutMS: 25e3,
       socketTimeoutMS: 6e4,
@@ -7898,7 +8508,7 @@ async function runMaintenance() {
   try {
     const { fixJobOfferIndexes: fixJobOfferIndexes2 } = await Promise.resolve().then(() => (init_dbMigration(), dbMigration_exports));
     await fixJobOfferIndexes2();
-    const models = Object.values(mongoose22.models);
+    const models = Object.values(mongoose23.models);
     await Promise.all(
       models.map((model) => model.createIndexes().catch(() => {
       }))
@@ -7909,9 +8519,23 @@ async function runMaintenance() {
   await ensureAdminAccount();
 }
 async function ensureAdminAccount() {
+  const email = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+  const password = process.env.ADMIN_PASSWORD || "";
+  const isProduction = process.env.NODE_ENV === "production";
+  if (!email || !password) {
+    if (isProduction) {
+      console.warn("\u26A0\uFE0F ADMIN_EMAIL / ADMIN_PASSWORD non d\xE9finis : aucun compte administrateur cr\xE9\xE9 (s\xE9curit\xE9). D\xE9finissez-les dans Vercel pour cr\xE9er l'admin.");
+      return;
+    }
+    console.warn("\u26A0\uFE0F ADMIN_EMAIL / ADMIN_PASSWORD non d\xE9finis : aucun compte administrateur cr\xE9\xE9.");
+    return;
+  }
+  if (password.length < 12) {
+    console.error("\u274C ADMIN_PASSWORD doit faire au moins 12 caract\xE8res : aucun compte administrateur cr\xE9\xE9.");
+    return;
+  }
   try {
     const User = (await Promise.resolve().then(() => (init_User(), User_exports))).default;
-    const email = (process.env.ADMIN_EMAIL || "admin@gmail.com").toLowerCase();
     const existing = await User.findOne({ email });
     if (existing) {
       if (existing.role !== "admin") {
@@ -7925,7 +8549,7 @@ async function ensureAdminAccount() {
       firstName: process.env.ADMIN_FIRST_NAME || "Directeur",
       lastName: process.env.ADMIN_LAST_NAME || "EasyJob",
       email,
-      password: process.env.ADMIN_PASSWORD || "admin123",
+      password,
       phone: "",
       role: "admin",
       isEmailVerified: true,

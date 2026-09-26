@@ -224,25 +224,28 @@ export default function RecruiterDetailPage() {
 
       <motion.div variants={item} className="flex flex-wrap gap-3">
         {recruiter.linkedinUrl && (
-          <a href={recruiter.linkedinUrl} target="_blank" rel="noopener noreferrer">
-            <Button className="bg-[#0A66C2] hover:bg-[#004182]">
+          <Button
+            asChild
+            className="bg-[#0A66C2] hover:bg-[#004182]"
+          >
+            <a href={recruiter.linkedinUrl} target="_blank" rel="noopener noreferrer">
               <MessageSquare className="h-4 w-4" /> Message LinkedIn
-            </Button>
-          </a>
+            </a>
+          </Button>
         )}
         {recruiter.email && (
-          <a href={`mailto:${recruiter.email}`}>
-            <Button variant="outline">
+          <Button asChild variant="outline">
+            <a href={`mailto:${recruiter.email}`}>
               <Mail className="h-4 w-4" /> Envoyer un email
-            </Button>
-          </a>
+            </a>
+          </Button>
         )}
         {recruiter.phone && (
-          <a href={`tel:${recruiter.phone}`}>
-            <Button variant="outline">
+          <Button asChild variant="outline">
+            <a href={`tel:${recruiter.phone}`}>
               <Phone className="h-4 w-4" /> Appeler
-            </Button>
-          </a>
+            </a>
+          </Button>
         )}
       </motion.div>
 
@@ -331,25 +334,28 @@ export default function RecruiterDetailPage() {
             <h3 className="mb-4 text-lg font-bold text-foreground">Contact rapide</h3>
             <div className="space-y-3">
               {recruiter.linkedinUrl && (
-                <a href={recruiter.linkedinUrl} target="_blank" rel="noopener noreferrer">
-                  <Button className="w-full bg-[#0A66C2] hover:bg-[#004182]">
+                <Button
+                  asChild
+                  className="w-full bg-[#0A66C2] hover:bg-[#004182]"
+                >
+                  <a href={recruiter.linkedinUrl} target="_blank" rel="noopener noreferrer">
                     <Send className="h-4 w-4" /> Message LinkedIn
-                  </Button>
-                </a>
+                  </a>
+                </Button>
               )}
               {recruiter.email && (
-                <a href={`mailto:${recruiter.email}`}>
-                  <Button variant="outline" className="w-full">
+                <Button asChild variant="outline" className="w-full">
+                  <a href={`mailto:${recruiter.email}`}>
                     <Mail className="h-4 w-4" /> Envoyer un email
-                  </Button>
-                </a>
+                  </a>
+                </Button>
               )}
               {recruiter.phone && (
-                <a href={`tel:${recruiter.phone}`}>
-                  <Button variant="outline" className="w-full">
+                <Button asChild variant="outline" className="w-full">
+                  <a href={`tel:${recruiter.phone}`}>
                     <Phone className="h-4 w-4" /> Appeler
-                  </Button>
-                </a>
+                  </a>
+                </Button>
               )}
             </div>
           </motion.div>

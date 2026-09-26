@@ -7,6 +7,12 @@ import RecruiterProfile from '../models/RecruiterProfile.js'
 import JobOffer from '../models/JobOffer.js'
 import Application from '../models/Application.js'
 import CompanyEmail from '../models/CompanyEmail.js'
+import CV from '../models/CV.js'
+import Email from '../models/Email.js'
+import Notification from '../models/Notification.js'
+import SearchProfile from '../models/SearchProfile.js'
+import PublicNews from '../models/PublicNews.js'
+import Recruiter from '../models/Recruiter.js'
 import { protect, authorize } from '../middlewares/auth.js'
 
 const router = express.Router()
@@ -472,10 +478,18 @@ router.get('/jobs', async (req, res) => {
 // Création de comptes (candidat, recruteur, admin) par l'administrateur.
 router.post('/users', async (req, res) => {
   try {
-    const { firstName, lastName, email, password, phone, role, companyName, industry, companySize, companyLocation, position } = req.body
+    const body = req.body || {}
+    const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : ''
+    const lastName = typeof body.lastName === 'string' ? body.lastName.trim() : ''
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+    const phone = typeof body.phone === 'string' ? body.phone.trim() : ''
+    const { password, role, companyName, industry, companySize, companyLocation, position } = body
 
     if (!firstName || !lastName || !email) {
       return res.status(400).json({ error: 'Prénom, nom et email sont requis' })
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Adresse email invalide' })
     }
 
     const validRoles = ['candidat', 'recruiter', 'admin']
@@ -484,37 +498,62 @@ router.post('/users', async (req, res) => {
     if (userRole === 'recruiter' && !companyName) {
       return res.status(400).json({ error: 'Le nom de l\'entreprise est requis pour un recruteur' })
     }
+    // `industry` est un champ requis de RecruiterProfile. Sans cette validation,
+    // la création du User réussissait puis `RecruiterProfile.create` levait une
+    // erreur → 500, en laissant un compte admin orphelin.
+    if (userRole === 'recruiter' && !industry) {
+      return res.status(400).json({ error: 'Le secteur d\'activité est requis pour un recruteur' })
+    }
 
-    const existing = await User.findOne({ email: email.toLowerCase() })
+    const existing = await User.findOne({ email })
     if (existing) {
       return res.status(400).json({ error: 'Un compte avec cet email existe déjà' })
     }
 
-    const generatedPassword = password && password.length >= 6 ? password : crypto.randomBytes(5).toString('hex')
+    // Mot de passe généré assez long pour passer la validation du modèle.
+    const generatedPassword = typeof password === 'string' && password.length >= 8
+      ? password
+      : crypto.randomBytes(9).toString('hex')
 
-    const user = await User.create({
-      firstName,
-      lastName,
-      email: email.toLowerCase(),
-      password: generatedPassword,
-      phone: phone || '',
-      role: userRole,
-      isEmailVerified: true,
-      isActive: true,
-      onboardingCompleted: true,
-    })
-
-    if (userRole === 'recruiter') {
-      await RecruiterProfile.create({
-        userId: user._id,
-        companyName,
-        industry: industry || '',
-        companySize: companySize || '11-50',
-        companyLocation: companyLocation || '',
-        position: position || '',
+    let user
+    try {
+      user = await User.create({
+        firstName,
+        lastName,
+        email,
+        password: generatedPassword,
+        phone,
+        role: userRole,
+        isEmailVerified: true,
+        isActive: true,
+        onboardingCompleted: true,
       })
-    } else if (userRole === 'candidat') {
-      await UserProfile.create({ userId: user._id })
+    } catch (error) {
+      if (error?.code === 11000) {
+        return res.status(400).json({ error: 'Un compte avec cet email existe déjà' })
+      }
+      throw error
+    }
+
+    // Création du profil associé avec compensation : en cas d'échec on annule
+    // le User plutôt que de laisser un compte sans profil.
+    try {
+      if (userRole === 'recruiter') {
+        await RecruiterProfile.create({
+          userId: user._id,
+          companyName,
+          industry,
+          companySize: companySize || '11-50',
+          companyLocation: companyLocation || '',
+          position: position || '',
+        })
+      } else if (userRole === 'candidat') {
+        await UserProfile.create({ userId: user._id })
+      }
+    } catch (profileError) {
+      await User.deleteOne({ _id: user._id }).catch(() => {})
+      console.error('Création profil admin échouée, compte annulé:', profileError.message)
+      return res.status(400).json({ error: 'Les informations de profil sont invalides. Aucun compte n\'a été créé.' })
     }
 
     res.status(201).json({
@@ -603,15 +642,35 @@ router.delete('/users/:id', async (req, res) => {
       }
     }
 
-    await Promise.all([
-      UserProfile.deleteMany({ userId: id }),
-      RecruiterProfile.deleteMany({ userId: id }),
-      JobOffer.deleteMany({ postedBy: id }),
-    ])
+    // Suppression en cascade des données rattachées à l'utilisateur. Sans
+    // cela, les candidatures, CV, emails, notifications et profils de recherche
+    // restaient en base et continuaient d'être comptés/affichés pour un compte
+    // inexistant. Chaque suppression est tolérante aux modèles absents.
+    const cascade = [
+      ['UserProfile', () => UserProfile.deleteMany({ userId: id })],
+      ['RecruiterProfile', () => RecruiterProfile.deleteMany({ userId: id })],
+      ['Recruiter', () => Recruiter.deleteMany({ userId: id })],
+      ['JobOffer (postedBy)', () => JobOffer.deleteMany({ postedBy: id })],
+      ['JobOffer (userId)', () => JobOffer.deleteMany({ userId: id })],
+      ['Application', () => Application.deleteMany({ userId: id })],
+      ['CV', () => CV.deleteMany({ userId: id })],
+      ['Email', () => Email.deleteMany({ userId: id })],
+      ['Notification', () => Notification.deleteMany({ userId: id })],
+      ['SearchProfile', () => SearchProfile.deleteMany({ userId: id })],
+      ['PublicNews', () => PublicNews.deleteMany({ userId: id })],
+    ]
+
+    const results = await Promise.allSettled(cascade.map(([, run]) => run()))
+    const failed = results
+      .map((result, index) => (result.status === 'rejected' ? cascade[index][0] : null))
+      .filter(Boolean)
+    if (failed.length > 0) {
+      console.warn(`Suppression admin ${id} : échecs partiels sur ${failed.join(', ')}`)
+    }
 
     await user.deleteOne()
 
-    res.json({ message: 'Utilisateur supprimé' })
+    res.json({ message: 'Utilisateur supprimé', partialCleanup: failed })
   } catch (error) {
     console.error('Erreur admin delete user:', error)
     res.status(500).json({ error: 'Erreur serveur' })

@@ -12,6 +12,20 @@ dist
 dist-ssr
 *.local
 
+# Données personnelles : ne doivent jamais être versionnées ni déployées.
+# Un CV nominatif a été trouvé dans public/ et partait en production.
+private/
+
+# PDF à la racine : servi directement par Vercel en /<nom>.pdf. Le dépôt en
+# contenait un (test_cv.pdf, 415 octets) sans aucun usage applicatif.
+*.pdf
+
+# Artefacts de build / de débogage : sans cela, `npm run lint` les analysait
+# et ils étaient poussés dans le déploiement Vercel.
+.esbuild_check_out/
+.probe_inside/
+
+
 # Environment variables
 .env
 .env.local

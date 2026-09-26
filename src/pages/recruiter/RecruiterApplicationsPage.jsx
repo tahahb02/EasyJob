@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useRecruiterApplications, useUpdateRecruiterApplicationStatus } from '@/api/hooks'
 import { toast } from 'sonner'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 
 const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.05 } } }
 const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }
@@ -271,25 +272,25 @@ export default function RecruiterApplicationsPage() {
                   </div>
 
                   {/* Status Actions */}
-                  <div className="flex-shrink-0 flex flex-col items-end gap-2">
-                    <div className="relative group">
-                      <button className="flex items-center gap-1 px-3 py-2 text-sm border border-surface-200 dark:border-surface-700 rounded-xl hover:bg-surface-50 dark:hover:bg-surface-700 transition">
-                        Actions <ChevronDown className="w-4 h-4" />
-                      </button>
-                      <div className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
-                        {Object.entries(statusConfig).map(([key, val]) => (
-                          <button
-                            key={key}
-                            onClick={() => handleStatusChange(app._id, key)}
-                            className={`w-full text-left px-4 py-2 text-sm hover:bg-surface-50 dark:hover:bg-surface-700 transition ${
-                              app.status === key ? 'font-semibold text-primary-500' : 'text-surface-600 dark:text-surface-400'
-                            }`}
-                          >
-                            {val.label}
+                    <div className="flex-shrink-0 flex flex-col items-end gap-2">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="flex items-center gap-1 px-3 py-2 text-sm border border-surface-200 dark:border-surface-700 rounded-xl hover:bg-surface-50 dark:hover:bg-surface-700 transition">
+                            Actions <ChevronDown className="w-4 h-4" />
                           </button>
-                        ))}
-                      </div>
-                    </div>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52">
+                          {Object.entries(statusConfig).map(([key, val]) => (
+                            <DropdownMenuItem
+                              key={key}
+                              onClick={() => handleStatusChange(app._id, key)}
+                              className={app.status === key ? 'font-semibold text-primary-500' : ''}
+                            >
+                              {val.label}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     <button
                       onClick={() => setOpenAppId(isOpen ? null : app._id)}
                       className="inline-flex items-center gap-1.5 rounded-xl border border-surface-200 dark:border-surface-700 px-3 py-2 text-sm font-medium text-surface-600 dark:text-surface-400 hover:text-primary-500 transition"

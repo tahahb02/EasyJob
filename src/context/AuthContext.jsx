@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import api from '@/api/axios'
+import { session } from '@/lib/session'
 import { toast } from 'sonner'
 
 const AuthContext = createContext(null)
@@ -13,21 +14,19 @@ export function AuthProvider({ children }) {
   // Check for existing session on mount
   useEffect(() => {
     const initAuth = async () => {
-      const token = localStorage.getItem('easyjob_access_token')
-      const savedUser = localStorage.getItem('easyjob_user')
-      
+      const token = session.accessToken
+      const savedUser = session.user
+
       if (token && savedUser) {
         try {
-          setUser(JSON.parse(savedUser))
+          setUser(savedUser)
           // Verify token is still valid
           const { data } = await api.get('/auth/me')
           setUser(data.user)
-          localStorage.setItem('easyjob_user', JSON.stringify(data.user))
+          session.updateUser(data.user, !!localStorage.getItem('easyjob_access_token'))
         } catch (error) {
           console.error('Session expirée:', error)
-          localStorage.removeItem('easyjob_access_token')
-          localStorage.removeItem('easyjob_refresh_token')
-          localStorage.removeItem('easyjob_user')
+          session.clear()
           setUser(null)
         }
       }
@@ -46,21 +45,17 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('easyjob:force-logout', onForceLogout)
   }, [queryClient])
 
-  const login = useCallback(async (email, password) => {
+  const login = useCallback(async (email, password, remember = true) => {
     try {
       const { data } = await api.post('/auth/login', { email, password })
       if (data.user && data.user.isActive === false) {
         const disabledError = 'Compte désactivé temporairement, veuillez contacter le responsable ou l\'admin, merci.'
-        localStorage.removeItem('easyjob_access_token')
-        localStorage.removeItem('easyjob_refresh_token')
-        localStorage.removeItem('easyjob_user')
-        localStorage.setItem('easyjob_login_message', disabledError)
+        session.clear()
+        session.setLoginMessage(disabledError, remember)
         setUser(null)
         return { success: false, error: disabledError }
       }
-      localStorage.setItem('easyjob_access_token', data.accessToken)
-      localStorage.setItem('easyjob_refresh_token', data.refreshToken)
-      localStorage.setItem('easyjob_user', JSON.stringify(data.user))
+      session.save({ accessToken: data.accessToken, refreshToken: data.refreshToken, user: data.user }, remember)
       setUser(data.user)
       return { success: true, user: data.user }
     } catch (error) {
@@ -71,9 +66,7 @@ export function AuthProvider({ children }) {
   const register = useCallback(async (userData) => {
     try {
       const { data } = await api.post('/auth/register', userData)
-      localStorage.setItem('easyjob_access_token', data.accessToken)
-      localStorage.setItem('easyjob_refresh_token', data.refreshToken)
-      localStorage.setItem('easyjob_user', JSON.stringify(data.user))
+      session.save({ accessToken: data.accessToken, refreshToken: data.refreshToken, user: data.user })
       setUser(data.user)
       return { success: true, user: data.user, emailSent: data.emailSent, emailError: data.emailError, previewUrl: data.previewUrl, fallbackCode: data.fallbackCode }
     } catch (error) {
@@ -87,7 +80,7 @@ export function AuthProvider({ children }) {
       // Update user verification status
       setUser(prev => {
         const updated = { ...prev, isEmailVerified: true }
-        localStorage.setItem('easyjob_user', JSON.stringify(updated))
+        session.updateUser(updated, !!localStorage.getItem('easyjob_access_token'))
         return updated
       })
       return { success: true, message: data.message }
@@ -111,9 +104,7 @@ export function AuthProvider({ children }) {
     } catch (error) {
       // Ignore error on logout
     } finally {
-      localStorage.removeItem('easyjob_access_token')
-      localStorage.removeItem('easyjob_refresh_token')
-      localStorage.removeItem('easyjob_user')
+      session.clear()
       setUser(null)
     }
   }, [])
@@ -123,7 +114,7 @@ export function AuthProvider({ children }) {
       const { data } = await api.put('/profile', updates)
       const updatedUser = data.user
       setUser(updatedUser)
-      localStorage.setItem('easyjob_user', JSON.stringify(updatedUser))
+      session.updateUser(updatedUser, !!localStorage.getItem('easyjob_access_token'))
       queryClient.invalidateQueries({ queryKey: ['profile'] })
       return { success: true, user: updatedUser, profile: data.profile }
     } catch (error) {

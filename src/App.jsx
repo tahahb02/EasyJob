@@ -1,61 +1,78 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
 import { AuthProvider } from '@/context/AuthContext'
 import { ThemeProvider } from '@/context/ThemeContext'
 import { SocketProvider } from '@/context/SocketContext'
 import ProtectedRoute from '@/components/ProtectedRoute'
+import RoleRoute from '@/components/RoleRoute'
 import MainLayoutShell from '@/layouts/MainLayoutShell'
 
-// Pages publiques
+// ─── Pages publiques (chargées dans le bundle initial) ───────────────
 import LandingPage from '@/pages/LandingPage'
 import LoginPage from '@/pages/auth/LoginPage'
-import RegisterPage from '@/pages/auth/RegisterPage'
-import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage'
-import ResetPasswordPage from '@/pages/auth/ResetPasswordPage'
-import VerifyEmailPage from '@/pages/auth/VerifyEmailPage'
-import TermsPage from '@/pages/legal/TermsPage'
-
-// Pages protégées Candidat
-import DashboardPage from '@/pages/dashboard/DashboardPage'
-import AnalyticsPage from '@/pages/dashboard/AnalyticsPage'
-import NotificationsPage from '@/pages/dashboard/NotificationsPage'
-import ProfilePage from '@/pages/profile/ProfilePage'
-import CVPage from '@/pages/profile/CVPage'
-import PortfolioPage from '@/pages/profile/PortfolioPage'
-import SearchPreferencesPage from '@/pages/profile/SearchPreferencesPage'
-import JobOffersPage from '@/pages/jobOffers/JobOffersPage'
-import JobOfferDetailPage from '@/pages/jobOffers/JobOfferDetailPage'
-import ScrapingConfigPage from '@/pages/jobOffers/ScrapingConfigPage'
-import SavedJobsPage from '@/pages/jobOffers/SavedJobsPage'
-import ApplicationsPage from '@/pages/applications/ApplicationsPage'
-import InternalApplicationsPage from '@/pages/applications/InternalApplicationsPage'
-import ApplicationDetailPage from '@/pages/applications/ApplicationDetailPage'
-import ComposeEmailPage from '@/pages/applications/ComposeEmailPage'
-import EmailTemplatesPage from '@/pages/applications/EmailTemplatesPage'
-import RecruitersPage from '@/pages/recruiters/RecruitersPage'
-import RecruiterDetailPage from '@/pages/recruiters/RecruiterDetailPage'
-import NetworkPage from '@/pages/recruiters/NetworkPage'
-import MessagesPage from '@/pages/shared/MessagesPage'
-import OnboardingPage from '@/pages/OnboardingPage'
-import CompanyEmailsPage from '@/pages/companyEmails/CompanyEmailsPage'
-
-// Pages Recruteur
-import RecruiterDashboardPage from '@/pages/recruiter/RecruiterDashboardPage'
-import RecruiterJobsPage from '@/pages/recruiter/RecruiterJobsPage'
-import RecruiterJobCreatePage from '@/pages/recruiter/RecruiterJobCreatePage'
-import RecruiterJobDetailPage from '@/pages/recruiter/RecruiterJobDetailPage'
-import RecruiterCandidatesPage from '@/pages/recruiter/RecruiterCandidatesPage'
-import RecruiterApplicationsPage from '@/pages/recruiter/RecruiterApplicationsPage'
-import RecruiterProfilePage from '@/pages/recruiter/RecruiterProfilePage'
 import NotFoundPage from '@/pages/NotFoundPage'
 
-// Pages Admin
+// ─── Chargement différé ─────────────────────────────────────────────
+// Chaque route.Downloaded on demand. Sans cela, un visiteur de la page
+// d'accueil téléchargeait les 40+ écrans de l'application (2,48 Mo) alors
+// qu'il n'en affiche aucun.
+const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'))
+const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage'))
+const ResetPasswordPage = lazy(() => import('@/pages/auth/ResetPasswordPage'))
+const VerifyEmailPage = lazy(() => import('@/pages/auth/VerifyEmailPage'))
+const TermsPage = lazy(() => import('@/pages/legal/TermsPage'))
+const OnboardingPage = lazy(() => import('@/pages/OnboardingPage'))
+
+// Candidat
+const DashboardPage = lazy(() => import('@/pages/dashboard/DashboardPage'))
+const AnalyticsPage = lazy(() => import('@/pages/dashboard/AnalyticsPage'))
+const NotificationsPage = lazy(() => import('@/pages/dashboard/NotificationsPage'))
+const ProfilePage = lazy(() => import('@/pages/profile/ProfilePage'))
+const CVPage = lazy(() => import('@/pages/profile/CVPage'))
+const PortfolioPage = lazy(() => import('@/pages/profile/PortfolioPage'))
+const SearchPreferencesPage = lazy(() => import('@/pages/profile/SearchPreferencesPage'))
+const JobOffersPage = lazy(() => import('@/pages/jobOffers/JobOffersPage'))
+const JobOfferDetailPage = lazy(() => import('@/pages/jobOffers/JobOfferDetailPage'))
+const ScrapingConfigPage = lazy(() => import('@/pages/jobOffers/ScrapingConfigPage'))
+const SavedJobsPage = lazy(() => import('@/pages/jobOffers/SavedJobsPage'))
+const ApplicationsPage = lazy(() => import('@/pages/applications/ApplicationsPage'))
+const InternalApplicationsPage = lazy(() => import('@/pages/applications/InternalApplicationsPage'))
+const ApplicationDetailPage = lazy(() => import('@/pages/applications/ApplicationDetailPage'))
+const ComposeEmailPage = lazy(() => import('@/pages/applications/ComposeEmailPage'))
+const EmailTemplatesPage = lazy(() => import('@/pages/applications/EmailTemplatesPage'))
+const RecruitersPage = lazy(() => import('@/pages/recruiters/RecruitersPage'))
+const RecruiterDetailPage = lazy(() => import('@/pages/recruiters/RecruiterDetailPage'))
+const NetworkPage = lazy(() => import('@/pages/recruiters/NetworkPage'))
+const MessagesPage = lazy(() => import('@/pages/shared/MessagesPage'))
+const CompanyEmailsPage = lazy(() => import('@/pages/companyEmails/CompanyEmailsPage'))
+
+// Recruteur
+const RecruiterDashboardPage = lazy(() => import('@/pages/recruiter/RecruiterDashboardPage'))
+const RecruiterJobsPage = lazy(() => import('@/pages/recruiter/RecruiterJobsPage'))
+const RecruiterJobCreatePage = lazy(() => import('@/pages/recruiter/RecruiterJobCreatePage'))
+const RecruiterJobDetailPage = lazy(() => import('@/pages/recruiter/RecruiterJobDetailPage'))
+const RecruiterCandidatesPage = lazy(() => import('@/pages/recruiter/RecruiterCandidatesPage'))
+const RecruiterApplicationsPage = lazy(() => import('@/pages/recruiter/RecruiterApplicationsPage'))
+const RecruiterProfilePage = lazy(() => import('@/pages/recruiter/RecruiterProfilePage'))
+
+// Admin
 import AdminGuard from '@/components/AdminGuard'
-import AdminDashboardPage from '@/pages/admin/AdminDashboardPage'
-import AdminUsersPage from '@/pages/admin/AdminUsersPage'
-import AdminRecruitersPage from '@/pages/admin/AdminRecruitersPage'
-import AdminCompaniesPage from '@/pages/admin/AdminCompaniesPage'
-import AdminJobsPage from '@/pages/admin/AdminJobsPage'
+const AdminDashboardPage = lazy(() => import('@/pages/admin/AdminDashboardPage'))
+const AdminUsersPage = lazy(() => import('@/pages/admin/AdminUsersPage'))
+const AdminRecruitersPage = lazy(() => import('@/pages/admin/AdminRecruitersPage'))
+const AdminCompaniesPage = lazy(() => import('@/pages/admin/AdminCompaniesPage'))
+const AdminJobsPage = lazy(() => import('@/pages/admin/AdminJobsPage'))
+
+/** Affiché pendant le téléchargement d'un écran. */
+function RouteFallback() {
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center" role="status" aria-live="polite">
+      <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
+      <span className="sr-only">Chargement en cours…</span>
+    </div>
+  )
+}
 
 export default function App() {
   return (
@@ -64,7 +81,8 @@ export default function App() {
         <SocketProvider>
         <BrowserRouter>
           <Toaster />
-          <Routes>
+          <Suspense fallback={<RouteFallback />}>
+            <Routes>
             {/* Routes publiques */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
@@ -102,14 +120,16 @@ export default function App() {
                 <Route path="/company-emails" element={<CompanyEmailsPage />} />
                 <Route path="/messages" element={<MessagesPage />} />
 
-                {/* Recruteur routes */}
-                <Route path="/recruiter-space/dashboard" element={<RecruiterDashboardPage />} />
-                <Route path="/recruiter-space/jobs" element={<RecruiterJobsPage />} />
-                <Route path="/recruiter-space/jobs/new" element={<RecruiterJobCreatePage />} />
-                <Route path="/recruiter-space/jobs/:id" element={<RecruiterJobDetailPage />} />
-                <Route path="/recruiter-space/candidates" element={<RecruiterCandidatesPage />} />
-                <Route path="/recruiter-space/applications" element={<RecruiterApplicationsPage />} />
-                <Route path="/recruiter-space/profile" element={<RecruiterProfilePage />} />
+                {/* Recruteur routes — réservées aux recruteurs et administrateurs */}
+                <Route element={<RoleRoute roles={['recruiter', 'admin']} redirectTo="/dashboard" />}>
+                  <Route path="/recruiter-space/dashboard" element={<RecruiterDashboardPage />} />
+                  <Route path="/recruiter-space/jobs" element={<RecruiterJobsPage />} />
+                  <Route path="/recruiter-space/jobs/new" element={<RecruiterJobCreatePage />} />
+                  <Route path="/recruiter-space/jobs/:id" element={<RecruiterJobDetailPage />} />
+                  <Route path="/recruiter-space/candidates" element={<RecruiterCandidatesPage />} />
+                  <Route path="/recruiter-space/applications" element={<RecruiterApplicationsPage />} />
+                  <Route path="/recruiter-space/profile" element={<RecruiterProfilePage />} />
+                </Route>
 
                 {/* Admin routes */}
                 <Route element={<AdminGuard />}>
@@ -124,7 +144,8 @@ export default function App() {
             </Route>
 
             <Route path="*" element={<NotFoundPage />} />
-          </Routes>
+            </Routes>
+          </Suspense>
         </BrowserRouter>
         </SocketProvider>
       </AuthProvider>

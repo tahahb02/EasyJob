@@ -377,7 +377,7 @@ export default function AdminUsersPage() {
                     <TableCell className="pr-4 text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon-sm" className="h-8 w-8">
+                          <Button variant="ghost" size="icon-sm" className="h-8 w-8" aria-label={`Actions pour ${u.email}`}>
                             <MoreHorizontal className="size-4" />
                           </Button>
                         </DropdownMenuTrigger>

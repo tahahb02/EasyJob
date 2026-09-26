@@ -1,7 +1,8 @@
 import express from 'express'
 import mongoose from 'mongoose'
-import { protect } from '../middlewares/auth.js'
-import { upload } from '../utils/fileUpload.js'
+import { protect, authorize } from '../middlewares/auth.js'
+import { upload, assertFileSignature } from '../utils/fileUpload.js'
+import { isValidObjectId } from '../utils/validation.js'
 import CV from '../models/CV.js'
 
 const router = express.Router()
@@ -854,9 +855,7 @@ router.get('/', protect, async (req, res) => {
 router.post('/', protect, upload.single('cv'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Aucun fichier fourni' })
-
-    // Deactivate old CVs
-    await CV.updateMany({ userId: req.user._id, isActive: true }, { isActive: false })
+    if (!assertFileSignature(req, res, 'cv')) return
 
     let extractedText = ''
     if (req.file.mimetype === 'application/pdf') {
@@ -876,6 +875,11 @@ router.post('/', protect, upload.single('cv'), async (req, res) => {
     const candidateSummary = generateCandidateSummary(extractedText, parsedData, {})
     const keywords = extractKeywords(extractedText, parsedData)
 
+    // Le CV est créé AVANT la désactivation de l'ancien : si l'insertion échoue
+    // (document trop volumineux, quota), l'utilisateur conserve son CV actif.
+    // L'ordre inverse le laissait sans CV.
+    const previousVersions = await CV.countDocuments({ userId: req.user._id, isActive: true })
+
     const cv = await CV.create({
       userId: req.user._id,
       fileName: `cv_${Date.now()}`,
@@ -888,8 +892,13 @@ router.post('/', protect, upload.single('cv'), async (req, res) => {
       analysis,
       candidateSummary,
       keywords,
-      version: 1,
+      version: previousVersions + 1,
     })
+
+    await CV.updateMany(
+      { userId: req.user._id, isActive: true, _id: { $ne: cv._id } },
+      { isActive: false }
+    )
 
     res.json({
       cv,
@@ -900,6 +909,9 @@ router.post('/', protect, upload.single('cv'), async (req, res) => {
     })
   } catch (error) {
     console.error('Erreur upload CV:', error)
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ error: 'Fichier invalide' })
+    }
     res.status(500).json({ error: 'Erreur lors de l\'upload' })
   }
 })
@@ -998,7 +1010,13 @@ router.post('/match-jobs', protect, async (req, res) => {
 // DELETE /api/profile/cv/:id
 router.delete('/:id', protect, async (req, res) => {
   try {
-    await CV.findOneAndDelete({ _id: req.params.id, userId: req.user._id })
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identifiant de CV invalide' })
+    }
+    // 404 si rien n'est supprimé (id inexistant ou CV d'autrui) : le 200
+    // précédent était un faux succès.
+    const deleted = await CV.findOneAndDelete({ _id: req.params.id, userId: req.user._id })
+    if (!deleted) return res.status(404).json({ error: 'CV non trouvé' })
     res.json({ message: 'CV supprimé' })
   } catch (error) {
     res.status(500).json({ error: 'Erreur serveur' })
@@ -1008,6 +1026,9 @@ router.delete('/:id', protect, async (req, res) => {
 // PUT /api/profile/cv/:id — update parsed data or re-analyze
 router.put('/:id', protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identifiant de CV invalide' })
+    }
     const cv = await CV.findOne({ _id: req.params.id, userId: req.user._id })
     if (!cv) return res.status(404).json({ error: 'CV non trouvé' })
 
@@ -1060,7 +1081,10 @@ router.put('/:id', protect, async (req, res) => {
 })
 
 // POST /api/profile/cv/backfill-summaries - generate summaries for existing CVs
-router.post('/backfill-summaries', protect, async (req, res) => {
+// Opération globale (tous les utilisateurs) : réservée à l'administrateur.
+// Elle était accessible à tout utilisateur authentifié, ce qui permettait de
+// lancer une écriture massive sur la collection CV.
+router.post('/backfill-summaries', protect, authorize('admin'), async (req, res) => {
   try {
     const cvs = await CV.find({ isActive: true })
     let updated = 0

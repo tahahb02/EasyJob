@@ -9,18 +9,67 @@ import { protect } from '../middlewares/auth.js'
 
 const router = express.Router()
 
+// Longueur maximale des identifiants : au-delà, on renvoie une 400 explicite au
+// lieu de laisser Mongo tronquer silencieusement ou lever une erreur 500.
+const MAX_FIELD = 120
+const MAX_PASSWORD = 128
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+// Trim + normalisation : `req.body` peut contenir n'importe quoi (null, nombre,
+// tableau, objet). On rejette explicitement tout ce qui n'est pas une chaîne,
+// sinon `email.toLowerCase()` lève une TypeError → 500.
+function asString(value) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function normalizeEmail(value) {
+  return asString(value).toLowerCase()
+}
+
+// Le « fallbackCode » renvoie le code de vérification DANS la réponse HTTP.
+// Utile en local, dangereux en production : sur `/resend-verification` n'importe
+// qui peut demander le code d'un emailalien et récupérer un compte non vérifié.
+// On le passe donc en opt-in explicite, et jamais en production.
+function codeFallbackAllowed() {
+  // Le code de vérification ne doit jamais être renvoyé par l'API en
+  // production : ce serait une porte d'entrée sans second facteur.
+  if (process.env.NODE_ENV === 'production') return false
+  if (process.env.DISABLE_CODE_FALLBACK === 'true') return false
+  // Hors production, c'est un opt-in explicite : sans ALLOW_CODE_FALLBACK, un
+  // échec d'envoi ne doit pas se traduire par un secret dans la réponse.
+  return process.env.ALLOW_CODE_FALLBACK === 'true'
+}
+
 router.post('/register', async (req, res) => {
   try {
-    const { firstName, lastName, email, password, phone, role } = req.body
+    const body = req.body || {}
+    const firstName = asString(body.firstName)
+    const lastName = asString(body.lastName)
+    const email = normalizeEmail(body.email)
+    const password = typeof body.password === 'string' ? body.password : ''
+    const phone = asString(body.phone)
+    const role = asString(body.role)
 
     if (!firstName || !lastName || !email || !password) {
       return res.status(400).json({ error: 'Tous les champs obligatoires doivent être remplis' })
     }
+    if (!EMAIL_RE.test(email)) {
+      return res.status(400).json({ error: 'Adresse email invalide' })
+    }
+    if (firstName.length > MAX_FIELD || lastName.length > MAX_FIELD) {
+      return res.status(400).json({ error: `Prénom et nom doivent faire moins de ${MAX_FIELD} caractères` })
+    }
+    if (phone.length > 40) {
+      return res.status(400).json({ error: 'Numéro de téléphone trop long' })
+    }
     if (password.length < 6) {
       return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caractères' })
     }
+    if (password.length > MAX_PASSWORD) {
+      return res.status(400).json({ error: `Le mot de passe doit faire moins de ${MAX_PASSWORD} caractères` })
+    }
 
-    const existingUser = await User.findOne({ email: email.toLowerCase() })
+    const existingUser = await User.findOne({ email })
     if (existingUser) {
       return res.status(400).json({ error: 'Un compte avec cet email existe déjà' })
     }
@@ -28,37 +77,66 @@ router.post('/register', async (req, res) => {
     const validRoles = ['candidat', 'recruiter']
     const userRole = validRoles.includes(role) ? role : 'candidat'
 
+    // ── Validation AVANT toute écriture ──────────────────────────────────
+    // Le profil recruteur impose `companyName` et `industry`. On contrôle donc
+    // les données ici : sinon `RecruiterProfile.create` échouait APRÈS la
+    // création du User, laissant un compte orphelin (email déjà « pris », profil
+    // recruteur absent → espace recruteur inaccessible à jamais).
+    const recruiterFields = {}
+    if (userRole === 'recruiter') {
+      recruiterFields.companyName = asString(body.companyName)
+      recruiterFields.industry = asString(body.industry)
+      recruiterFields.companySize = asString(body.companySize) || '11-50'
+      recruiterFields.companyLocation = asString(body.companyLocation)
+      recruiterFields.companyWebsite = asString(body.companyWebsite)
+      recruiterFields.companyDescription = asString(body.companyDescription)
+      recruiterFields.position = asString(body.position)
+      recruiterFields.linkedinUrl = asString(body.linkedinUrl)
+
+      if (!recruiterFields.companyName) {
+        return res.status(400).json({ error: "Le nom de l'entreprise est requis pour un compte recruteur" })
+      }
+      if (!recruiterFields.industry) {
+        return res.status(400).json({ error: "Le secteur d'activité est requis pour un compte recruteur" })
+      }
+    }
+
     const verificationCode = generateEmailVerificationCode()
 
-    const user = await User.create({
-      firstName,
-      lastName,
-      email: email.toLowerCase(),
-      password,
-      phone: phone || '',
-      role: userRole,
-      isEmailVerified: false,
-      emailVerificationCode: verificationCode,
-      emailVerificationExpire: new Date(Date.now() + 10 * 60 * 1000),
-    })
-
-    // If recruiter, create recruiter profile
-    if (userRole === 'recruiter') {
-      const { companyName, industry, companySize, companyLocation, companyWebsite, companyDescription, position, linkedinUrl } = req.body
-      await RecruiterProfile.create({
-        userId: user._id,
-        companyName: companyName || '',
-        industry: industry || '',
-        companySize: companySize || '11-50',
-        companyLocation: companyLocation || '',
-        companyWebsite: companyWebsite || '',
-        companyDescription: companyDescription || '',
-        position: position || '',
-        linkedinUrl: linkedinUrl || '',
+    // Création + profil associé avec compensation : si l'écriture du profil
+    // échoue, on supprime le User pour ne pas laisser de compte orphelin
+    // (email déjà « pris » + profil recruteur absent = espace inaccessible à
+    // jamais). Pas de transaction : fonctionne aussi sur un Mongo standalone.
+    let user
+    try {
+      user = await User.create({
+        firstName,
+        lastName,
+        email,
+        password,
+        phone,
+        role: userRole,
+        isEmailVerified: false,
+        emailVerificationCode: verificationCode,
+        emailVerificationExpire: new Date(Date.now() + 10 * 60 * 1000),
       })
-    } else {
-      // Create empty profile for candidates
-      await UserProfile.create({ userId: user._id })
+    } catch (createError) {
+      if (createError?.code === 11000) {
+        return res.status(400).json({ error: 'Un compte avec cet email existe déjà' })
+      }
+      throw createError
+    }
+
+    try {
+      if (userRole === 'recruiter') {
+        await RecruiterProfile.create({ userId: user._id, ...recruiterFields })
+      } else {
+        await UserProfile.create({ userId: user._id })
+      }
+    } catch (profileError) {
+      await User.deleteOne({ _id: user._id }).catch(() => {})
+      console.error('Erreur création profil associé, compte annulé:', profileError.message)
+      return res.status(400).json({ error: 'Les informations de profil sont invalides. Aucun compte n\'a été créé.' })
     }
 
     const emailResult = await sendVerificationEmail(user.email, user.firstName, verificationCode)
@@ -80,7 +158,7 @@ router.post('/register', async (req, res) => {
       emailSent,
       emailError: emailSent ? null : emailResult.error || null,
       previewUrl: emailResult.previewUrl || null,
-      fallbackCode: emailSent || process.env.DISABLE_CODE_FALLBACK === 'true' ? null : verificationCode,
+      fallbackCode: codeFallbackAllowed() && !emailSent ? verificationCode : null,
     })
   } catch (error) {
     console.error('Erreur register:', error)
@@ -90,10 +168,15 @@ router.post('/register', async (req, res) => {
 
 router.post('/verify-email', async (req, res) => {
   try {
-    const { email, code } = req.body
+    const email = normalizeEmail(req.body?.email)
+    const code = asString(req.body?.code)
+
+    if (!email || !code) {
+      return res.status(400).json({ error: 'Email et code requis' })
+    }
 
     const user = await User.findOne({
-      email: email.toLowerCase(),
+      email,
       emailVerificationCode: code,
       emailVerificationExpire: { $gt: Date.now() },
     })
@@ -116,9 +199,12 @@ router.post('/verify-email', async (req, res) => {
 
 router.post('/resend-verification', async (req, res) => {
   try {
-    const { email } = req.body
-    const user = await User.findOne({ email: email.toLowerCase() })
+    const email = normalizeEmail(req.body?.email)
+    if (!email) {
+      return res.status(400).json({ error: 'Email requis' })
+    }
 
+    const user = await User.findOne({ email })
     if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' })
     if (user.isEmailVerified) return res.status(400).json({ error: 'Email déjà vérifié' })
 
@@ -136,22 +222,27 @@ router.post('/resend-verification', async (req, res) => {
       emailSent: emailResult.success,
       emailError: emailResult.success ? null : emailResult.error || null,
       previewUrl: emailResult.previewUrl || null,
-      fallbackCode: emailResult.success || process.env.DISABLE_CODE_FALLBACK === 'true' ? null : verificationCode,
+      fallbackCode: codeFallbackAllowed() && !emailResult.success ? verificationCode : null,
     })
   } catch (error) {
+    console.error('Erreur resend-verification:', error)
     res.status(500).json({ error: 'Erreur lors de l\'envoi' })
   }
 })
 
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body
+    const email = normalizeEmail(req.body?.email)
+    const password = typeof req.body?.password === 'string' ? req.body.password : ''
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email et mot de passe requis' })
     }
+    if (password.length > MAX_PASSWORD) {
+      return res.status(401).json({ error: 'Email ou mot de passe incorrect' })
+    }
 
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password')
+    const user = await User.findOne({ email }).select('+password')
     if (!user) {
       return res.status(401).json({ error: 'Email ou mot de passe incorrect' })
     }
@@ -220,8 +311,12 @@ router.post('/refresh-token', async (req, res) => {
 
 router.post('/forgot-password', async (req, res) => {
   try {
-    const { email } = req.body
-    const user = await User.findOne({ email: email.toLowerCase() })
+    const email = normalizeEmail(req.body?.email)
+    if (!email) {
+      return res.status(400).json({ error: 'Email requis' })
+    }
+
+    const user = await User.findOne({ email })
 
     if (!user) {
       return res.json({ message: 'Si un compte existe avec cet email, un lien de réinitialisation a été envoyé.' })
@@ -243,11 +338,17 @@ router.post('/forgot-password', async (req, res) => {
 
 router.post('/reset-password/:token', async (req, res) => {
   try {
-    const { password } = req.body
+    const password = typeof req.body?.password === 'string' ? req.body.password : ''
     const { token } = req.params
 
     if (!password || password.length < 6) {
       return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caractères' })
+    }
+    if (password.length > MAX_PASSWORD) {
+      return res.status(400).json({ error: `Le mot de passe doit faire moins de ${MAX_PASSWORD} caractères` })
+    }
+    if (!token) {
+      return res.status(400).json({ error: 'Lien invalide ou expiré' })
     }
 
     const user = await User.findOne({

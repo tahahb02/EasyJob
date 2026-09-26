@@ -3,6 +3,7 @@ import Recruiter from '../models/Recruiter.js'
 import UserProfile from '../models/UserProfile.js'
 import { protect } from '../middlewares/auth.js'
 import { scrapeRecruiters } from '../services/jobScraper.js'
+import { isValidObjectId, pick, escapeRegExp, RECRUITER_EDITABLE_FIELDS } from '../utils/validation.js'
 
 const router = express.Router()
 
@@ -70,14 +71,17 @@ router.get('/', protect, async (req, res) => {
     const query = { userId: req.user._id, isActive: true }
 
     if (search) {
+      // Regex échappée : sans cela, `search` était injecté tel quel dans
+      // `$regex` (ReDoS possible via un motif catastrophique).
+      const safe = new RegExp(escapeRegExp(search), 'i')
       query.$or = [
-        { firstName: { $regex: search, $options: 'i' } },
-        { lastName: { $regex: search, $options: 'i' } },
-        { company: { $regex: search, $options: 'i' } },
+        { firstName: safe },
+        { lastName: safe },
+        { company: safe },
       ]
     }
     if (sector) query.sector = sector
-    if (location) query.location = { $regex: location, $options: 'i' }
+    if (location) query.location = new RegExp(escapeRegExp(location), 'i')
     if (connectionDegree) query.connectionDegree = connectionDegree
 
     const recruiters = await Recruiter.find(query).sort({ updatedAt: -1 })
@@ -89,6 +93,9 @@ router.get('/', protect, async (req, res) => {
 
 router.get('/:id', protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identifiant recruteur invalide' })
+    }
     const recruiter = await Recruiter.findOne({ _id: req.params.id, userId: req.user._id })
     if (!recruiter) return res.status(404).json({ error: 'Recruteur non trouvé' })
     res.json({ recruiter })
@@ -99,32 +106,55 @@ router.get('/:id', protect, async (req, res) => {
 
 router.post('/', protect, async (req, res) => {
   try {
-    const recruiter = await Recruiter.create({ ...req.body, userId: req.user._id })
+    // Allowlist + userId forcé : le corps complet était accepté, ce qui laissait
+    // passer `userId`, `interactionCount`, etc.
+    const recruiter = await Recruiter.create({ ...pick(req.body, RECRUITER_EDITABLE_FIELDS), userId: req.user._id })
     res.status(201).json({ recruiter, message: 'Recruteur ajouté' })
   } catch (error) {
+    if (error.name === 'ValidationError') {
+      const details = Object.values(error.errors || {}).map(e => e.message).join(', ')
+      return res.status(400).json({ error: details || 'Données recruteur invalides' })
+    }
     res.status(500).json({ error: 'Erreur lors de l\'ajout' })
   }
 })
 
 router.put('/:id', protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identifiant recruteur invalide' })
+    }
+    // Allowlist : `userId` n'est plus modifiable par l'appelant.
+    const updates = pick(req.body, RECRUITER_EDITABLE_FIELDS)
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'Aucun champ modifiable fourni' })
+    }
     const recruiter = await Recruiter.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id },
-      req.body,
-      { new: true }
+      { $set: updates },
+      { new: true, runValidators: true }
     )
     if (!recruiter) return res.status(404).json({ error: 'Recruteur non trouvé' })
     res.json({ recruiter, message: 'Recruteur mis à jour' })
   } catch (error) {
+    if (error.name === 'ValidationError') {
+      const details = Object.values(error.errors || {}).map(e => e.message).join(', ')
+      return res.status(400).json({ error: details || 'Données recruteur invalides' })
+    }
     res.status(500).json({ error: 'Erreur serveur' })
   }
 })
 
 router.delete('/:id', protect, async (req, res) => {
   try {
-    await Recruiter.findOneAndDelete({ _id: req.params.id, userId: req.user._id })
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identifiant recruteur invalide' })
+    }
+    // 404 si rien n'est supprimé, au lieu d'un « supprimé » fictif.
+    const deleted = await Recruiter.findOneAndDelete({ _id: req.params.id, userId: req.user._id })
+    if (!deleted) return res.status(404).json({ error: 'Recruteur non trouvé' })
     res.json({ message: 'Recruteur supprimé' })
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Erreur serveur' })
   }
 })

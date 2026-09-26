@@ -5,10 +5,48 @@ import { protect } from '../middlewares/auth.js'
 import { sendEmail, escapeHtml, brandLayout } from '../utils/sendEmail.js'
 import { recordExchange } from '../services/MailService.js'
 import { notifyEmailReceived } from '../services/NotificationService.js'
+import { escapeRegExp, clampInt, isValidObjectId, asString, isValidEmail } from '../utils/validation.js'
 
 const router = express.Router()
 
 const MAIL_SUBJECT_PREFIX = '[EasyJob] '
+
+// Quota d'envoi. `/api/mail/send` et `/api/applications/:id/send` permettent
+// d'envoyer à une adresse externe arbitraire : sans plafond, un compte créé
+// gratuitement peut servir de relais d'envoi (spam) et vider le quota du
+// fournisseur d'email. Fenêtre glissante par utilisateur et par IP.
+const SEND_WINDOW_MS = 60 * 60 * 1000
+const SEND_LIMIT_PER_USER = 30
+const SEND_LIMIT_PER_IP = 60
+const sendLog = new Map()
+
+function checkSendQuota(userId, ip) {
+  const now = Date.now()
+  const entries = [
+    { key: `u:${userId}`, limit: SEND_LIMIT_PER_USER },
+    { key: `i:${ip}`, limit: SEND_LIMIT_PER_IP },
+  ]
+
+  for (const entry of entries) {
+    const hits = (sendLog.get(entry.key) || []).filter(t => now - t < SEND_WINDOW_MS)
+    if (hits.length >= entry.limit) {
+      sendLog.set(entry.key, hits)
+      return { allowed: false, scope: entry.key.startsWith('u:') ? 'compte' : 'IP' }
+    }
+    hits.push(now)
+    sendLog.set(entry.key, hits)
+  }
+
+  // Purge périodique pour éviter la croissance illimitée de la Map.
+  if (sendLog.size > 5000) {
+    for (const [key, hits] of sendLog) {
+      if (!hits.some(t => now - t < SEND_WINDOW_MS)) sendLog.delete(key)
+    }
+  }
+
+  return { allowed: true }
+}
+
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase()
@@ -34,7 +72,7 @@ async function resolveRecipientUser(to) {
 // GET /api/mail?type=inbox|sent&search=...&conversation=<email>&page=1&limit=30
 router.get('/', protect, async (req, res) => {
   try {
-    const { type = 'inbox', search, conversation, page = 1, limit = 30 } = req.query
+    const { type = 'inbox', search, conversation, page, limit } = req.query
     const query = { userId: req.user._id }
 
     const orClauses = []
@@ -46,7 +84,10 @@ router.get('/', protect, async (req, res) => {
     }
 
     if (search && search.trim()) {
-      const regex = new RegExp(search.trim(), 'i')
+      // Regex échappée : `new RegExp(search)` avec une saisie comme `[` levait
+      // une SyntaxError → 500, et un motif catastrophique pouvait provoquer un
+      // ReDoS. On cherche désormais la chaîne saisie littéralement.
+      const regex = new RegExp(escapeRegExp(search), 'i')
       orClauses.push({ subject: regex }, { body: regex }, { fromName: regex }, { toName: regex }, { companyName: regex })
     }
 
@@ -54,19 +95,21 @@ router.get('/', protect, async (req, res) => {
       query.$or = orClauses
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit)
+    const currentPage = clampInt(page, { min: 1, max: 10000, fallback: 1 })
+    const perPage = clampInt(limit, { min: 1, max: 100, fallback: 30 })
+    const skip = (currentPage - 1) * perPage
     const [emails, total, unreadCount] = await Promise.all([
       Email.find(query)
         .populate('fromUser', 'firstName lastName email avatar role')
         .populate('toUser', 'firstName lastName email avatar role')
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(parseInt(limit)),
+        .limit(perPage),
       Email.countDocuments(query),
       Email.countDocuments({ userId: req.user._id, direction: 'received', isRead: false }),
     ])
 
-    res.json({ emails, total, unreadCount, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) })
+    res.json({ emails, total, unreadCount, page: currentPage, pages: Math.ceil(total / perPage) })
   } catch (error) {
     console.error('Mailbox error:', error)
     res.status(500).json({ error: 'Erreur lors de la récupération des emails' })
@@ -152,14 +195,26 @@ router.get('/conversations', protect, async (req, res) => {
 // POST /api/mail/send — nouvel email (interne ou externe)
 router.post('/send', protect, async (req, res) => {
   try {
-    const { to, subject, body, companyName = '', applicationId = null, jobOfferId = null } = req.body
+    const { to, subject, body, companyName = '', applicationId = null, jobOfferId = null } = req.body || {}
     if (!to || !subject || !body) {
       return res.status(400).json({ error: 'Destinataire, objet et contenu requis' })
     }
 
-    const toEmail = String(to).trim()
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail)) {
+    const toEmail = asString(to, { max: 320 })
+    if (!isValidEmail(toEmail)) {
       return res.status(400).json({ error: 'Adresse email invalide' })
+    }
+    const subjectLine = asString(subject, { max: 200 })
+    const bodyText = asString(body, { max: 20000 })
+    if (!subjectLine || !bodyText) {
+      return res.status(400).json({ error: 'Objet et contenu requis' })
+    }
+
+    const quota = checkSendQuota(req.user._id, req.ip)
+    if (!quota.allowed) {
+      return res.status(429).json({
+        error: 'Trop d\'emails envoyés. La limite est de ' + SEND_LIMIT_PER_USER + ' par heure.',
+      })
     }
 
     const recipientUser = await resolveRecipientUser(toEmail)
@@ -170,26 +225,26 @@ router.post('/send', protect, async (req, res) => {
 
     const content = `
       <p style="margin:0 0 8px 0; font-size:14px; color:#334155; line-height:1.6;">Bonjour <strong>${escapeHtml(recipientName || '')}</strong>,</p>
-      <div style="background:#eff6ff; border-left:4px solid #2563eb; border-radius:12px; padding:18px 20px; margin:0 0 6px 0; white-space:pre-wrap; color:#334155; font-size:14px; line-height:1.7;">${escapeHtml(body)}</div>
+      <div style="background:#eff6ff; border-left:4px solid #2563eb; border-radius:12px; padding:18px 20px; margin:0 0 6px 0; white-space:pre-wrap; color:#334155; font-size:14px; line-height:1.7;">${escapeHtml(bodyText)}</div>
       <p style="margin:14px 0 0 0; font-size:13px; color:#94a3b8; line-height:1.6;">Envoyé par <strong>${escapeHtml(senderName)}</strong> via EasyJob</p>
     `
     const html = brandLayout({
-      title: subject,
+      title: subjectLine,
       content,
       footerText: 'Message envoyé via EasyJob — Votre carrière au Maroc',
     })
 
-    const emailResult = await sendEmail({ to: toEmail, subject: `${MAIL_SUBJECT_PREFIX}${subject}`, html })
+    const emailResult = await sendEmail({ to: toEmail, subject: `${MAIL_SUBJECT_PREFIX}${subjectLine}`, html })
 
     if (!emailResult.success) {
-      return res.status(500).json({ error: 'Erreur lors de l\'envoi de l\'email', details: emailResult.error })
+      return res.status(502).json({ error: 'Erreur lors de l\'envoi de l\'email', details: emailResult.error })
     }
 
     const recorded = await recordExchange({
       senderUser: req.user,
       recipientUser,
-      subject,
-      body,
+      subject: subjectLine,
+      body: bodyText,
       fromName: senderName,
       toName: recipientName,
       toEmail,
@@ -208,7 +263,7 @@ router.post('/send', protect, async (req, res) => {
         userId: recipientUser._id,
         fromName: senderName,
         companyName,
-        subject,
+        subject: subjectLine,
         emailId: receivedCopy?._id?.toString() || null,
       })
     }
@@ -223,9 +278,19 @@ router.post('/send', protect, async (req, res) => {
 // POST /api/mail/:id/reply — réponse à un email reçu/envoyé
 router.post('/:id/reply', protect, async (req, res) => {
   try {
-    const { body } = req.body
-    if (!body || !String(body).trim()) {
+    const bodyText = asString(req.body?.body, { max: 20000 })
+    if (!bodyText) {
       return res.status(400).json({ error: 'Le contenu de la réponse est requis' })
+    }
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identifiant d\'email invalide' })
+    }
+
+    const quota = checkSendQuota(req.user._id, req.ip)
+    if (!quota.allowed) {
+      return res.status(429).json({
+        error: 'Trop d\'emails envoyés. La limite est de ' + SEND_LIMIT_PER_USER + ' par heure.',
+      })
     }
 
     const email = await Email.findOne({ _id: req.params.id, userId: req.user._id })
@@ -246,7 +311,7 @@ router.post('/:id/reply', protect, async (req, res) => {
 
     const content = `
       <p style="margin:0 0 8px 0; font-size:14px; color:#334155; line-height:1.6;">Bonjour <strong>${escapeHtml(recipientName || '')}</strong>,</p>
-      <div style="background:#eff6ff; border-left:4px solid #2563eb; border-radius:12px; padding:18px 20px; margin:0 0 16px 0; white-space:pre-wrap; color:#334155; font-size:14px; line-height:1.7;">${escapeHtml(body)}</div>
+      <div style="background:#eff6ff; border-left:4px solid #2563eb; border-radius:12px; padding:18px 20px; margin:0 0 16px 0; white-space:pre-wrap; color:#334155; font-size:14px; line-height:1.7;">${escapeHtml(bodyText)}</div>
       <div style="border-left:3px solid #e2e8f0; padding:10px 14px; font-size:12px; color:#94a3b8; line-height:1.6;">
         <strong style="color:#64748b;">De : ${escapeHtml(email.fromName || '')}</strong><br />
         <strong style="color:#64748b;">Objet : ${escapeHtml(email.subject || '')}</strong><br />
@@ -263,14 +328,14 @@ router.post('/:id/reply', protect, async (req, res) => {
     const emailResult = await sendEmail({ to: toEmail, subject: `${MAIL_SUBJECT_PREFIX}${subject}`, html })
 
     if (!emailResult.success) {
-      return res.status(500).json({ error: 'Erreur lors de l\'envoi de la réponse', details: emailResult.error })
+      return res.status(502).json({ error: 'Erreur lors de l\'envoi de la réponse', details: emailResult.error })
     }
 
     const recorded = await recordExchange({
       senderUser: req.user,
       recipientUser,
       subject,
-      body,
+      body: bodyText,
       fromName: senderName,
       toName: recipientName,
       toEmail,
@@ -304,6 +369,9 @@ router.post('/:id/reply', protect, async (req, res) => {
 // GET /api/mail/:id
 router.get('/:id', protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identifiant d\'email invalide' })
+    }
     const email = await Email.findOne({ _id: req.params.id, userId: req.user._id })
       .populate('fromUser', 'firstName lastName email avatar role')
       .populate('toUser', 'firstName lastName email avatar role')
@@ -318,6 +386,9 @@ router.get('/:id', protect, async (req, res) => {
 // PUT /api/mail/:id/read
 router.put('/:id/read', protect, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identifiant d\'email invalide' })
+    }
     const email = await Email.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id, direction: 'received' },
       { isRead: true, readAt: new Date() },
