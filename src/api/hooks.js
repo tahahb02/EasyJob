@@ -436,16 +436,24 @@ export const useScrapingStatus = (runId, options = {}) => useQuery({
     const query = params.toString()
     // Une requête de statut peut bloquer le temps d'une collecte : on lui
     // laisse un budget large pour ne jamais se faire couper par le client.
-    const { data } = await api.get(`/scraping/status${query ? `?${query}` : ''}`, { timeout: 300000 })
+    const { data } = await api.get(`/scraping/status${query ? `?${query}` : ''}`, { timeout: 60000 })
     return data
   },
   enabled: !!runId,
   // Tant qu'on ne sait pas que la collecte est finie, on continue d'interroger :
   // un échec réseau temporaire ne doit plus éteindre le suivi pour de bon.
+  // Rythme rapide pendant la collecte, très lent sinon : inutile de marteler
+  // le serveur quand plus rien ne bouge (et ça épuise le quota de requêtes).
   refetchInterval: query => (query.state.data?.isRunning === false ? false : 1500),
-  refetchIntervalInBackground: true,
-  retry: 4,
-  retryDelay: 2000,
+  // Le serveur pilote la collecte tout seul : inutile de continuer à interroger
+  // quand l'onglet est masqué, la requête reprend au retour sur l'onglet.
+  refetchIntervalInBackground: false,
+  // Un 429 ne se relance pas en boucle : on respecte le délai serveur.
+  retry: (failureCount, error) => {
+    if (error?.response?.status === 429) return failureCount < 1
+    return failureCount < 3
+  },
+  retryDelay: attempt => Math.min(1000 * 2 ** attempt, 10000),
   ...options,
 })
 

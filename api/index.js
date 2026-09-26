@@ -80,15 +80,41 @@ var init_User = __esm({
 // backend/utils/sendEmail.js
 var sendEmail_exports = {};
 __export(sendEmail_exports, {
+  BRAND: () => BRAND,
   brandButton: () => brandButton,
   brandLayout: () => brandLayout,
   escapeHtml: () => escapeHtml,
+  resolveSender: () => resolveSender,
   sendEmail: () => sendEmail,
   sendPasswordResetEmail: () => sendPasswordResetEmail,
   sendVerificationEmail: () => sendVerificationEmail
 });
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
+function isUsableAddress(value) {
+  const email = String(value || "").trim();
+  if (!email) return false;
+  if (PLACEHOLDER_EMAILS.some((placeholder) => email.includes(placeholder))) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+function parseSender(value) {
+  const match = String(value || "").match(/^(.*)\s*<([^>]+)>$/);
+  if (!match) return { name: "", email: String(value || "").trim() };
+  return { name: match[1].trim(), email: match[2].trim() };
+}
+function resolveSender() {
+  const fromEnv = parseSender(process.env.EMAIL_FROM);
+  const candidates = [
+    parseSender(process.env.BREVO_SENDER_EMAIL),
+    fromEnv,
+    parseSender(process.env.EMAIL_USER),
+    parseSender(process.env.SUPPORT_EMAIL)
+  ];
+  const chosen = candidates.find((candidate) => isUsableAddress(candidate.email));
+  const email = chosen?.email || BRAND.supportEmail;
+  const name = chosen?.name || process.env.BREVO_SENDER_NAME || BRAND.supportName;
+  return { name: name || BRAND.supportName, email };
+}
 function escapeHtml(value = "") {
   return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
@@ -125,8 +151,10 @@ function brandLayout({ accent = "#2563eb", title, content, footerText }) {
                   ${content}
                 </div>
                 <div style="padding:24px 8px 8px 8px; text-align:center; font-family:Inter, Arial, sans-serif; font-size:12px; color:#94a3b8; line-height:1.7;">
-                  ${footerText || "EasyJob \u2014 Votre carri\xE8re au Maroc"}<br />
-                  \xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} EasyJob. Tous droits r\xE9serv\xE9s.
+                  ${footerText || `${BRAND.name} \u2014 Votre carri\xE8re au Maroc`}<br />
+                  Besoin d'aide ? \xC9crivez-nous \xE0
+                  <a href="mailto:${BRAND.supportEmail}" style="color:${accent}; text-decoration:none; font-weight:600;">${BRAND.supportEmail}</a><br />
+                  \xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} ${BRAND.name}. Tous droits r\xE9serv\xE9s.
                 </div>
               </td>
             </tr>
@@ -140,14 +168,8 @@ function hasRealCreds() {
   return !!(process.env.EMAIL_USER && process.env.EMAIL_PASS && process.env.EMAIL_USER !== "your_email@gmail.com" && process.env.EMAIL_PASS !== "your_app_password");
 }
 function getFromAddress() {
-  const envFrom = process.env.EMAIL_FROM;
-  if (envFrom && !envFrom.includes("noreply@easyjob.ma") && !envFrom.includes("your_email@gmail.com")) {
-    return envFrom;
-  }
-  if (hasRealCreds()) {
-    return `EasyJob <${process.env.EMAIL_USER}>`;
-  }
-  return "EasyJob <noreply@easyjob.ma>";
+  const { name, email } = resolveSender();
+  return `${name} <${email}>`;
 }
 function mailPort() {
   return parseInt(process.env.EMAIL_PORT || "587", 10);
@@ -235,30 +257,21 @@ async function withRetry(fn, attempts = 3, baseDelay = 400) {
   }
   throw lastError;
 }
-function parseSender(value) {
-  const match = String(value || "").match(/^(.*)\s*<([^>]+)>$/);
-  if (!match) return { name: "", email: String(value || "").trim() };
-  return { name: match[1].trim(), email: match[2].trim() };
-}
-async function resendFromAddress() {
-  return process.env.RESEND_FROM || "EasyJob <onboarding@resend.dev>";
+function resendFromAddress() {
+  const { name, email } = resolveSender();
+  return `${name} <${email}>`;
 }
 async function sendViaBrevo({ to, subject, html, attachments }) {
   const apiKey = process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY;
   if (!apiKey) throw new Error("Brevo n\xE9cessite BREVO_API_KEY (ou EMAIL_PROVIDER=smtp)");
-  const parsed = parseSender(process.env.EMAIL_FROM || process.env.EMAIL_USER);
-  const sender = {
-    name: process.env.BREVO_SENDER_NAME || parsed.name || "EasyJob",
-    email: process.env.BREVO_SENDER_EMAIL || parsed.email || process.env.EMAIL_USER
-  };
-  if (!sender.email) {
-    throw new Error("Envoyeur Brevo manquant : d\xE9finissez BREVO_SENDER_EMAIL ou EMAIL_USER");
-  }
+  const { name, email } = resolveSender();
   const payload = {
-    sender,
+    sender: { name, email },
     to: [{ email: to }],
     subject,
-    htmlContent: html
+    htmlContent: html,
+    // Les réponses des utilisateurs doivent revenir au support de la plateforme.
+    replyTo: { email: process.env.SUPPORT_REPLY_TO || email, name: `${BRAND.supportName} (support)` }
   };
   if (attachments && attachments.length) {
     payload.attachment = attachments.map((a) => ({
@@ -292,11 +305,13 @@ function resolveProvider() {
 async function sendViaResend({ to, subject, html, attachments }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) throw new Error("EMAIL_PROVIDER=resend n\xE9cessite RESEND_API_KEY");
+  const sender = resolveSender();
   const payload = {
     from: await resendFromAddress(),
     to: [to],
     subject,
-    html
+    html,
+    reply_to: process.env.SUPPORT_REPLY_TO || sender.email
   };
   if (attachments && attachments.length) {
     payload.attachments = attachments.map((a) => ({
@@ -319,11 +334,22 @@ async function sendViaResend({ to, subject, html, attachments }) {
   console.log("\u{1F4E7} Email envoy\xE9 via Resend:", data.id);
   return { messageId: data.id, previewUrl: null };
 }
-var transporterPromise, wait, sendEmail, sendVerificationEmail, sendPasswordResetEmail;
+var transporterPromise, BRAND, PLACEHOLDER_EMAILS, wait, sendEmail, sendVerificationEmail, sendPasswordResetEmail;
 var init_sendEmail = __esm({
   "backend/utils/sendEmail.js"() {
     dotenv.config();
     transporterPromise = null;
+    BRAND = {
+      name: "EasyJob",
+      supportName: "EasyJob Support",
+      supportEmail: "easyjobmarocsupport@gmail.com"
+    };
+    PLACEHOLDER_EMAILS = [
+      "your_email@gmail.com",
+      "noreply@easyjob.ma",
+      "onboarding@resend.dev",
+      "noreply@example.com"
+    ];
     wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     sendEmail = async ({ to, subject, html, attachments }) => {
       const provider = resolveProvider();
@@ -336,6 +362,7 @@ var init_sendEmail = __esm({
           const result = await withRetry(() => sendViaBrevo({ to, subject, html, attachments }));
           return { success: true, messageId: result.messageId, previewUrl: result.previewUrl };
         }
+        const sender = resolveSender();
         const info = await withRetry(async () => {
           const transporter = await getTransporter();
           return transporter.sendMail({
@@ -343,6 +370,7 @@ var init_sendEmail = __esm({
             to,
             subject,
             html,
+            replyTo: process.env.SUPPORT_REPLY_TO || sender.email,
             ...attachments && attachments.length ? { attachments } : {}
           });
         });
@@ -7776,6 +7804,7 @@ var admin_default = router18;
 mongoose22.set("toJSON", { virtuals: true, versionKey: false });
 mongoose22.set("toObject", { virtuals: true, versionKey: false });
 var app = express19();
+app.set("trust proxy", 1);
 app.use(helmet({ contentSecurityPolicy: false }));
 var allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:5173").split(",").map((o) => o.trim()).filter(Boolean);
 app.use(cors({
@@ -7791,8 +7820,31 @@ app.use(cors({
 app.use(express19.json({ limit: "10mb" }));
 app.use(express19.urlencoded({ extended: true }));
 app.use(cookieParser());
-var limiter = rateLimit({ windowMs: 15 * 60 * 1e3, max: 200, message: { error: "Trop de requ\xEAtes" } });
-app.use("/api/", limiter);
+var WINDOW_MS = 15 * 60 * 1e3;
+var sharedLimitHandler = (req, res) => {
+  res.status(429).json({
+    error: "Trop de requ\xEAtes",
+    message: "Trop de requ\xEAtes, merci de patienter quelques secondes."
+  });
+};
+var isScrapingStatus = (req) => req.originalUrl.startsWith("/api/scraping/status");
+var apiLimiter = rateLimit({
+  windowMs: WINDOW_MS,
+  limit: 1e3,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  skip: isScrapingStatus,
+  handler: sharedLimitHandler
+});
+var scrapingStatusLimiter = rateLimit({
+  windowMs: WINDOW_MS,
+  limit: 3e3,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  handler: sharedLimitHandler
+});
+app.use("/api/scraping/status", scrapingStatusLimiter);
+app.use("/api/", apiLimiter);
 app.use("/api/auth", auth_default);
 app.use("/api/profile/cv", cv_default);
 app.use("/api/profile/portfolio", portfolio_default);

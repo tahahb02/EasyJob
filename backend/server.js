@@ -28,6 +28,11 @@ mongoose.set('toObject', { virtuals: true, versionKey: false })
 
 const app = express()
 
+// Derrière Vercel (ou tout reverse proxy), `req.ip` vaut l'adresse du proxy :
+// sans cette option, TOUS les utilisateurs partagent le même compteur et le
+// premier qui dépasse bloque tout le monde. On fait confiance au premier saut.
+app.set('trust proxy', 1)
+
 app.use(helmet({ contentSecurityPolicy: false }))
 const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .split(',')
@@ -48,8 +53,50 @@ app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
 
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200, message: { error: 'Trop de requêtes' } })
-app.use('/api/', limiter)
+// ─── LIMITATION DE DÉBIT ───────────────────────────────────────────
+// Un seul compteur global de 200 requêtes / 15 min était incohérent avec
+// l'interface : le suivi du scrapping interroge /scraping/status toutes les
+// 1,5 s, soit 600 requêtes sur la fenêtre, et le moindre rechargement de page
+// consommait déjà une trentaine d'appels. Résultat : « Trop de requêtes »
+// au bout de quelques minutes d'utilisation.
+// On sépare donc les budgets : le suivi du scrapping (route très sollicitée
+// par nature) a son propre compteur, large, et le reste de l'API garde un
+// plafond de protection classique.
+const WINDOW_MS = 15 * 60 * 1000
+
+const sharedLimitHandler = (req, res) => {
+  res.status(429).json({
+    error: 'Trop de requêtes',
+    message: 'Trop de requêtes, merci de patienter quelques secondes.',
+  })
+}
+
+// Le suivi du scrapping a son propre compteur et est donc exempté du compteur
+// général, sans quoi il consommerait deux quotas et les enêtes RateLimit se
+// chevaucheraient.
+const isScrapingStatus = req => req.originalUrl.startsWith('/api/scraping/status')
+
+const apiLimiter = rateLimit({
+  windowMs: WINDOW_MS,
+  limit: 1000,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skip: isScrapingStatus,
+  handler: sharedLimitHandler,
+})
+
+// Budget dédié au relevé d'état du scrapping : c'est la seule route legitimately
+// appelée en haute fréquence (le suivi de progression).
+const scrapingStatusLimiter = rateLimit({
+  windowMs: WINDOW_MS,
+  limit: 3000,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  handler: sharedLimitHandler,
+})
+
+app.use('/api/scraping/status', scrapingStatusLimiter)
+app.use('/api/', apiLimiter)
 
 app.use('/api/auth', authRoutes)
 app.use('/api/profile/cv', cvRoutes)

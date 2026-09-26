@@ -1,3 +1,4 @@
+import { CONTACT_EMAIL } from '@/lib/brand'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ShieldCheck, Scale, FileText, Mail } from 'lucide-react'
 import Logo from '@/components/Logo'
@@ -196,9 +197,9 @@ const sections = [
         Les présentes conditions sont régies par le droit en vigueur. Tout litige sera
         soumis aux juridictions compétentes. Pour toute question relative à ces
         conditions, vous pouvez nous contacter à l'adresse{' '}
-        <a href="mailto:contact@easyjob.app" className="font-medium text-primary hover:underline">
-          contact@easyjob.app
-        </a>
+                  <a href={`mailto:${CONTACT_EMAIL}`} className="font-medium text-primary hover:underline">
+                    {CONTACT_EMAIL}
+                  </a>
         .
       </p>
     ),
@@ -281,7 +282,7 @@ export default function TermsPage() {
             présentes conditions d'utilisation.
           </p>
           <Button asChild className="mt-4">
-            <a href="mailto:contact@easyjob.app">Nous écrire</a>
+            <a href={`mailto:${CONTACT_EMAIL}`}>Nous écrire</a>
           </Button>
         </div>
       </main>

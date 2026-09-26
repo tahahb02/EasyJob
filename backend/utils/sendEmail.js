@@ -5,6 +5,63 @@ dotenv.config()
 
 let transporterPromise = null
 
+// ─── IDENTITÉ DE MARQUE ET ADRESSE DE SUPPORT ───────────────────────
+// Adresse unique de la plateforme : elle expédie les codes de confirmation,
+// les mails de réinitialisation, les candidatures et le support utilisateur.
+// Toute la communication part d'ici, ce qui évite qu'un envoi sorte d'une
+// adresse personnelle.
+export const BRAND = {
+  name: 'EasyJob',
+  supportName: 'EasyJob Support',
+  supportEmail: 'easyjobmarocsupport@gmail.com',
+}
+
+// Valeurs de substitution livrées avec le projet : jamais utilisées comme
+// expéditeur réel, sinon les mails partiraient d'une adresse inconnue.
+const PLACEHOLDER_EMAILS = [
+  'your_email@gmail.com',
+  'noreply@easyjob.ma',
+  'onboarding@resend.dev',
+  'noreply@example.com',
+]
+
+function isUsableAddress(value) {
+  const email = String(value || '').trim()
+  if (!email) return false
+  if (PLACEHOLDER_EMAILS.some(placeholder => email.includes(placeholder))) return false
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
+function parseSender(value) {
+  const match = String(value || '').match(/^(.*)\s*<([^>]+)>$/)
+  if (!match) return { name: '', email: String(value || '').trim() }
+  return { name: match[1].trim(), email: match[2].trim() }
+}
+
+/**
+ * Source de vérité unique de l'expéditeur, partagée par Brevo, Resend et le
+ * SMTP Gmail. Résolution par ordre de priorité :
+ *   BREVO_SENDER_NAME / BREVO_SENDER_EMAIL
+ *   → EMAIL_FROM ("Nom <adresse>")
+ *   → EMAIL_USER
+ *   → SUPPORT_EMAIL
+ *   → l'adresse de support de la plateforme
+ * @returns {{ name: string, email: string }}
+ */
+export function resolveSender() {
+  const fromEnv = parseSender(process.env.EMAIL_FROM)
+  const candidates = [
+    parseSender(process.env.BREVO_SENDER_EMAIL),
+    fromEnv,
+    parseSender(process.env.EMAIL_USER),
+    parseSender(process.env.SUPPORT_EMAIL),
+  ]
+  const chosen = candidates.find(candidate => isUsableAddress(candidate.email))
+  const email = chosen?.email || BRAND.supportEmail
+  const name = chosen?.name || process.env.BREVO_SENDER_NAME || BRAND.supportName
+  return { name: name || BRAND.supportName, email }
+}
+
 export function escapeHtml(value = '') {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -48,8 +105,10 @@ export function brandLayout({ accent = '#2563eb', title, content, footerText }) 
                   ${content}
                 </div>
                 <div style="padding:24px 8px 8px 8px; text-align:center; font-family:Inter, Arial, sans-serif; font-size:12px; color:#94a3b8; line-height:1.7;">
-                  ${footerText || 'EasyJob — Votre carrière au Maroc'}<br />
-                  © ${new Date().getFullYear()} EasyJob. Tous droits réservés.
+                  ${footerText || `${BRAND.name} — Votre carrière au Maroc`}<br />
+                  Besoin d'aide ? Écrivez-nous à
+                  <a href="mailto:${BRAND.supportEmail}" style="color:${accent}; text-decoration:none; font-weight:600;">${BRAND.supportEmail}</a><br />
+                  © ${new Date().getFullYear()} ${BRAND.name}. Tous droits réservés.
                 </div>
               </td>
             </tr>
@@ -67,14 +126,8 @@ function hasRealCreds() {
 }
 
 function getFromAddress() {
-  const envFrom = process.env.EMAIL_FROM
-  if (envFrom && !envFrom.includes('noreply@easyjob.ma') && !envFrom.includes('your_email@gmail.com')) {
-    return envFrom
-  }
-  if (hasRealCreds()) {
-    return `EasyJob <${process.env.EMAIL_USER}>`
-  }
-  return 'EasyJob <noreply@easyjob.ma>'
+  const { name, email } = resolveSender()
+  return `${name} <${email}>`
 }
 
 function mailPort() {
@@ -162,34 +215,24 @@ async function withRetry(fn, attempts = 3, baseDelay = 400) {
   throw lastError
 }
 
-function parseSender(value) {
-  const match = String(value || '').match(/^(.*)\s*<([^>]+)>$/)
-  if (!match) return { name: '', email: String(value || '').trim() }
-  return { name: match[1].trim(), email: match[2].trim() }
-}
-
-async function resendFromAddress() {
-  return process.env.RESEND_FROM || 'EasyJob <onboarding@resend.dev>'
+function resendFromAddress() {
+  const { name, email } = resolveSender()
+  return `${name} <${email}>`
 }
 
 async function sendViaBrevo({ to, subject, html, attachments }) {
   const apiKey = process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY
   if (!apiKey) throw new Error('Brevo nécessite BREVO_API_KEY (ou EMAIL_PROVIDER=smtp)')
 
-  const parsed = parseSender(process.env.EMAIL_FROM || process.env.EMAIL_USER)
-  const sender = {
-    name: process.env.BREVO_SENDER_NAME || parsed.name || 'EasyJob',
-    email: process.env.BREVO_SENDER_EMAIL || parsed.email || process.env.EMAIL_USER,
-  }
-  if (!sender.email) {
-    throw new Error('Envoyeur Brevo manquant : définissez BREVO_SENDER_EMAIL ou EMAIL_USER')
-  }
+  const { name, email } = resolveSender()
 
   const payload = {
-    sender,
+    sender: { name, email },
     to: [{ email: to }],
     subject,
     htmlContent: html,
+    // Les réponses des utilisateurs doivent revenir au support de la plateforme.
+    replyTo: { email: process.env.SUPPORT_REPLY_TO || email, name: `${BRAND.supportName} (support)` },
   }
   if (attachments && attachments.length) {
     payload.attachment = attachments
@@ -229,11 +272,13 @@ async function sendViaResend({ to, subject, html, attachments }) {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) throw new Error('EMAIL_PROVIDER=resend nécessite RESEND_API_KEY')
 
+  const sender = resolveSender()
   const payload = {
     from: await resendFromAddress(),
     to: [to],
     subject,
     html,
+    reply_to: process.env.SUPPORT_REPLY_TO || sender.email,
   }
   if (attachments && attachments.length) {
     payload.attachments = attachments
@@ -273,6 +318,7 @@ export const sendEmail = async ({ to, subject, html, attachments }) => {
       return { success: true, messageId: result.messageId, previewUrl: result.previewUrl }
     }
 
+    const sender = resolveSender()
     const info = await withRetry(async () => {
       const transporter = await getTransporter()
       return transporter.sendMail({
@@ -280,6 +326,7 @@ export const sendEmail = async ({ to, subject, html, attachments }) => {
         to,
         subject,
         html,
+        replyTo: process.env.SUPPORT_REPLY_TO || sender.email,
         ...(attachments && attachments.length ? { attachments } : {}),
       })
     })
